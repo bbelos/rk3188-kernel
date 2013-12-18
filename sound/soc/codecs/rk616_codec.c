@@ -17,6 +17,7 @@
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <sound/soc.h>
+#include <sound/hp_switch.h>
 #include <sound/soc-dapm.h>
 #include <sound/initval.h>
 #include <sound/tlv.h>
@@ -45,7 +46,7 @@
 #define  SPKOUT_VOLUME    24 //0~31
 #define  HPOUT_VOLUME     20 //0~31
 #else
-#define  SPKOUT_VOLUME    24 //0~31
+#define  SPKOUT_VOLUME    14 //0~31
 #define  HPOUT_VOLUME     24 //0~31
 #endif
 
@@ -62,6 +63,7 @@
 #define HP_MOS_DELAY 50
 
 //for route
+#define RK616_CODEC_ALL	0
 #define RK616_CODEC_PLAYBACK	1
 #define RK616_CODEC_CAPTURE	2
 #define RK616_CODEC_INCALL	4
@@ -99,6 +101,8 @@ struct rk616_codec_priv {
 static struct rk616_codec_priv *rk616_priv = NULL;
 static struct mfd_rk616 *rk616_mfd = NULL;
 static bool rk616_for_mid = 1, is_hdmi_in = false;
+static int mute_status = 1;
+static int isRegister = 0;
 
 bool rk616_get_for_mid(void)
 {
@@ -2597,6 +2601,7 @@ static int rk616_hw_params(struct snd_pcm_substream *substream,
 static int rk616_digital_mute(struct snd_soc_dai *dai, int mute)
 {
 	struct rk616_codec_priv *rk616 = rk616_priv;
+    mute_status = mute;
 
 	if (rk616_for_mid)
 	{
@@ -2715,6 +2720,23 @@ static int rk616_resume(struct snd_soc_codec *codec)
 	return 0;
 }
 
+void hp_switch_on()
+{
+    if(isRegister == 0) return;
+    gpio_set_value(rk616_mfd->pdata->spk_ctl_gpio, GPIO_LOW);
+    gpio_set_value(rk616_mfd->pdata->hp_ctl_gpio, GPIO_HIGH);
+    DBG("%s the phone is insert\n", __FUNCTION__);
+}
+ 
+void hp_switch_off()
+{
+    if(isRegister == 0) return;
+    if(mute_status == 1)return;
+    gpio_set_value(rk616_mfd->pdata->spk_ctl_gpio, GPIO_HIGH);
+    gpio_set_value(rk616_mfd->pdata->hp_ctl_gpio, GPIO_LOW);
+    DBG("%s the phone is dis insert\n", __FUNCTION__);
+}
+
 static int rk616_probe(struct snd_soc_codec *codec)
 {
 	struct rk616_codec_priv *rk616;
@@ -2815,6 +2837,7 @@ static int rk616_probe(struct snd_soc_codec *codec)
 		snd_soc_dapm_add_routes(&codec->dapm, rk616_dapm_routes,
 				ARRAY_SIZE(rk616_dapm_routes));
 	}
+    isRegister = 1 ;
 
 	return 0;
 
@@ -2822,7 +2845,7 @@ err__:
 	kfree(rk616);
 	rk616 = NULL;
 	rk616_priv = NULL;
-
+    isRegister = 0;
 	return ret;
 }
 

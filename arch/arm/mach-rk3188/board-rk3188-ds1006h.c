@@ -56,7 +56,9 @@
 #if defined(CONFIG_MFD_RK610)
 #include <linux/mfd/rk610_core.h>
 #endif
-
+#if defined(CONFIG_MFD_RK616)
+#include <linux/mfd/rk616.h>
+#endif
 #if defined(CONFIG_RK_HDMI)
 	#include "../../../drivers/video/rockchip/hdmi/rk_hdmi.h"
 #endif
@@ -77,6 +79,19 @@
 
 #include "../mach-rk30/board-rk3168-ds1006h-camera.c"
 #include <plat/key.h>
+
+#if defined(CONFIG_SWITCH_GPIO) 
+static struct gpio_switch_platform_data headset_switch_data = {
+    .name = "h2w",
+    .gpio = RK30_PIN0_PC1, 
+};
+static struct platform_device device_headset_switch = {
+    .name = "switch-gpio",
+    .dev  = {
+        .platform_data    = &headset_switch_data,          
+    }
+};
+#endif
 
 static struct rk29_keys_button key_button[] = {
 	{
@@ -115,6 +130,41 @@ int get_harware_version()
     #endif
 }
 EXPORT_SYMBOL_GPL(get_harware_version);
+
+#if defined(CONFIG_TOUCHSCREEN_GSLX680) || defined(CONFIG_TOUCHSCREEN_GSLX68X) || defined(CONFIG_TOUCHSCREEN_GSL2682)
+#define TOUCH_RESET_PIN RK30_PIN0_PB6
+#define TOUCH_EN_PIN NULL
+#define TOUCH_INT_PIN RK30_PIN1_PB7
+
+int gslx680_init_platform_hw(void)
+{
+
+       if(gpio_request(TOUCH_RESET_PIN,NULL) != 0){
+                gpio_free(TOUCH_RESET_PIN);
+                printk("gslx680_init_platform_hw gpio_request error\n");
+                return -EIO;
+        }
+        if(gpio_request(TOUCH_INT_PIN,NULL) != 0){
+                gpio_free(TOUCH_INT_PIN);
+                printk("gslx680_init_platform_hw  gpio_request error\n");
+                return -EIO;
+        }
+        gpio_direction_output(TOUCH_RESET_PIN, GPIO_HIGH);
+        mdelay(10);
+        gpio_set_value(TOUCH_RESET_PIN,GPIO_LOW);
+        mdelay(10);
+        gpio_set_value(TOUCH_RESET_PIN,GPIO_HIGH);
+        msleep(300);
+        return 0;
+
+}
+
+struct ts_hw_data     gslx680_info = {
+    .reset_gpio = TOUCH_RESET_PIN,
+    .touch_en_gpio = TOUCH_INT_PIN,
+    .init_platform_hw = gslx680_init_platform_hw,
+};
+#endif
 
 #if defined(CONFIG_CT36X_TS)
 
@@ -661,6 +711,8 @@ static struct rk610_ctl_platform_data rk610_ctl_pdata = {
 };
 #endif
 
+
+
 #ifdef CONFIG_SND_SOC_RK610
 static int rk610_codec_io_init(void)
 {
@@ -673,6 +725,77 @@ static struct rk610_codec_platform_data rk610_codec_pdata = {
 	.spk_ctl_io = RK30_PIN2_PD7,
 	.io_init = rk610_codec_io_init,
 	.boot_depop = 1,
+};
+#endif
+
+#if defined(CONFIG_MFD_RK616)
+
+#if defined(CONFIG_TCHIP_MACH_BACK_MUSIC)
+#define RK616_RST_PIN 			RK30_PIN1_PB5
+#else
+#define RK616_RST_PIN 			RK30_PIN3_PB2
+#endif
+#define RK616_PWREN_PIN			INVALID_GPIO//RK30_PIN0_PA3
+#define RK616_SCL_RATE			(100*1000)   //i2c scl rate
+static int rk616_power_on_init(void)
+{
+	int ret;
+
+	if(RK616_PWREN_PIN != INVALID_GPIO)
+	{
+		ret = gpio_request(RK616_PWREN_PIN, "rk616 pwren");
+		if (ret)
+		{
+			printk(KERN_ERR "rk616 pwren gpio request fail\n");
+		}
+		else 
+		{
+			gpio_direction_output(RK616_PWREN_PIN,GPIO_HIGH);
+		}
+	}
+	
+	if(RK616_RST_PIN != INVALID_GPIO)
+	{
+		ret = gpio_request(RK616_RST_PIN, "rk616 reset");
+		if (ret)
+		{
+			printk(KERN_ERR "rk616 reset gpio request fail\n");
+		}
+		else 
+		{
+			gpio_direction_output(RK616_RST_PIN, GPIO_HIGH);
+			msleep(2);
+			gpio_direction_output(RK616_RST_PIN, GPIO_LOW);
+			msleep(10);
+	    		gpio_set_value(RK616_RST_PIN, GPIO_HIGH);
+		}
+	}
+
+	return 0;
+	
+}
+
+
+static int rk616_power_deinit(void)
+{
+	gpio_set_value(RK616_PWREN_PIN,GPIO_LOW);
+	gpio_set_value(RK616_RST_PIN,GPIO_LOW);
+	gpio_free(RK616_PWREN_PIN);
+	gpio_free(RK616_RST_PIN);
+	
+	return 0;
+}
+static struct rk616_platform_data rk616_pdata = {
+	.power_init = rk616_power_on_init,
+	.power_deinit = rk616_power_deinit,
+	.scl_rate   = RK616_SCL_RATE,
+	.lcd0_func = INPUT,             //port lcd0 as input
+	.lcd1_func = INPUT,             //port lcd1 as input
+ 	.lvds_ch_nr = 1,		//the number of used lvds channel  
+	.hdmi_irq = RK30_PIN2_PD6,
+	.spk_ctl_gpio = RK30_PIN2_PD7,
+	.hp_ctl_gpio = RK30_PIN0_PC7,//RK30_PIN0_PC1,
+    //.phone_ctl_gpio = RK30_PIN0_PC7,
 };
 #endif
 
@@ -1249,7 +1372,9 @@ static struct platform_device device_tcc_bt = {
 
 
 static struct platform_device *devices[] __initdata = {
-
+#if defined(CONFIG_SWITCH_GPIO) 
+    &device_headset_switch,
+#endif
 #ifdef CONFIG_ION
 	&device_ion,
 #endif
@@ -1783,6 +1908,14 @@ void  rk30_pwm_resume_voltage_set(void)
 
 #ifdef CONFIG_I2C2_RK30
 static struct i2c_board_info __initdata i2c2_info[] = {
+#if defined (CONFIG_TOUCHSCREEN_GSLX680) || defined (CONFIG_TOUCHSCREEN_GSLX68X) || defined (CONFIG_TOUCHSCREEN_GSL2682)
+    {
+        .type           = "gslX680",
+        .addr           = 0x40,
+        .flags          = 0,
+        .platform_data =&gslx680_info,
+    },
+#endif
 #if defined (CONFIG_CT36X_TS)
 	{
 		.type	       = CT36X_NAME,
@@ -1826,6 +1959,14 @@ static struct i2c_board_info __initdata i2c3_info[] = {
 
 #ifdef CONFIG_I2C4_RK30
 static struct i2c_board_info __initdata i2c4_info[] = {
+#if defined (CONFIG_MFD_RK616)
+	{
+		.type	       = "rk616",
+		.addr	       = 0x50,
+		.flags	       = 0,
+		.platform_data = &rk616_pdata,
+	},
+#endif
 #ifdef CONFIG_MFD_RK610
 		{
 			.type			= "rk610_ctl",
