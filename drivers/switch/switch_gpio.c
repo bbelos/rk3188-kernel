@@ -24,6 +24,12 @@
 #include <linux/switch.h>
 #include <linux/workqueue.h>
 #include <linux/gpio.h>
+#include <linux/interrupt.h>
+//#include <mach/irqs.h>
+#include <linux/irq.h>
+#include <linux/sched.h>
+#include <linux/delay.h>
+#include <sound/hp_switch.h>
 
 struct gpio_switch_data {
 	struct switch_dev sdev;
@@ -36,14 +42,34 @@ struct gpio_switch_data {
 	struct work_struct work;
 };
 
+static int last_state;
+static irqreturn_t gpio_irq_handler(int irq, void *dev_id);
+
 static void gpio_switch_work(struct work_struct *work)
 {
 	int state;
 	struct gpio_switch_data	*data =
 		container_of(work, struct gpio_switch_data, work);
 
+    switch_set_state(&data->sdev, last_state);
+    free_irq(data->irq,data);
+    msleep(800);
 	state = gpio_get_value(data->gpio);
-	switch_set_state(&data->sdev, state);
+    if(last_state != state)
+        last_state = state;
+#ifdef CONFIG_MFD_RK616
+    if(state == 0)
+        hp_switch_on();
+    else
+        hp_switch_off();
+#endif
+	//switch_set_state(&data->sdev, state);
+
+    //data->irq = gpio_to_irq(data->gpio);
+    //free_irq(data->irq,data);
+    //msleep(50);
+    request_irq(data->irq, gpio_irq_handler,(state==0) ? IRQF_TRIGGER_RISING:IRQF_TRIGGER_FALLING, "h2w",data);
+    printk("Switch the headset status : %d\n",state);
 }
 
 static irqreturn_t gpio_irq_handler(int irq, void *dev_id)
@@ -52,6 +78,8 @@ static irqreturn_t gpio_irq_handler(int irq, void *dev_id)
 	    (struct gpio_switch_data *)dev_id;
 
 	schedule_work(&switch_data->work);
+    //set_irq_type(switch_data->irq,gpio_get_value(switch_data->gpio)? IRQF_TRIGGER_RISING:IRQF_TRIGGER_FALLING);
+    printk("Headset interrupt \n");
 	return IRQ_HANDLED;
 }
 
@@ -75,6 +103,8 @@ static int gpio_switch_probe(struct platform_device *pdev)
 	struct gpio_switch_platform_data *pdata = pdev->dev.platform_data;
 	struct gpio_switch_data *switch_data;
 	int ret = 0;
+
+    printk("register switch gpio \n");
 
 	if (!pdata)
 		return -EBUSY;
@@ -102,6 +132,8 @@ static int gpio_switch_probe(struct platform_device *pdev)
 	ret = gpio_direction_input(switch_data->gpio);
 	if (ret < 0)
 		goto err_set_gpio_input;
+    
+    gpio_pull_updown(switch_data->gpio, GPIO_HIGH);
 
 	INIT_WORK(&switch_data->work, gpio_switch_work);
 
@@ -110,9 +142,10 @@ static int gpio_switch_probe(struct platform_device *pdev)
 		ret = switch_data->irq;
 		goto err_detect_irq_num_failed;
 	}
-
+   
+    last_state = !gpio_get_value(switch_data->gpio);
 	ret = request_irq(switch_data->irq, gpio_irq_handler,
-			  IRQF_TRIGGER_LOW, pdev->name, switch_data);
+                IRQF_TRIGGER_RISING , pdev->name,switch_data);
 	if (ret < 0)
 		goto err_request_irq;
 

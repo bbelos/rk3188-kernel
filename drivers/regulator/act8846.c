@@ -699,6 +699,31 @@ error:
 	return err;
 }
 
+char reg9_val;
+void regulator_ctrl_vcc_tp(bool on)
+{
+	int ret;
+	struct act8846 *act8846 = g_act8846;
+	const char REG9 = 0x71;
+	if(on)
+	{
+		/*close out9*/
+		reg9_val = act8846_reg_read(act8846,REG9);
+		DBG("before set REG9 = %d\n", reg9_val);
+		ret = act8846_set_bits(act8846, REG9,(0x1<<7),(0x0<<7));
+		DBG("after set REG89 = %d\n", act8846_reg_read(act8846,REG9));
+		if (ret < 0) {
+			DBG("act8846 set 0xc3 error!\n");
+		}
+	}
+	else
+	{
+		/*resume reg9*/
+		act8846_i2c_write(act8846->i2c, REG9, 1, reg9_val);
+		reg9_val = act8846_reg_read(act8846,REG9);
+		DBG("resume REG8 = %d\n", reg9_val);
+	}
+}
 
 int act8846_device_shutdown(void)
 {

@@ -39,6 +39,6 @@ struct act8846_platform_data {
 	int (*set_init)(struct act8846 *act8846);
 	struct act8846_regulator_subdev *regulators;
 };
-
+void regulator_ctrl_vcc_tp(bool on);
 #endif
 

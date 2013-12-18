@@ -106,3 +106,9 @@ obj-$(CONFIG_TOUCHSCREEN_GSLX680_RK3028)	+= rockchip_gslX680_rk3028.o
 obj-$(CONFIG_TP_760_TS)                    += tp_760_ts.o
 obj-y += zet62xx/
 obj-y += aw5x0x/
+
+obj-y += gsl_point_id.o
+ifeq ($(CONFIG_TCHIP_MACH_TR785),y)
+$(obj)/gsl_point_id.o: $(srctree)/$(obj)/gsl_point_id_tr785
+	cp $(srctree)/$(obj)/gsl_point_id_tr785 $(obj)/gsl_point_id.o
+endif
