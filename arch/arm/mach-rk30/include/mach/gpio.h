@@ -1,15 +1,19 @@
 #ifndef __MACH_GPIO_H
 #define __MACH_GPIO_H
 
+#ifndef MKLINUXLOG
 #include <mach/irqs.h>
 #include <linux/init.h>
+#endif /* MKLINUXLOG */
 
 #if defined(CONFIG_ARCH_RK3066B) || defined(CONFIG_ARCH_RK3188)
 #define GPIO_BANKS		4
+#define PIN_BASE                               NR_GIC_IRQS
 #else
 #define GPIO_BANKS		7
 #endif
 
+#define NUM_GROUP                      32
 #define	RK30_PIN0_PA0		(0*NUM_GROUP + PIN_BASE + 0)
 #define	RK30_PIN0_PA1		(0*NUM_GROUP + PIN_BASE + 1)
 #define	RK30_PIN0_PA2		(0*NUM_GROUP + PIN_BASE + 2)
@@ -194,6 +198,7 @@
 #define	RK30_PIN6_PB7		(6*NUM_GROUP + PIN_BASE + 15)
 #endif
 
+#ifndef MKLINUXLOG
 #include <plat/gpio.h>
-
+#endif
 #endif

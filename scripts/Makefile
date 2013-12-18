@@ -14,6 +14,7 @@ hostprogs-y        += bmptologo
 hostprogs-$(CONFIG_VT)           += conmakehash
 hostprogs-$(CONFIG_IKCONFIG)     += bin2c
 hostprogs-$(BUILD_C_RECORDMCOUNT) += recordmcount
+hostprogs-y         += tchip_sysInfgcc
 
 always		:= $(hostprogs-y) $(hostprogs-m)
 

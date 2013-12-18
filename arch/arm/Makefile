@@ -295,7 +295,7 @@ archclean:
 bp:;	$(Q)$(MAKE) $(build)=$(boot) MACHINE=$(MACHINE) $(boot)/bootpImage
 i zi:;	$(Q)$(MAKE) $(build)=$(boot) MACHINE=$(MACHINE) $@
 
-PHONY += kernel.img zkernel.img
+PHONY += kernel.img zkernel.img tchip
 
 ifdef CONFIG_MACH_RK29_2906
 kernel.img: Image FORCE
@@ -310,6 +310,14 @@ endif
 zkernel.img: zImage FORCE
 	$(Q)$(srctree)/mkkrnlimg $(obj)/arch/arm/boot/zImage $(obj)/kernel.img
 	@echo '  Image:  kernel.img is ready'
+
+tchip: Image FORCE
+	@./scripts/tchip_sysInfgcc pv | tee .fw_version
+	$(Q)$(srctree)/mkkrnlimg $(obj)/arch/arm/boot/Image $(obj)/kernel.img
+	@echo '  Image:  kernel.img is ready'
+	$(Q)$(srctree)/mkkrnlimg $(obj)/arch/arm/boot/Image $(HOME)/vmware/vmShared/kernel.img
+	@date
+	@echo -e '\n\t\t\tEnjoy your job ... \n'
 
 ANDROID_RAMDISK_IMG := $(shell echo $(OUT) | sed -e 's/^.*\/out\/target\/product\//out\/target\/product\//')/ramdisk.img
 ANDROID_DIR := $(shell cd $(OUT)/../../../../ && pwd)

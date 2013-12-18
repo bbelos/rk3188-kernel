@@ -1,0 +1,311 @@
+menu "T-Chip Products Configuration"
+
+#########################################
+#           T-Chip Series Boards        #
+menu "T-Chip USB info Select"
+
+config TCHIP_USB_VENDOR
+	string "USB Controller Vendor"
+	default "T-Chip"
+	help
+		Changes according to the requirements of your product.
+
+config TCHIP_USB_PRODUCT
+	string "USB Controller Product"
+	default "T-Chip"
+	help
+		Changes according to the requirements of your product.
+
+config TCHIP_USB_INFO
+	string "USB Information"
+	default "T-Chip USB Device"
+	help
+		Changes according to the requirements of your product.
+	
+endmenu
+
+#########################################
+#           T-Chip Series Boards        #
+choice
+	prompt "Select Machine Model"
+	default TCHIP_MACH_DEFAULT
+
+
+	config TCHIP_MACH_DEFAULT
+
+		bool "Unknow tchip RK30 Machine"
+
+	config TCHIP_MACH_TR785
+		bool "TR785, Public 7.85' Machine"
+		select TCHIP_MACHINE
+
+	config TCHIP_MACH_TR785_V10
+		depends on TCHIP_MACH_TR785
+		bool "v10 for tr785"
+	
+	config TCHIP_MACH_TR785_V20
+		depends on TCHIP_MACH_TR785
+		bool "v01 for tr785"
+       
+endchoice
+
+#########################################
+#           T-Chip Series Boards        #
+choice
+	prompt "Select Customer for your Machine model"
+	default TCHIP_MACH_DEFAUL
+
+	config TCHIP_MACH_DEFAUL
+		bool "have no Customer now"
+
+	config TCHIP_CUSTOMER_KangGuan
+		bool "Kang Guan"
+
+	config TCHIP_CUSTOMER_Soaiy
+		bool "Soaiy"
+		select LOGO_LINUX_CLUT224_SOAIY
+
+endchoice
+
+
+#caixx add begin
+menu "T-Chip Products Tool adapt IC Select"
+menu "T-Chip Products Tool adapt Camera IC Select"
+#	config TCHIP_MACH_SOC_CAMERA_GT2005
+#	    depends on SOC_CAMERA_GT2005
+#		bool "GT2005 is open"
+		
+	config TCHIP_MACH_SOC_CAMERA_GC0308
+		depends on SOC_CAMERA_GC0308
+		bool "GC0308 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_GC0307
+		depends on SOC_CAMERA_GC0307
+		bool "GC0307 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_MT9M111
+		depends on SOC_CAMERA_MT9M111
+		bool "MT9M111 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_MT9M112
+		depends on SOC_CAMERA_MT9M112
+		bool "MT9M112 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_MT9T031
+		depends on SOC_CAMERA_MT9T031
+		bool "MT9T031 is open"	
+
+	config TCHIP_MACH_SOC_CAMERA_MT9P111
+		depends on SOC_CAMERA_MT9P111
+		bool "MT9P111 is open"
+		
+	config TCHIP_MACH_SOC_CAMERA_MT9D112
+		depends on SOC_CAMERA_MT9D112
+		bool "MT9D112 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_HI704
+		depends on SOC_CAMERA_HI704
+		bool "HI704 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_HI253
+		depends on SOC_CAMERA_HI253
+		bool "HI253 is open"
+		
+	config TCHIP_MACH_SOC_CAMERA_OV5640
+		depends on SOC_CAMERA_OV5640
+		bool "OV5640 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_OV2640
+		depends on SOC_CAMERA_OV2640_RK
+		bool "OV2640 is open"
+
+	config TCHIP_MACH_SOC_CAMERA_OV2659_B
+		depends on SOC_CAMERA_OV2659
+		bool "OV2659 back is open"
+
+	config TCHIP_MACH_SOC_CAMERA_OV2659_F
+		depends on SOC_CAMERA_OV2659
+		bool "OV2659 front is open"
+		
+		config TCHIP_MACH_SOC_CAMERA_GT2005_B
+		depends on SOC_CAMERA_GT2005
+		bool "GT2005 back is open"
+
+	config TCHIP_MACH_SOC_CAMERA_GT2005_F
+		depends on SOC_CAMERA_GT2005
+		bool "GT2005 front is open"
+
+        config TCHIP_MACH_SOC_CAMERA_SP2518_B
+                depends on SOC_CAMERA_SP2518
+                bool "SP2518 back is open"
+ 
+        config TCHIP_MACH_SOC_CAMERA_SP2518_F
+                depends on SOC_CAMERA_SP2518
+                bool "SP2518 front is open"
+
+	config TCHIP_MACH_SOC_CAMERA_OV5642
+		depends on SOC_CAMERA_OV5642
+		bool "OV5642 is open"
+
+       config TCHIP_MACH_SOC_CAMERA_GC2035_B
+               depends on SOC_CAMERA_GC2035
+               bool "GC2035 back is open"
+
+       config TCHIP_MACH_SOC_CAMERA_GC2035_F
+               depends on SOC_CAMERA_GC2035
+               bool "GC2035 front is open"
+
+       config TCHIP_MACH_SOC_CAMERA_GC0328_F
+               depends on SOC_CAMERA_GC0328
+               bool "GC0328 front is open"
+
+        config TCHIP_MACH_SOC_CAMERA_SP0838
+                depends on SOC_CAMERA_SP0838
+                bool "SP0838 front is open"
+endmenu
+
+choice
+	prompt "T-Chip Products Tool adapt Hdmi IC Select"
+	#default TCHIP_MACH_NOHDMI
+	
+	config TCHIP_MACH_ANX7150
+	    depends on ANX7150
+		bool "ANX7150 is open"
+
+	config TCHIP_MACH_CAT6611
+	    depends on CAT6611
+		bool "CAT6611 is open"
+		
+	config TCHIP_MACH_HDMI_RK30
+	    depends on HDMI_RK30
+		bool "RK30 HDMI is open"
+		
+	config TCHIP_MACH_HDMI_RK610
+	    depends on HDMI_RK610
+		bool "RK610 HDMI is open"
+		
+	config TCHIP_MACH_HDMI_RK616
+	    depends on HDMI_RK616
+		bool "RK616 HDMI is open"
+
+	config TCHIP_MACH_NOHDMI
+		bool "No HDMI"
+endchoice
+
+choice
+	prompt "T-Chip Products Tool adapt Wifi IC Select"
+	default TCHIP_MACH_NOWIFI
+	
+	config TCHIP_MACH_AR6003
+	    depends on AR6003
+		bool "AR6003 is open"
+
+	config TCHIP_MACH_BCM4329
+	    depends on BCM4329
+		bool "BCM4329 is open"
+
+	config TCHIP_MACH_MV8686
+	    depends on MV8686
+		bool "MV8686 is open"
+
+	config TCHIP_MACH_RTL8192
+	    depends on RTL8192CU
+		bool "RTL8192 is open"
+		
+	config TCHIP_MACH_NOWIFI
+		bool "No Wifi"
+endchoice
+
+choice
+	prompt "T-Chip Products Tool adapt Codec IC Select"
+	default TCHIP_MACH_SND_RK29_SOC_WM8988
+	
+	config TCHIP_MACH_SND_RK29_SOC_WM8988
+	    depends on SND_RK29_SOC_WM8988
+		bool "WM8988 is open"
+		
+	config TCHIP_MACH_SND_RK29_SOC_WM8900
+	    depends on SND_RK29_SOC_WM8900
+		bool "WM8900 is open"
+
+	config TCHIP_MACH_SND_RK29_SOC_RT5621
+	    depends on SND_RK29_SOC_RT5621
+		bool "RT5621 is open"
+
+	config TCHIP_MACH_SND_RK29_SOC_WM8994
+		depends on SND_RK29_SOC_WM8994
+		bool "WM8994 is open"
+		
+	config TCHIP_MACH_SND_RK29_SOC_RT5631
+	    depends on SND_RK29_SOC_RT5631
+		bool "RT5631 is open"		
+
+	config TCHIP_MACH_SND_RK29_SOC_RK610
+	    depends on SND_RK29_SOC_RK610
+		bool "RK610 is open"	
+		
+	config TCHIP_MACH_SND_RK_SOC_RK616
+	    depends on SND_RK_SOC_RK616
+		bool "RK616 is open"
+		
+	config TCHIP_MACH_SND_RK29_SOC_ES8323
+	    depends on SND_RK29_SOC_ES8323
+		bool "ES8323 is open"	
+			
+endchoice
+
+choice
+	prompt  "T-Chip Products Tool adapt Touch IC Select"
+	default TCHIP_MACH_TOUCH_GSL3680
+
+	config TCHIP_MACH_TOUCH_GSL3680
+		bool "GSL3680 is open"
+		depends on TOUCHSCREEN_GSLX680
+	
+endchoice
+
+choice
+	prompt  "T-Chip Products Tool adapt Modem IC Select"
+	default TCHIP_MACH_MODEM_OTHERS
+
+	config TCHIP_MACH_MODEM_OTHERS
+		bool "ROCKCHIP modem is open"
+		depends on MODEM_ROCKCHIP_DEMO
+
+	config TCHIP_MACH_MODEM_TDM330
+		bool "TDM330 is open"
+		depends on TDM330
+endchoice
+
+   config TCHIP_RK29_GPS
+		bool "T-CHIP GPS is open"
+	        depends on RK29_GPS
+	        default n
+
+endmenu
+#caixx add end 
+
+#########################################
+#           T-Chip Series Boards        #
+choice
+	prompt  "T-Chip Display Rotation Select"
+	default TCHIP_LOGO_ROTATE_0
+
+config TCHIP_LOGO_ROTATE_0
+    bool "Rotate LOGO 0"
+
+config TCHIP_LOGO_ROTATE_180
+    bool "Rotate LOGO 180"
+
+config TCHIP_LOGO_ROTATE_90
+	depends on LOGO_LINUX_CLUT224
+    bool "Rotate LOGO 90,"
+
+config TCHIP_LOGO_ROTATE_270
+    bool "Rotate LOGO 270,"	
+    depends on LOGO_LINUX_CLUT224
+
+endchoice
+
+
+endmenu
