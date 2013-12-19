@@ -1033,6 +1033,10 @@ static int rk3188_lcdc_early_suspend(struct rk_lcdc_device_driver *dev_drv)
 
 	struct rk3188_lcdc_device *lcdc_dev = 
 		container_of(dev_drv,struct rk3188_lcdc_device,driver);
+	//wuhao
+	lcdc_msk_reg(lcdc_dev,DSP_CTRL1,m_BLACK_EN,v_BLACK_EN(1));
+	lcdc_cfg_done(lcdc_dev);
+	msleep(25);
 
 	if(dev_drv->screen0->standby)
 		dev_drv->screen0->standby(1);
@@ -1053,6 +1057,7 @@ static int rk3188_lcdc_early_suspend(struct rk_lcdc_device_driver *dev_drv)
 		spin_unlock(&lcdc_dev->reg_lock);
 		return 0;
 	}
+	mdelay(25);
 	rk3188_lcdc_clk_disable(lcdc_dev);
 #if defined(CONFIG_ARCH_RK3026)
 	if(dev_drv->screen0->type != SCREEN_LVDS){
@@ -1082,6 +1087,15 @@ static int rk3188_lcdc_early_resume(struct rk_lcdc_device_driver *dev_drv)
 		iomux_set(LCDC0_DCLK);
 	}
 #endif
+	if(dev_drv->screen0->standby)
+	        dev_drv->screen0->standby(0);         //screen wake up
+	//wuhao
+	lcdc_msk_reg(lcdc_dev,DSP_CTRL1,m_BLACK_EN,v_BLACK_EN(1));
+	lcdc_cfg_done(lcdc_dev);
+	msleep(25);
+	lcdc_msk_reg(lcdc_dev,DSP_CTRL1,m_BLACK_EN,v_BLACK_EN(0));
+	lcdc_cfg_done(lcdc_dev);
+	msleep(25);
 	if(dev_drv->screen_ctr_info->io_enable) 		//power on
 		dev_drv->screen_ctr_info->io_enable();
 	
@@ -1117,8 +1131,8 @@ static int rk3188_lcdc_early_resume(struct rk_lcdc_device_driver *dev_drv)
 	if(!lcdc_dev->atv_layer_cnt)
 		rk3188_lcdc_clk_disable(lcdc_dev);
 
-	if(dev_drv->screen0->standby)
-		dev_drv->screen0->standby(0);	      //screen wake up
+//	if(dev_drv->screen0->standby)
+//		dev_drv->screen0->standby(0);	      //screen wake up
 	
 	return 0;
 }

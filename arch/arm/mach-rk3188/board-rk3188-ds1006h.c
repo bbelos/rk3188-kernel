@@ -484,18 +484,20 @@ static struct sensor_platform_data cm3217_info = {
 #ifdef CONFIG_FB_ROCKCHIP
 
 #if DS1006H_V1_2_SUPPORT
-#define LCD_CS_PIN         RK30_PIN0_PB0
+#define LCD_CS_PIN         RK30_PIN1_PB5
+#define LCD_CS_IOMUX       GPIO1_B5
+#define LCD_CS_VALUE       GPIO_HIGH
+#define LCD_PWR_PIN        RK30_PIN1_PB2
+#define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_PWR_VALUE      GPIO_HIGH
+#define LCD_EN_PIN         RK30_PIN0_PB0
+#define LCD_EN_VALUE       GPIO_LOW
 #else
 #define LCD_CS_PIN         INVALID_GPIO
-#endif
 #define LCD_CS_VALUE       GPIO_HIGH
-
-#if DS1006H_V1_2_SUPPORT
-#define LCD_EN_PIN         RK30_PIN0_PB1
-#else
 #define LCD_EN_PIN         RK30_PIN0_PB0
-#endif
 #define LCD_EN_VALUE       GPIO_LOW
+#endif
 
 static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 {
@@ -530,6 +532,20 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 			gpio_direction_output(LCD_EN_PIN, LCD_EN_VALUE);
 		}
 	}
+	if(LCD_PWR_PIN !=INVALID_GPIO)
+    	{
+      		ret = gpio_request(LCD_PWR_PIN, NULL);
+      		if (ret != 0)
+      	{
+        	gpio_free(LCD_PWR_PIN);
+        	printk(KERN_ERR "request lcd en pin fail!\n");
+        	return -1;
+      	}
+      	else
+      	{
+        	gpio_direction_output(LCD_PWR_PIN, LCD_PWR_VALUE);
+      	}
+    }
 	return 0;
 }
 static int rk_fb_io_disable(void)
@@ -542,6 +558,10 @@ static int rk_fb_io_disable(void)
 	{
 		gpio_set_value(LCD_EN_PIN, !LCD_EN_VALUE);
 	}
+	if(LCD_PWR_PIN !=INVALID_GPIO)
+      	{
+        	gpio_set_value(LCD_PWR_PIN, !LCD_PWR_VALUE);
+      	}
 	return 0;
 }
 static int rk_fb_io_enable(void)
@@ -554,6 +574,10 @@ static int rk_fb_io_enable(void)
 	{
 		gpio_set_value(LCD_EN_PIN, LCD_EN_VALUE);
 	}
+	if(LCD_PWR_PIN !=INVALID_GPIO)
+      	{
+        	gpio_set_value(LCD_PWR_PIN, LCD_PWR_VALUE);
+      	}
 	return 0;
 }
 
