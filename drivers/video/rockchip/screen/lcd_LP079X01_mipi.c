@@ -15,7 +15,7 @@
 #define SCREEN_TYPE	    	SCREEN_MIPI
 #endif
 #define LVDS_FORMAT         0     //mipi lcd don't need it, so 0 would be ok.
-#define OUT_FACE	    	OUT_P888//OUT_P666 //OUT_P888
+#define OUT_FACE	    	OUT_P666 //OUT_P888
 
 
 #define DCLK	          	67*1000000 //150*1000000
