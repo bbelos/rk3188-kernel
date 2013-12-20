@@ -274,9 +274,9 @@ static void write_header(void)
 static void write_footer(void)
 {
 	fputs("\n};\n\n", out);
-	fprintf(out, "const struct linux_logo %s __initconst = {\n", logoname);
+	fprintf(out, "struct linux_logo %s __initdata = {\n", logoname);//fprintf(out, "const struct linux_logo %s __initconst = {\n", logoname);
 	fprintf(out, "\t.type\t\t= %s,\n", logo_types[logo_type]);
-
+#if 0
 	if (logo_type == LINUX_LOGO_CLUT224) {
 		fprintf(out, "\t.clut\t\t= &(%s_clut[%ld]),\n", logoname, sizeof(clut_name));
 		fprintf(out, "\t.data\t\t= &(%s_data[%ld])\n", logoname, sizeof(data_name) + 4);
@@ -289,8 +289,18 @@ static void write_footer(void)
 		}
 		fprintf(out, "\t.data\t\t= %s_data\n", logoname);
 	}
-
-	fputs("};\n\n", out);
+#endif
+    fprintf(out, "\t.width\t\t= %d,\n", logo_width);
+    fprintf(out, "\t.height\t\t= %d,\n", logo_height);
+    if (logo_type == LINUX_LOGO_CLUT224) {
+            fprintf(out, "\t.clutsize\t= %d,\n", logo_clutsize);
+            fprintf(out, "\t.clut\t\t= %s_clut,\n", logoname);
+    }
+    fprintf(out, "\t.data\t\t= %s_data,\n", logoname);
+    fprintf(out,"\t.reserve1\t\t=0x20110714,\n");
+    fprintf(out,"\t.reserve2\t\t=0x41701102");
+	
+    fputs("};\n\n", out);
 
 	/* close logo file */
 	if (outputname)
@@ -387,11 +397,11 @@ static void write_logo_clut224(void)
 			}
 		}
 
-	write_hex_cnt = 0;
+	//write_hex_cnt = 0;
 
 	/* write file header */
 	write_header();
-
+/*
 	write_hex((unsigned char)(logo_width >> 8));
 	write_hex((unsigned char)logo_width);
 	write_hex((unsigned char)(logo_height >> 8));
@@ -404,7 +414,7 @@ static void write_logo_clut224(void)
 	write_hex((unsigned char)logo_width);
 	write_hex((unsigned char)(logo_height >> 8));
 	write_hex((unsigned char)logo_height);
-
+*/
 	/* write logo data */
 	for (i = 0; i < logo_height; i++)
 		for (j = 0; j < logo_width; j++) {
@@ -417,15 +427,17 @@ static void write_logo_clut224(void)
 	fputs("\n};\n\n", out);
 
 	/* write logo clut */
-	fprintf(out, "static unsigned char %s_clut[] __initdata = {\n",
+	fprintf(out, "static unsigned char %s_clut[224*3] __initdata = {\n",//fprintf(out, "static unsigned char %s_clut[] __initdata = {\n",
 		logoname);
 
 	write_hex_cnt = 0;
 
+    /*
 	for (i = 0; i < sizeof(clut_name); i++){
 		write_hex(clut_name[i]);
 	}
 	write_hex(logo_clutsize);
+    */
 
 	for (i = 0; i < logo_clutsize; i++) {
 		write_hex(logo_clut[i].red);
@@ -433,10 +445,12 @@ static void write_logo_clut224(void)
 		write_hex(logo_clut[i].blue);
 	}
 
+    /*
 	for (i = logo_clutsize; i < (MAX_LINUX_LOGO_COLORS * 3); i++)
 	{
 		write_hex(32);
 	}
+    */
 
 	/* write logo structure and file footer */
 	write_footer();

@@ -26,6 +26,7 @@ obj-$(CONFIG_LOGO_CHARGER_CLUT224)         += logo_charger00_clut224.o logo_char
 
 obj-$(CONFIG_SPU_BASE)			+= logo_spe_clut224.o
 
+obj-y  += tchip_sysInf.o
 # How to generate logo's
 
 # Use logo-cfiles to retrieve list of .c files to be built
@@ -49,12 +50,16 @@ extra-y += $(call logo-cfiles,_bmp,bmp)
 
 bmptologo := scripts/bmptologo
 pnmtologo := scripts/pnmtologo
+sysinfgcc := scripts/tchip_sysInfgcc
 
 # Create commands like "pnmtologo -t mono -n logo_mac_mono -o ..."
 quiet_cmd_logo = LOGO    $@
 	cmd_logo = $(pnmtologo) \
 			-t $(patsubst $*_%,%,$(notdir $(basename $<))) \
 			-n $(notdir $(basename $<)) -o $@ $<
+
+$(obj)/tchip_sysInf.c:  $(sysinfgcc) FORCE
+	        $(sysinfgcc)
 
 quiet_cmd_bmplogo = LOGO    $@
 	cmd_bmplogo = $(bmptologo) \

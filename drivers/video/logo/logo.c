@@ -153,11 +153,13 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 		}
 		else
 		{
+            /*
 	  		logo->width = ((logo->data[0] << 8) + logo->data[1]);
         		logo->height = ((logo->data[2] << 8) + logo->data[3]);
         		logo->clutsize = logo->clut[0];
         		logo->data += 4;
         		logo->clut += 1;
+                */
 		}
 	}
 	m_logo = logo;
