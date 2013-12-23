@@ -39,4 +39,11 @@ config GS_BMA023
   help
     To have support for your specific gsesnor you will have to
     select the proper drivers which depend on this option.
+    
+config SENSORS_STK8312
+  bool "SENSORS_STK8312"
+	depends on G_SENSOR_DEVICE
+	help	 
+	  To have support for your specific gsesnor you will have to
+	  select the proper drivers which depend on this option.
 endif

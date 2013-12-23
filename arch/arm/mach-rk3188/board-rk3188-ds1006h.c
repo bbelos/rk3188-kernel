@@ -80,6 +80,18 @@
 #include "../mach-rk30/board-rk3168-ds1006h-camera.c"
 #include <plat/key.h>
 
+
+#if defined(CONFIG_TCHIP_MACH_TR785)
+	#define GS2_ORIGENTATION_MC3230        { 1, 0, 0,0, -1, 0,  0, 0, -1}
+       //#define GS2_ORIGENTATION_STK8312       { 0, 0, 1,1, 0, 0,  0, -1, 0} //z,x,y
+	#define GS2_ORIGENTATION_STK8312      { 0, 0, -1,-1, 0, 0,  0, -1, 0} //z,x,y
+	#define GS2_ORIGENTATION_MMA7660       { 1, 0, 0,0, -1, 0,  0, 0, -1}
+#else
+	#define GS2_ORIGENTATION_MC3230         {0, 1, 0, 1, 0, 0, 0, 0, -1}
+	#define GS2_ORIGENTATION_STK8312        {0, 1, 0, 1, 0, 0, 0, 0, -1}
+	#define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1}    
+#endif
+
 #if defined(CONFIG_SWITCH_GPIO) 
 static struct gpio_switch_platform_data headset_switch_data = {
     .name = "h2w",
@@ -293,6 +305,18 @@ static struct platform_device rk29_device_backlight = {
 
 #endif
 
+#if defined (CONFIG_SENSORS_STK8312)
+
+#define STK8312_INT_PIN   RK30_PIN0_PB7
+
+static struct gsensor_platform_data STK8312_info = {
+    .model= 8312,
+    .swap_xy = 0,
+    .swap_xyz = 1,
+    .orientation = GS2_ORIGENTATION_STK8312,
+};
+#endif
+
 /*MMA8452 gsensor*/
 #if defined (CONFIG_GS_MMA8452)
 #define MMA8452_INT_PIN   RK30_PIN0_PB7
@@ -362,6 +386,14 @@ static struct sensor_platform_data akm8963_info =
        }
 };
 
+#endif
+
+#if defined(CONFIG_LS_STK2203)
+static struct sensor_platform_data light_stk2203_info = {
+    .type = SENSOR_TYPE_LIGHT,
+    .irq_enable = 1,
+    .poll_delay_ms = 200,
+};
 #endif
 
 #if defined(CONFIG_LS_PHOTORESISTOR)
@@ -1535,6 +1567,15 @@ static struct i2c_board_info __initdata i2c0_info[] = {
 		.addr          = 0x40,
 		.flags         = 0,
 	},
+#endif
+#if defined (CONFIG_SENSORS_STK8312)
+       {
+         .type                   = "stk831x",
+         .addr                   = 0x3d,
+         .flags                  = 0,
+         .irq                    = STK8312_INT_PIN,
+         .platform_data          = &STK8312_info,
+       },
 #endif
 };
 #endif
