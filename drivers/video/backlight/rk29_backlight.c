@@ -78,6 +78,7 @@ static ssize_t backlight_write(struct device *dev,
 static ssize_t backlight_read(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
+    struct rk29_bl_info *rk29_bl_info = bl_get_data(rk29_bl);
 	DBG("rk29_bl_info->min_brightness=%d\n",rk29_bl_info->min_brightness);
 	return 0;
 }
@@ -143,6 +144,30 @@ int rk29_bl_val_scalor_conic(struct rk29_bl_info *rk29_bl_info,int brightness)
 	
 	return brightness;
 }
+
+int rk29_bl_val_scalor_elongation(struct rk29_bl_info *rk29_bl_info,int brightness)
+{
+    int cal_brightness;
+    
+    if (rk29_bl_info->max_brightness < rk29_bl_info->min_brightness)
+        rk29_bl_info->max_brightness = rk29_bl_info->min_brightness;
+    
+    // 把上层传下来的(1~255)的值比例对应到(rk29_bl_info->min_brightness ~ rk29_bl_info->max_brightness)
+    cal_brightness = rk29_bl_info->min_brightness
+        + brightness * (rk29_bl_info->max_brightness
+        - rk29_bl_info->min_brightness) / 255;
+    
+    if (cal_brightness > rk29_bl_info->max_brightness)
+        cal_brightness = rk29_bl_info->max_brightness;
+    if (cal_brightness < rk29_bl_info->min_brightness)
+        cal_brightness = rk29_bl_info->min_brightness;
+    
+    DBG(">>>%s-->%d brightness = %d, cal_brightness = %d, min = %d, max = %d\n",
+                __FUNCTION__,__LINE__, brightness, cal_brightness,
+    rk29_bl_info->min_brightness, rk29_bl_info->max_brightness);
+    return cal_brightness;
+}
+
 static int rk29_bl_update_status(struct backlight_device *bl)
 {
 	u32 divh,div_total;
@@ -160,7 +185,9 @@ static int rk29_bl_update_status(struct backlight_device *bl)
 
 	if(brightness)
 	{
-		if(rk29_bl_info->brightness_mode==BRIGHTNESS_MODE_LINE)
+		if(rk29_bl_info->brightness_mode==BRIGHTNESS_MODE_ELONGATION)
+            brightness=rk29_bl_val_scalor_elongation(rk29_bl_info,brightness);
+        else if(rk29_bl_info->brightness_mode==BRIGHTNESS_MODE_LINE)
 			brightness=rk29_bl_val_scalor_line(rk29_bl_info,brightness);
 		else
 			brightness=rk29_bl_val_scalor_conic(rk29_bl_info,brightness);
@@ -211,7 +238,17 @@ static int rk29_bl_update_status(struct backlight_device *bl)
 		rk_pwm_setup(id, PWM_DIV, divh, div_total);
 	}
 
-
+    // BL_CORE_DRIVER4 is the flag if backlight have done io_init.
+    // Rosolve splash screen when machine boot
+    // Add by zhansb@130320
+    if (!(bl->props.state & BL_CORE_DRIVER4))
+    {
+        bl->props.state |= BL_CORE_DRIVER4;
+        if (rk29_bl_info && rk29_bl_info->io_init)
+        {
+            rk29_bl_info->io_init();
+        }
+    }
 
 	DBG("%s:line=%d,brightness = %d, div_total = %d, divh = %d state=%x \n",__FUNCTION__,__LINE__,brightness, div_total, divh,bl->props.state);
 out:
@@ -339,10 +376,11 @@ static int rk29_backlight_probe(struct platform_device *pdev)
 		}	
 	}
 	#endif
-	
+
+    /*
 	if (rk29_bl_info && rk29_bl_info->io_init) {
 		rk29_bl_info->io_init();
-	}
+	}*/
 
 	if(rk29_bl_info->pre_div > 0)
 		pre_div = rk29_bl_info->pre_div;

@@ -283,6 +283,18 @@ static int rk29_backlight_pwm_resume(void)
 }
 
 static struct rk29_bl_info rk29_bl_info = {
+#if defined(CONFIG_TCHIP_MACH_TR785)
+        .min_brightness = 65,
+        .max_brightness = 220,
+        .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
+	.pre_div = 30 * 1000,  // pwm output clk: 30k;
+	.pwm_id = PWM_ID,
+	.bl_ref = !PWM_EFFECT_VALUE,
+	.io_init = rk29_backlight_io_init,
+	.io_deinit = rk29_backlight_io_deinit,
+	.pwm_suspend = rk29_backlight_pwm_suspend,
+	.pwm_resume = rk29_backlight_pwm_resume,
+#else
         .min_brightness = 65,
         .max_brightness = 150,
         .brightness_mode =BRIGHTNESS_MODE_CONIC,
@@ -293,6 +305,7 @@ static struct rk29_bl_info rk29_bl_info = {
 	.io_deinit = rk29_backlight_io_deinit,
 	.pwm_suspend = rk29_backlight_pwm_suspend,
 	.pwm_resume = rk29_backlight_pwm_resume,
+#endif
 };
 
 static struct platform_device rk29_device_backlight = {
