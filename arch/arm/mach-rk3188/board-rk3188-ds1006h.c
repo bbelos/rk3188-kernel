@@ -2158,6 +2158,9 @@ static void rk30_pm_power_off(void)
 	wm831x_device_shutdown(Wm831x);//wm8326 shutdown
 #endif
 #if defined(CONFIG_REGULATOR_ACT8846)
+#ifdef CONFIG_TCHIP_MACH_TR785
+    act8846_device_shutdown();
+#else
        if (pmic_is_act8846()) {
                printk("enter dcdet===========\n");
                if(gpio_get_value (RK30_PIN0_PB2) == GPIO_LOW)
@@ -2173,6 +2176,7 @@ static void rk30_pm_power_off(void)
 		}
 		  */
        }
+#endif
 #endif
 	gpio_direction_output(POWER_ON_PIN, GPIO_LOW);
 	while (1);
