@@ -2,7 +2,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/mfd/rk616.h>
-
+#include "../video/rockchip/hdmi/rk_hdmi.h"
 
 
 extern int rk616_pll_set_rate(struct mfd_rk616 *rk616,int id,u32 cfg_val,u32 frac);
@@ -792,7 +792,9 @@ int rk616_set_vif(struct mfd_rk616 *rk616,rk_screen *screen,bool connect)
 	{
 		rk616_vif_disable(rk616,0);
 		rk616_vif_disable(rk616,1);
+        if (hdmi->hotplug != HDMI_HPD_ACTIVED) {
                 rk616_mclk_set_rate(rk616->mclk, 11289600);
+        }
 		return 0;
 	}
 #if defined(CONFIG_ONE_LCDC_DUAL_OUTPUT_INF)

@@ -150,7 +150,10 @@ static int hdmi_process_command(void)
 				if(!hdmi->enable || hdmi->suspend)
 				{
 					if(hdmi->hotplug == HDMI_HPD_ACTIVED)
+                    {
+                        hdmi->hotplug = HDMI_HPD_REMOVED;
 						hdmi_sys_remove();
+                    }
 					hdmi->state = HDMI_SLEEP;
 					hdmi->hotplug = HDMI_HPD_REMOVED;
 					hdmi->remove();
@@ -220,8 +223,8 @@ void hdmi_work(struct work_struct *work)
 			hdmi->state = READ_PARSE_EDID;
 		}
 		else if(hdmi->hotplug == HDMI_HPD_ACTIVED) {
-			hdmi_sys_remove();
 			hdmi->hotplug = hotplug;
+			hdmi_sys_remove();
 			if(hotplug == HDMI_HPD_REMOVED)
 				hdmi_sys_sleep();
 			else {
