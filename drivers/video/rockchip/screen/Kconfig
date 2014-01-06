@@ -96,6 +96,9 @@ config LCD_TX23D88VM
 config LCD_A050VL01
 	bool "RGB A050VL01"
 
+config LCD_HX101ID21C
+	bool "lvds lcd  panel HX101ID21C"
+
 config LCD_B101EW05
 	bool "RGB lcd  panel B101EW05"
 
