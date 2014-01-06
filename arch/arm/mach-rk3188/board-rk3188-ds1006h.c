@@ -81,7 +81,7 @@
 #include <plat/key.h>
 
 
-#if defined(CONFIG_TCHIP_MACH_TR785)
+#if defined(CONFIG_TCHIP_MACH_TR785) || defined(CONFIG_TCHIP_MACH_TR1088)
 	#define GS2_ORIGENTATION_MC3230        { 1, 0, 0,0, -1, 0,  0, 0, -1}
        //#define GS2_ORIGENTATION_STK8312       { 0, 0, 1,1, 0, 0,  0, -1, 0} //z,x,y
 	#define GS2_ORIGENTATION_STK8312      { 0, 0, -1,-1, 0, 0,  0, -1, 0} //z,x,y
@@ -306,7 +306,7 @@ static int rk29_backlight_pwm_resume(void)
 }
 
 static struct rk29_bl_info rk29_bl_info = {
-#if defined(CONFIG_TCHIP_MACH_TR785)
+#if defined(CONFIG_TCHIP_MACH_TR785) || defined(CONFIG_TCHIP_MACH_TR1088)
         .min_brightness = 65,
         .max_brightness = 220,
         .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
@@ -649,6 +649,30 @@ static int rk_fb_io_enable(void)
 	return 0;
 }
 
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+
+#if defined(CONFIG_LCDC1_RK3188)
+struct rk29fb_info lcdc1_screen_info = {
+	.prop           = EXTEND,       //extend display device
+       .lcd_info  = NULL,
+       .set_screen_info = hdmi_init_lcdc,
+
+};
+#endif
+
+#if defined(CONFIG_LCDC0_RK3188)
+struct rk29fb_info lcdc0_screen_info = {
+	.prop	   = PRMRY,		//primary display device
+	.io_init   = rk_fb_io_init,
+	.io_disable = rk_fb_io_disable,
+	.io_enable = rk_fb_io_enable,
+	.set_screen_info = set_lcd_info,
+	
+};
+#endif
+
+
+#else
 #if defined(CONFIG_LCDC0_RK3188)
 struct rk29fb_info lcdc0_screen_info = {
 	.prop           = EXTEND,       //extend display device
@@ -667,6 +691,8 @@ struct rk29fb_info lcdc1_screen_info = {
 	.set_screen_info = set_lcd_info,
 	
 };
+#endif
+
 #endif
 
 static struct resource resource_fb[] = {
