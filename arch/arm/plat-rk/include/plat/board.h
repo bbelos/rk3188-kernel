@@ -197,6 +197,15 @@ struct gsensor_platform_data {
 	void (*exit_platform_hw)(void);
 };
 
+struct cw2015_platform_data{
+       int dc_det_pin;
+        int batt_low_pin;
+        //.charge_ok_pin   = RK30_PIN0_PA6,
+        int dc_det_level;
+        int batt_low_level;
+        //.charge_ok_level = GPIO_HIGH,
+};
+
 struct akm8975_platform_data {
 	short m_layout[4][3][3];
 	char project_name[64];

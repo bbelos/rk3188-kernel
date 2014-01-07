@@ -388,6 +388,18 @@ static struct sensor_platform_data lis3dh_info = {
 };
 #endif
 
+#if defined(CONFIG_BATTERY_CW2015)
+static struct cw2015_platform_data cw2015_info =
+{
+    .dc_det_pin = INVALID_GPIO,
+    //.batt_low_pin = RK30_PIN0_PB1,
+    //.charge_ok_pin   = RK30_PIN0_PA6,
+    .dc_det_level = GPIO_LOW,
+    .batt_low_level = GPIO_LOW,
+    //.charge_ok_level = GPIO_HIGH,
+};
+#endif
+
 #if defined (CONFIG_COMPASS_AK8963)
 static struct sensor_platform_data akm8963_info =
 {
@@ -1567,6 +1579,15 @@ static int rk_platform_add_display_devices(void)
 // i2c
 #ifdef CONFIG_I2C0_RK30
 static struct i2c_board_info __initdata i2c0_info[] = {
+#if defined (CONFIG_BATTERY_CW2015)
+        {
+                .type                   = "cw2015",
+                .addr                   = 0x62,
+                .flags                  = 0,
+                .platform_data = &cw2015_info,
+        },
+#endif
+	
 #if defined (CONFIG_GS_MMA8452)
 	{
 		.type	        = "gs_mma8452",
