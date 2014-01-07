@@ -76,7 +76,17 @@ int rk31sdk_get_sdmmc0_pin_io_voltage(void)
     
 #elif defined(CONFIG_BCM4329) || defined(CONFIG_BCM4319) || defined(CONFIG_RKWIFI) \
 	|| defined(CONFIG_RTL8189ES)
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+    #define RK30SDK_WIFI_GPIO_POWER_N               RK30_PIN3_PD0                 
+    #define RK30SDK_WIFI_GPIO_POWER_ENABLE_VALUE    GPIO_HIGH                   
 
+    #define RK30SDK_WIFI_GPIO_RESET_N               INVALID_GPIO // RK30_PIN2_PA7
+    #define RK30SDK_WIFI_GPIO_RESET_ENABLE_VALUE    GPIO_HIGH 
+
+	#define RK30SDK_WIFI_GPIO_WIFI_INT_B                RK30_PIN3_PD2
+    #define RK30SDK_WIFI_GPIO_WIFI_INT_B_ENABLE_VALUE   GPIO_HIGH
+
+#else
     #define RK30SDK_WIFI_GPIO_POWER_N               RK30_PIN3_PD0                 
     #define RK30SDK_WIFI_GPIO_POWER_ENABLE_VALUE    GPIO_HIGH                   
 
@@ -85,6 +95,8 @@ int rk31sdk_get_sdmmc0_pin_io_voltage(void)
 
 	#define RK30SDK_WIFI_GPIO_WIFI_INT_B                RK30_PIN3_PD2
     #define RK30SDK_WIFI_GPIO_WIFI_INT_B_ENABLE_VALUE   GPIO_HIGH
+
+#endif
 
 #elif defined(CONFIG_MT5931_MT6622) || defined(CONFIG_MT5931) || defined(CONFIG_MTK_MT5931)
 

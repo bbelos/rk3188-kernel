@@ -1279,7 +1279,11 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
 
     .reset_gpio         = { // BT_RST
         .io             = RK30_PIN3_PD1, // set io to INVALID_GPIO for disable it
+#if defined(CONFIG_TCHIP_MACH_TR1088)
         .enable         = GPIO_LOW,
+#else
+        .enable         = GPIO_LOW,
+#endif
         .iomux          = {
             .name       = "bt_reset",
             .fgpio      = GPIO3_D1,
@@ -1297,7 +1301,11 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
 
     .wake_host_irq      = { // BT_HOST_WAKE, for bt wakeup host when it is in deep sleep
         .gpio           = {
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+            .io         = RK30_PIN3_PC7, // set io to INVALID_GPIO for disable it
+#else
             .io         = RK30_PIN0_PA5, // set io to INVALID_GPIO for disable it
+#endif
             .enable     = GPIO_LOW,      // set GPIO_LOW for falling, set 0 for rising
             .iomux      = {
                 .name   = NULL,
@@ -2216,8 +2224,38 @@ static void rk30_pm_power_off(void)
 	while (1);
 }
 
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+#define WL_PWR     RK30_PIN1_PB4 
+#define WL_IO_PWR  RK30_PIN1_PB3
+#define BT_RST     RK30_PIN3_PD1
+void wifi_bt_io_init()
+{ 
+    gpio_free(RK30_PIN1_PB4);
+    gpio_request(RK30_PIN1_PB4, "wifi");//RK30_PIN3_PD0
+    //gpio_request(BT_RST, "bt_rst");//RK30_PIN3_PD0
+}
+
+void wifi_bt_power_ctl(bool on)
+{
+    if(on)
+    {
+        gpio_direction_output(RK30_PIN1_PB4, GPIO_LOW);
+        //gpio_direction_output(BT_RST, GPIO_HIGH);
+    }
+    else
+    {
+        gpio_direction_output(RK30_PIN1_PB4, GPIO_HIGH);
+        //gpio_direction_output(BT_RST, GPIO_LOW);
+    }
+}
+#endif
+
 static void __init machine_rk30_board_init(void)
 {
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+    wifi_bt_io_init();
+    wifi_bt_power_ctl(true);
+#endif
 	//avs_init();
 	gpio_request(POWER_ON_PIN, "poweronpin");
 	gpio_direction_output(POWER_ON_PIN, GPIO_HIGH);
