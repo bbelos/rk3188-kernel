@@ -42,6 +42,13 @@
  *  31: 6dB
  *  Step: 1.5dB
 */
+
+
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+#define  SPKOUT_VOLUME    22 //0~31
+#define  HPOUT_VOLUME     24 //0~31
+#define   CAPTURE_VOL     24 //0-31
+#else
 #ifdef VIRTUAL_HPGND
 #define  SPKOUT_VOLUME    24 //0~31
 #define  HPOUT_VOLUME     20 //0~31
@@ -57,7 +64,7 @@
  *  Step: 1.5dB
 */
 #define   CAPTURE_VOL     24 //0-31
-
+#endif
 //sleep for MOSFET or SPK power amplifier chip
 #define SPK_AMP_DELAY 150
 #define HP_MOS_DELAY 50
