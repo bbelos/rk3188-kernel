@@ -1239,11 +1239,17 @@ static int pwm_voltage_map[] = {
 
 static struct regulator_consumer_supply pwm_dcdc1_consumers[] = {
 	{
+		.supply = "vdd_core",
+	}
+};
+static struct regulator_consumer_supply pwm_dcdc2_consumers[] = {
+	{
 		.supply = "vdd_cpu",
 	}
 };
 
-struct regulator_init_data pwm_regulator_init_dcdc[1] =
+
+struct regulator_init_data pwm_regulator_init_dcdc[2] =
 {
 	{
 		.constraints = {
@@ -1256,30 +1262,65 @@ struct regulator_init_data pwm_regulator_init_dcdc[1] =
 		.num_consumer_supplies = ARRAY_SIZE(pwm_dcdc1_consumers),
 		.consumer_supplies = pwm_dcdc1_consumers,
 	},
-};
-
-static struct pwm_platform_data pwm_regulator_info[1] = {
 	{
+		.constraints = {
+			.name = "PWM_DCDC2",
+			.min_uV = 600000,
+			.max_uV = 1800000,      //0.6-1.8V
+			.apply_uV = true,
+			.valid_ops_mask = REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_VOLTAGE,
+		},
+		.num_consumer_supplies = ARRAY_SIZE(pwm_dcdc2_consumers),
+		.consumer_supplies = pwm_dcdc2_consumers,
+	},
+};
+#define	GPIO0A4_PWM1_NAME				"gpio0a4_pwm1_name"
+#define	GPIO0A3_PWM0_NAME				"gpio0a3_pwm0_name"
+static struct pwm_platform_data pwm_regulator_info[2] = {
+	{ 	//PWM_LOG
 		.pwm_id = 1,
 		.pwm_gpio = RK30_PIN3_PD4,
+		.pwm_iomux_name=GPIO0A4_PWM1_NAME,
 		.pwm_iomux_pwm = PWM1,
 		.pwm_iomux_gpio = GPIO3_D4,
 		.pwm_voltage = 1100000,
-		.suspend_voltage = 1000000,
-		.min_uV = 800000,
-		.max_uV	= 1375000,
-		.coefficient = 575,	//57.5%
+		.suspend_voltage = 1050000,
+		.min_uV=1000000,
+		.max_uV	= 1400000,
+		.coefficient = 700,	//57.5%
 		.pwm_voltage_map = pwm_voltage_map,
 		.init_data	= &pwm_regulator_init_dcdc[0],
 	},
+	{	//PWM_ARM
+		.pwm_id = 0,
+		.pwm_gpio = RK30_PIN3_PD3,
+		.pwm_iomux_pwm = PWM0,
+		.pwm_iomux_name=GPIO0A3_PWM0_NAME,
+		.pwm_iomux_gpio = GPIO3_D3,
+		.pwm_voltage = 1100000,
+		.suspend_voltage = 1050000,
+		.min_uV=1000000,
+		.max_uV	= 1400000,
+		.coefficient = 700,	//57.5%
+		.pwm_voltage_map = pwm_voltage_map,
+		.init_data	= &pwm_regulator_init_dcdc[1],
+	},
+	
 };
 
-struct platform_device pwm_regulator_device[1] = {
+struct platform_device pwm_regulator_device[2] = {
 	{
 		.name = "pwm-voltage-regulator",
 		.id = 0,
 		.dev		= {
 			.platform_data = &pwm_regulator_info[0],
+		}
+	},
+	{
+		.name = "pwm-voltage-regulator",
+		.id = 1,
+		.dev		= {
+			.platform_data = &pwm_regulator_info[1],
 		}
 	},
 };
@@ -1555,6 +1596,11 @@ static struct platform_device *devices[] __initdata = {
 
 #ifdef CONFIG_TCC_BT_DEV
         &device_tcc_bt,
+#endif
+
+#ifdef CONFIG_RK30_PWM_REGULATOR
+        &pwm_regulator_device[0],
+        &pwm_regulator_device[1],
 #endif
 };
 
@@ -2424,7 +2470,7 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level0[] = {
 };
 //ds1006h 10'
 static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {	
-       {.frequency = 133 * 1000,       .index = 975 * 1000},
+    {.frequency = 133 * 1000,       .index = 975 * 1000},
 	{.frequency = 200 * 1000,       .index = 1000 * 1000},
 	{.frequency = 266 * 1000,       .index = 1025 * 1000},
 	{.frequency = 300 * 1000,       .index = 1050 * 1000},
