@@ -63,6 +63,11 @@
 #define GSLX680_I2C_ADDR 	0x40
 #define IRQ_PORT			RK30_PIN1_PB7//RK29_PIN0_PA2
 #define WAKE_PORT			RK30_PIN0_PB6//RK29_PIN6_PC3
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+#define POWER_PORT          RK30_PIN1_PB5
+#else
+#define POWER_PORT          INVALID_GPIO
+#endif
 
 #define GSL_DATA_REG		0x80
 #define GSL_STATUS_REG		0xe0
@@ -201,6 +206,15 @@ static int gslX680_init(void)
 	}
 	gpio_direction_output(WAKE_PORT, 0);
 	gpio_set_value(WAKE_PORT,GPIO_HIGH);
+	msleep(20);
+    
+	if(gpio_request(POWER_PORT,NULL) != 0){
+		gpio_free(POWER_PORT);
+		printk("zhongchu_init_platform_hw gpio_request error\n");
+		return -EIO;
+	}
+	gpio_direction_output(POWER_PORT, 0);
+	gpio_set_value(POWER_PORT,GPIO_LOW);
 	msleep(20);
 
 	if(gpio_request(IRQ_PORT,NULL) != 0){
@@ -981,7 +995,28 @@ i2c_lock_schedule:
 	enable_irq(ts->irq);
 		
 }
+#if defined(CONFIG_REGULATOR_ACT8846)
 extern void regulator_ctrl_vcc_tp(bool on);
+#elif defined(CONFIG_RK30_PWM_REGULATOR)
+void regulator_ctrl_vcc_tp(bool on)
+{
+    //no pmu 
+    if(on && POWER_PORT!= INVALID_GPIO)
+    {
+        gpio_set_value(POWER_PORT,GPIO_LOW);
+    }
+    else if(INVALID_GPIO!=INVALID_GPIO)
+    {
+        gpio_set_value(POWER_PORT,GPIO_HIGH);
+    }
+
+}
+#else
+void regulator_ctrl_vcc_tp(bool on)
+{
+    //empty
+}
+#endif
 #ifdef GSL_MONITOR
 static void gsl_monitor_worker(void)
 {

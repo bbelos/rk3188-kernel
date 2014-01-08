@@ -564,6 +564,15 @@ static struct sensor_platform_data cm3217_info = {
 #ifdef CONFIG_FB_ROCKCHIP
 
 #if DS1006H_V1_2_SUPPORT
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+#define LCD_CS_PIN         INVALID_GPIO
+#define LCD_CS_VALUE       GPIO_HIGH
+#define LCD_EN_PIN         RK30_PIN0_PB0//INVALID_GPIO
+#define LCD_EN_VALUE       GPIO_LOW
+#define LCD_PWR_PIN        RK30_PIN1_PB2
+#define LCD_PWR_VALUE      GPIO_HIGH
+#define LCD_PWR_IOMUX      GPIO1_B2
+#else
 #define LCD_CS_PIN         RK30_PIN1_PB5
 #define LCD_CS_IOMUX       GPIO1_B5
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -572,6 +581,7 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_EN_PIN         RK30_PIN0_PB0
 #define LCD_EN_VALUE       GPIO_LOW
+#endif
 #else
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
