@@ -42,6 +42,8 @@
 #include "rockchip_gslX680_backmusic.h"
 #elif defined(CONFIG_TCHIP_MACH_TR103Q)
 #include "rockchip_gslX680_tr103q.h"
+#elif defined(CONFIG_TCHIP_MACH_TR1088)
+#include "rockchip_gslX680_tr1088.h"
 #elif defined(CONFIG_TCHIP_MACH_TR820)
 #include "TR820.h"
 #else

@@ -111,4 +111,7 @@ obj-y += gsl_point_id.o
 ifeq ($(CONFIG_TCHIP_MACH_TR785),y)
 $(obj)/gsl_point_id.o: $(srctree)/$(obj)/gsl_point_id_tr785
 	cp $(srctree)/$(obj)/gsl_point_id_tr785 $(obj)/gsl_point_id.o
+else ifeq ($(CONFIG_TCHIP_MACH_TR1088),y)
+$(obj)/gsl_point_id.o: $(srctree)/$(obj)/gsl_point_id_tr1088
+	cp $(srctree)/$(obj)/gsl_point_id_tr1088 $(obj)/gsl_point_id.o
 endif
