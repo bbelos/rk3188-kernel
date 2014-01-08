@@ -33,6 +33,10 @@ Comprehensive camera device registration:
                              mclk)\           // sensor input clock rate, 24 or 48
                           
 */
+
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+#include "../mach-rk3188/tchip_camera_setup_tr1088.h"
+#else
 static struct rkcamera_platform_data new_camera[] = {
     new_camera_device_ex(RK29_CAM_SENSOR_OV5642,
                         back,
@@ -76,6 +80,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         3, 0), */
     new_camera_device_end
 };
+#endif
 /*---------------- Camera Sensor Macro Define Begin  ------------------------*/
 /*---------------- Camera Sensor Configuration Macro Begin ------------------------*/
 #define CONFIG_SENSOR_0 RK29_CAM_SENSOR_OV5640						/* back camera sensor */
