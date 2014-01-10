@@ -2273,6 +2273,14 @@ static struct i2c_board_info __initdata i2c2_info[] = {
 		.platform_data = &icn83xx_info,
 	},
 #endif
+#if defined (CONFIG_TOUCHSCREEN_ICN850X)
+    {
+        .type          = "chipone-ts",
+        .addr          = 0x48,
+        .flags         = 0,
+        .irq           = RK30_PIN1_PB7,
+    },
+#endif
 #if defined (CONFIG_CT36X_TS)
 	{
 		.type	       = CT36X_NAME,

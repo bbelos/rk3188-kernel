@@ -28,6 +28,15 @@ config TOUCHSCREEN_GSLX680_RK3168
 config TOUCHSCREEN_GSLX680_RK3028
 		tristate "gslX680 rk3028 touchscreen panel support "
 		depends on I2C2_RK29 || I2C2_RK30
+config TOUCHSCREEN_GSLX680_RK3028_780
+		tristate "gslX680 rk3028 touchscreen panel support for 780"
+		depends on I2C2_RK29 || I2C2_RK30
+
+config TOUCHSCREEN_ICN850X
+       tristate "Chipone touchscreen icn850x"
+       help
+         This enables support for Chipone touchscreens.
+
 config TOUCHSCREEN_XPT2046_SPI
 	tristate "XPT2046 based touchscreens:SPI Interface"
 	depends on SPIM_RK29
@@ -1103,8 +1112,13 @@ config ATMEL_MXT1386
                 default n
                 help
                   RK29 ATMEL_MXT1386 touch debug
-comment "zet62xx support" 
-source  "drivers/input/touchscreen/zet62xx/Kconfig"  
+                  
+config TOUCHSCREEN_ILITEK_AIMVF
+		tristate "ilitek_aimvF touchscreen panel support "
+		depends on I2C2_RK29 || I2C2_RK30   
+
+comment "zet62xx support"
+source  "drivers/input/touchscreen/zet62xx/Kconfig"	
 comment "AW5X0X support" 
-source  "drivers/input/touchscreen/aw5x0x/Kconfig"
+source  "drivers/input/touchscreen/aw5x0x/Kconfig"	            
 endif

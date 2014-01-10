@@ -101,9 +101,12 @@ obj-$(CONFIG_TOUCHSCREEN_FT5X0X)	+= ft5x0x.o
 obj-$(CONFIG_TOUCHSCREEN_GSLX680)	+= rockchip_gslX680.o
 obj-$(CONFIG_TOUCHSCREEN_GSLX680_RK3168)	+= rockchip_gslX680_rk3168.o
 obj-$(CONFIG_TOUCHSCREEN_GSLX680_RK3028)	+= rockchip_gslX680_rk3028.o
+obj-$(CONFIG_TOUCHSCREEN_GSLX680_RK3028_780)	+= rockchip_gslX680_rk3028_s741.o
 # Make VTL TouchScreen Driver
 #obj-$(CONFIG_TOUCHSCREEN_CT36X)		+= ct36x_ts/
 obj-$(CONFIG_TP_760_TS)                    += tp_760_ts.o
+obj-$(CONFIG_TOUCHSCREEN_ILITEK_AIMVF)	+= ilitek_aimvF.o
+obj-$(CONFIG_TOUCHSCREEN_ICN850X)      += ICN850X/
 obj-y += zet62xx/
 obj-y += aw5x0x/
 
