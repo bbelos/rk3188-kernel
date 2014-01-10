@@ -37,6 +37,9 @@ choice
 	
     config TCHIP_MACH_TR1088
 		bool "TR1088, Public 10.1' Machine"
+    
+    config TCHIP_MACH_TR7088
+		bool "TR7088, Public 7' Machine"
 
 	config TCHIP_MACH_TR785
 		bool "TR785, Public 7.85' Machine"
