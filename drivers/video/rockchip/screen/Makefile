@@ -68,6 +68,7 @@ obj-$(CONFIG_LCD_MQ0801D)    += lcd_mq0801d.o
 obj-$(CONFIG_LCD_LD089WU1_MIPI)   += lcd_LD089WU1_mipi.o
 obj-$(CONFIG_LCD_LP079X01_MIPI)   += lcd_LP079X01_mipi.o
 obj-$(CONFIG_LCD_B080XAN02_MIPI)   += lcd_B080XAN02_mipi.o
+obj-$(CONFIG_LCD_LSL070NL01_LVDS)   += lcd_lsl070nl01.o
 
 
 quiet_cmd_gen = GEN     $@

@@ -306,7 +306,7 @@ static int rk29_backlight_pwm_resume(void)
 }
 
 static struct rk29_bl_info rk29_bl_info = {
-#if defined(CONFIG_TCHIP_MACH_TR785) || defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR785) || defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
         .min_brightness = 65,
         .max_brightness = 220,
         .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
@@ -564,7 +564,7 @@ static struct sensor_platform_data cm3217_info = {
 #ifdef CONFIG_FB_ROCKCHIP
 
 #if DS1006H_V1_2_SUPPORT
-#if defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
 #define LCD_EN_PIN         RK30_PIN0_PB0//INVALID_GPIO
@@ -671,7 +671,7 @@ static int rk_fb_io_enable(void)
 	return 0;
 }
 
-#if defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
 
 #if defined(CONFIG_LCDC1_RK3188)
 struct rk29fb_info lcdc1_screen_info = {
@@ -2301,7 +2301,7 @@ static void rk30_pm_power_off(void)
 	while (1);
 }
 
-#if defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
 #define WL_PWR     RK30_PIN1_PB4 
 #define WL_IO_PWR  RK30_PIN1_PB3
 #define BT_RST     RK30_PIN3_PD1
@@ -2316,7 +2316,9 @@ void wifi_bt_power_ctl(bool on)
 {
     if(on)
     {
-        gpio_direction_output(RK30_PIN1_PB4, GPIO_LOW);
+        printk("wbj->>>>>>>>>>>>>>hello\n");
+        gpio_set_value(RK30_PIN1_PB4,GPIO_LOW);
+        //gpio_direction_output(RK30_PIN1_PB4, GPIO_LOW);
         //gpio_direction_output(BT_RST, GPIO_HIGH);
     }
     else
@@ -2329,7 +2331,7 @@ void wifi_bt_power_ctl(bool on)
 
 static void __init machine_rk30_board_init(void)
 {
-#if defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
     wifi_bt_io_init();
     wifi_bt_power_ctl(true);
 #endif

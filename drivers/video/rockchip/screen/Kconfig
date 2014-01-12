@@ -196,6 +196,8 @@ config LCD_RK3168_FAC
         bool "RK3168 for factoryTool"     
 config LCD_LP079X01_MIPI
 	bool "mipi dsi lcd LP079X01 1024x785"
+config LCD_LSL070NL01_LVDS
+	bool "lcds lcd lsl070nl01 1024X600"
 endchoice
 
 
