@@ -36,6 +36,8 @@ Comprehensive camera device registration:
 
 #if defined(CONFIG_TCHIP_MACH_TR1088)
 #include "../mach-rk3188/tchip_camera_setup_tr1088.h"
+#elif defined(CONFIG_TCHIP_MACH_TR7088)
+#include "../mach-rk3188/tchip_camera_setup_tr7088.h"
 #else
 static struct rkcamera_platform_data new_camera[] = {
     new_camera_device_ex(RK29_CAM_SENSOR_OV5642,
