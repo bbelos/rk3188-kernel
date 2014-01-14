@@ -201,6 +201,61 @@ struct ts_hw_data     gslx680_info = {
 };
 #endif
 
+#if defined(CONFIG_TOUCHSCREEN_ICN83XX)
+#define TOUCH_INT_PIN		RK30_PIN1_PB7
+#define TOUCH_RST_PIN		RK30_PIN0_PB6  //INVALID_GPIO
+//if no the pins set 0
+struct icn83xx_ts_hw_data { //this struct is define in icn838x_iic_ts.c 
+	int reset_gpio;
+	int touch_en_gpio;
+	int (*init_platform_hw)(void);
+	int revert_x;
+	int revert_y;
+	int revert_xy;
+	int screen_max_x;
+	int screen_max_y;
+};
+int icn83xx_init_platform_hw(void)
+{
+	if(TOUCH_RST_PIN == INVALID_GPIO){
+		printk("----------------------->icn830x_rst_pin no defined\n");
+		return 0;
+	}
+	gpio_request(TOUCH_RST_PIN, "icn830x_rst_pin");
+	gpio_direction_output(TOUCH_RST_PIN, GPIO_HIGH);
+	printk("----------------------->icn830x_rst_pin = %d\n",gpio_get_value(TOUCH_RST_PIN));
+ 
+        return 0;
+
+}
+
+struct icn83xx_ts_hw_data     icn83xx_info = {
+	.reset_gpio = TOUCH_RST_PIN,//0
+	.touch_en_gpio = 0, //0
+	.init_platform_hw = icn83xx_init_platform_hw,//0
+	#if defined(CONFIG_TCHIP_MACH_TR726C) && defined(CONFIG_LCD_RK2926_V86)
+	.revert_x = 0,
+	.revert_y = 1,
+	.revert_xy = 0,
+	#else
+	.revert_x = 1,
+	.revert_y = 0,
+	.revert_xy = 0,
+	#endif
+	#if defined(CONFIG_TCHIP_MACH_600P)
+	.screen_max_x = 1024,
+		#if defined(CONFIG_TCHIP_MACH_TP_SCREEN_DD)
+	.screen_max_y = 626,
+		#else
+	.screen_max_y = 600,
+		#endif
+	#else //480P
+	.screen_max_x = 800,
+	.screen_max_y = 480,
+	#endif
+};
+#endif
+
 #if defined(CONFIG_CT36X_TS)
 
 #define TOUCH_MODEL		363
@@ -242,6 +297,8 @@ static struct spi_board_info board_spi_devices[] = {
 #define BL_EN_PIN         RK30_PIN0_PA2
 #define BL_EN_VALUE       GPIO_HIGH
 #endif
+
+int is_backligth_closed = 0;
 static int rk29_backlight_io_init(void)
 {
 	int ret = 0;
@@ -267,7 +324,7 @@ static int rk29_backlight_io_deinit(void)
 #ifdef  LCD_DISP_ON_PIN
 	gpio_free(BL_EN_PIN);
 #endif
-
+	is_backligth_closed = 1;
 	pwm_gpio = iomux_mode_to_gpio(PWM_MODE);
 	gpio_request(pwm_gpio, NULL);
 	gpio_direction_output(pwm_gpio, GPIO_LOW);
@@ -283,6 +340,7 @@ static int rk29_backlight_pwm_suspend(void)
 		printk("func %s, line %d: request gpio fail\n", __FUNCTION__, __LINE__);
 		return -1;
 	}
+	is_backligth_closed = 1;
 	gpio_direction_output(pwm_gpio, GPIO_LOW);
 #ifdef  LCD_DISP_ON_PIN
 	gpio_direction_output(BL_EN_PIN, 0);
@@ -302,6 +360,7 @@ static int rk29_backlight_pwm_resume(void)
 	gpio_direction_output(BL_EN_PIN, 1);
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
 #endif
+	is_backligth_closed = 0;
 	return 0;
 }
 
@@ -2138,6 +2197,15 @@ static struct i2c_board_info __initdata i2c2_info[] = {
         .flags          = 0,
         .platform_data =&gslx680_info,
     },
+#endif
+#if defined (CONFIG_TOUCHSCREEN_ICN83XX)
+	{
+		.type          = "chipone-ts",
+		.addr          = 0x30,
+		.flags         = 0,
+		//.irq           = RK30_PIN0_PB4,
+		.platform_data = &icn83xx_info,
+	},
 #endif
 #if defined (CONFIG_CT36X_TS)
 	{

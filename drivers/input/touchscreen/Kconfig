@@ -14,6 +14,11 @@ if INPUT_TOUCHSCREEN
 config CT36X_TS
 	tristate "CT36X touchscreens support"
 
+config TOUCHSCREEN_ICN83XX
+       tristate "Chipone touchscreen icn838x"
+       help
+         This enables support for Chipone touchscreens.
+
 config TOUCHSCREEN_GSLX680
 		tristate "gslX680 touchscreen panel support "
 		depends on I2C2_RK29 || I2C2_RK30

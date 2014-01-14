@@ -114,4 +114,9 @@ $(obj)/gsl_point_id.o: $(srctree)/$(obj)/gsl_point_id_tr785
 else ifeq ($(CONFIG_TCHIP_MACH_TR1088),y)
 $(obj)/gsl_point_id.o: $(srctree)/$(obj)/gsl_point_id_tr1088
 	cp $(srctree)/$(obj)/gsl_point_id_tr1088 $(obj)/gsl_point_id.o
+else
+$(obj)/gsl_point_id.o: $(srctree)/$(obj)/gsl_point_id
+	cp $(srctree)/$(obj)/gsl_point_id $(obj)/gsl_point_id.o
 endif
+
+obj-$(CONFIG_TOUCHSCREEN_ICN83XX)      += ICN838X/
