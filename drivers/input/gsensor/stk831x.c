@@ -208,7 +208,7 @@ static int32_t stk_get_ic_content(struct stk831x_data *stk);
 static int STK831x_SetOffset(char buf[]);
 static void stk_handle_first_en(struct stk831x_data *stk);
 
-#if defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
 static int gsensor_direct_x = 1;
 static int gsensor_direct_y = 1;
 static int gsensor_direct_z = 0;
