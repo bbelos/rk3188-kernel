@@ -48,6 +48,10 @@
 #define  SPKOUT_VOLUME    22 //0~31
 #define  HPOUT_VOLUME     24 //0~31
 #define   CAPTURE_VOL     24 //0-31
+#elif defined(CONFIG_TCHIP_MACH_TR7088)
+#define  SPKOUT_VOLUME    22 //0~31
+#define  HPOUT_VOLUME     24 //0~31
+#define   CAPTURE_VOL     24 //0-31
 #else
 #ifdef VIRTUAL_HPGND
 #define  SPKOUT_VOLUME    24 //0~31
