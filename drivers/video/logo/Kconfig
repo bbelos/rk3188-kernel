@@ -27,6 +27,10 @@ config LOGO_LINUX_CLUT224
 	bool "Standard 224-color Linux logo"
 	default y
 
+config LOGO_LINUX_CLUT224_TR7088
+	bool "Standard 224-color Linux logo for TR7088"
+	default n
+
 config LOGO_PIPO_CLUT224
 	bool "Standard 224-pipo Linux logo"
 	default n

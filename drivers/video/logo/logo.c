@@ -84,6 +84,10 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 		/* Generic Linux logo */
 		logo = &logo_linux_clut224;
 #endif
+#ifdef CONFIG_LOGO_LINUX_CLUT224_TR7088
+		/* Generic Linux logo */
+		logo = &tr7088_logo_linux_clut224;
+#endif
 #ifdef CONFIG_LOGO_PIPO_CLUT224
 		/* Generic Linux logo */
 		logo = &logo_pipo_clut224;
