@@ -28,14 +28,27 @@
 
 typedef uint32_t uint32;
 
-//#define ENABLE_DDR_CLCOK_GPLL_PATH  //for RK3188
+#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR1088)
+#define USE_LPDDR2
+#endif
 
+//#define ENABLE_DDR_CLCOK_GPLL_PATH  //for RK3188
+#ifdef USE_LPDDR2
+#define DDR3_DDR2_ODT_DLL_DISABLE_FREQ    (200)
+#else
 #define DDR3_DDR2_ODT_DLL_DISABLE_FREQ    (333)
+#endif
 #define SR_IDLE                       (0x1)   //unit:32*DDR clk cycle, and 0 for disable auto self-refresh
 #define PD_IDLE                       (0X40)  //unit:DDR clk cycle, and 0 for disable auto power-down
 
+#ifdef USE_LPDDR2
+#if (DDR3_DDR2_ODT_DLL_DISABLE_FREQ > 200)
+#error
+#endif
+#else
 #if (DDR3_DDR2_ODT_DLL_DISABLE_FREQ > 333)
 #error
+#endif
 #endif
 
 #define PMU_BASE_ADDR           RK30_PMU_BASE
@@ -2010,11 +2023,19 @@ uint32_t ddr_get_parameter(uint32_t nMHz)
             ret = -4;
         if(nMHz <= DDR3_DDR2_ODT_DLL_DISABLE_FREQ)
         {
+            #ifdef  USE_LPDDR2
+            p_publ_timing->mr[1] = DDR3_DS_34 | DDR3_Rtt_Nom_DIS;
+            #else
             p_publ_timing->mr[1] = DDR3_DS_40 | DDR3_Rtt_Nom_DIS;
+            #endif
         }
         else
         {
+            #ifdef USE_LPDDR2
+            p_publ_timing->mr[1] = DDR3_DS_34 | DDR3_Rtt_Nom_120;
+            #else
             p_publ_timing->mr[1] = DDR3_DS_40 | DDR3_Rtt_Nom_120;
+            #endif
         }
         p_publ_timing->mr[2] = DDR3_MR2_CWL(cwl) /* | DDR3_Rtt_WR_60 */;
         p_publ_timing->mr[3] = 0;
@@ -2813,7 +2834,11 @@ void __sramlocalfunc ddr_update_odt(void)
             pPHY_Reg->DATX8[3].DXGCR &= ~(0x3<<9);
         }
     }
+#ifdef USE_LPDDR2
+    tmp = (0x1<<28) | (0x3<<15) | (0x3<<10) | (0x19<<5) | 0x19;
+#else
     tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0xb<<5) | 0xb;  //DS=34ohm,ODT=171ohm
+#endif
     cs = ((pPHY_Reg->PGCR>>18) & 0xF);
     if(cs > 1)
     {
