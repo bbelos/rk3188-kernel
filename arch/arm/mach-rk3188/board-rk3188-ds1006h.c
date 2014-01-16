@@ -1428,8 +1428,8 @@ static struct pwm_platform_data pwm_regulator_info[2] = {
 		.pwm_voltage = 1100000,
 		.suspend_voltage = 1050000,
 		.min_uV=1000000,
-		.max_uV	= 1400000,
-		.coefficient = 700,	//57.5%
+		.max_uV	= 1375000,
+		.coefficient = 470,	//57.5%
 		.pwm_voltage_map = pwm_voltage_map,
 		.init_data	= &pwm_regulator_init_dcdc[1],
 	},
@@ -2196,7 +2196,11 @@ void __sramfunc board_pmu_resume(void)
 	#endif
 }
 
- int __sramdata gpio3d6_iomux,gpio3d6_do,gpio3d6_dir,gpio3d6_en;
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
+int __sramdata gpio3d3_iomux,gpio3d3_do,gpio3d3_dir,gpio3d3_en;
+#else
+int __sramdata gpio3d6_iomux,gpio3d6_do,gpio3d6_dir,gpio3d6_en;
+#endif
 
 #define grf_readl(offset)	readl_relaxed(RK30_GRF_BASE + offset)
 #define grf_writel(v, offset)	do { writel_relaxed(v, RK30_GRF_BASE + offset); dsb(); } while (0)
@@ -2207,25 +2211,25 @@ void __sramfunc rk30_pwm_logic_suspend_voltage(void)
 
 //	int gpio0d7_iomux,gpio0d7_do,gpio0d7_dir,gpio0d7_en;
 	sram_udelay(10000);
-	gpio3d6_iomux = grf_readl(GRF_GPIO3D_IOMUX);
-	gpio3d6_do = grf_readl(GRF_GPIO3H_DO);
-	gpio3d6_dir = grf_readl(GRF_GPIO3H_DIR);
-	gpio3d6_en = grf_readl(GRF_GPIO3H_EN);
-
-	grf_writel((1<<28), GRF_GPIO3D_IOMUX);
-	grf_writel((1<<30)|(1<<14), GRF_GPIO3H_DIR);
-	grf_writel((1<<30)|(1<<14), GRF_GPIO3H_DO);
-	grf_writel((1<<30)|(1<<14), GRF_GPIO3H_EN);
+    gpio3d3_iomux = grf_readl(0x009c);
+    gpio3d3_do = grf_readl(GRF_GPIO3H_DO);
+    gpio3d3_dir = grf_readl(GRF_GPIO3H_DIR);
+    gpio3d3_en = grf_readl(GRF_GPIO3H_EN);
+    
+    grf_writel((1<<22)|(3<<24), 0x009c);
+    grf_writel((3<<27)|(3<<11), GRF_GPIO3H_DIR);
+    grf_writel((3<<27)|(3<<11), GRF_GPIO3H_DO);
+    grf_writel((3<<27)|(3<<11), GRF_GPIO3H_EN);
 #endif 
 }
 void __sramfunc rk30_pwm_logic_resume_voltage(void)
 {
 #ifdef CONFIG_RK30_PWM_REGULATOR
-	grf_writel((1<<28)|gpio3d6_iomux, GRF_GPIO3D_IOMUX);
-	grf_writel((1<<30)|gpio3d6_en, GRF_GPIO3H_EN);
-	grf_writel((1<<30)|gpio3d6_dir, GRF_GPIO3H_DIR);
-	grf_writel((1<<30)|gpio3d6_do, GRF_GPIO3H_DO);
-	sram_udelay(10000);
+	grf_writel((1<<22)|(3<<24)|gpio3d3_iomux, 0x009c);
+    grf_writel((3<<27)|gpio3d3_en, GRF_GPIO3H_EN);
+    grf_writel((3<<27)|gpio3d3_dir, GRF_GPIO3H_DIR);
+    grf_writel((3<<27)|gpio3d3_do, GRF_GPIO3H_DO);
+    sram_udelay(10000);
 
 #endif
 
@@ -2587,13 +2591,15 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level1[] = {
 };
 // ds1006h 10'
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
-        {.frequency = 312 * 1000,       .index = 900 * 1000},
-        {.frequency = 504 * 1000,       .index = 925 * 1000},
+        {.frequency = 312 * 1000,       .index = 925 * 1000},
+        {.frequency = 504 * 1000,       .index = 950 * 1000},
         {.frequency = 816 * 1000,       .index = 1000 * 1000},
         {.frequency = 1008 * 1000,      .index = 1075 * 1000},
         {.frequency = 1200 * 1000,      .index = 1200 * 1000},
         {.frequency = 1416 * 1000,      .index = 1250 * 1000},
+#if !defined(CONFIG_TCHIP_MACH_TR1088) && !defined(CONFIG_TCHIP_MACH_TR7088)
         {.frequency = 1608 * 1000,      .index = 1350 * 1000},
+#endif
         {.frequency = CPUFREQ_TABLE_END},
 };
 //if you board is good for volt quality,select dvfs_arm_table_volt_level0
@@ -2625,8 +2631,8 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {
 
 /******************************** ddr dvfs frequency volt table **********************************/
 static struct cpufreq_frequency_table dvfs_ddr_table_volt_level0[] = {
-	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 950 * 1000},
-	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1000 * 1000},
+	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
+	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1050 * 1000},
 	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1100 * 1000},
         {.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,     .index = 1150 * 1000},
 	//{.frequency = 528 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
@@ -2634,7 +2640,7 @@ static struct cpufreq_frequency_table dvfs_ddr_table_volt_level0[] = {
 };
 
 static struct cpufreq_frequency_table dvfs_ddr_table_t[] = {
-	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 950 * 1000},
+	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
 	{.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1150 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
