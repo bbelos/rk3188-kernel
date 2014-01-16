@@ -169,6 +169,7 @@ EXPORT_SYMBOL_GPL(get_harware_version);
 #if defined(CONFIG_TOUCHSCREEN_GSLX680) || defined(CONFIG_TOUCHSCREEN_GSLX68X) || defined(CONFIG_TOUCHSCREEN_GSL2682)
 #define TOUCH_RESET_PIN RK30_PIN0_PB6
 #define TOUCH_EN_PIN NULL
+#define TOUCH_PWR_PIN RK30_PIN1_PB5
 #define TOUCH_INT_PIN RK30_PIN1_PB7
 
 int gslx680_init_platform_hw(void)
@@ -184,6 +185,12 @@ int gslx680_init_platform_hw(void)
                 printk("gslx680_init_platform_hw  gpio_request error\n");
                 return -EIO;
         }
+        if(gpio_request(TOUCH_PWR_PIN,NULL) != 0){
+            gpio_free(TOUCH_RESET_PIN);
+            printk("gslx680_init_platform_hw gpio_request error\n");
+            return -EIO;
+        }
+        gpio_direction_output(TOUCH_PWR_PIN, GPIO_LOW);
         gpio_direction_output(TOUCH_RESET_PIN, GPIO_HIGH);
         mdelay(10);
         gpio_set_value(TOUCH_RESET_PIN,GPIO_LOW);
@@ -481,7 +488,7 @@ static struct sensor_platform_data lis3dh_info = {
 #if defined(CONFIG_BATTERY_CW2015)
 static struct cw2015_platform_data cw2015_info =
 {
-    .dc_det_pin = INVALID_GPIO,
+    .dc_det_pin = RK30_PIN0_PB2,//INVALID_GPIO,
     //.batt_low_pin = RK30_PIN0_PB1,
     //.charge_ok_pin   = RK30_PIN0_PA6,
     .dc_det_level = GPIO_LOW,
@@ -976,7 +983,11 @@ static struct rk610_codec_platform_data rk610_codec_pdata = {
 #else
 #define RK616_RST_PIN 			RK30_PIN3_PB2
 #endif
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+#define RK616_PWREN_PIN			RK30_PIN0_PA3
+#else
 #define RK616_PWREN_PIN			INVALID_GPIO//RK30_PIN0_PA3
+#endif
 #define RK616_SCL_RATE			(100*1000)   //i2c scl rate
 static int rk616_power_on_init(void)
 {
