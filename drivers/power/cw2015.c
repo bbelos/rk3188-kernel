@@ -11,11 +11,12 @@
 #include <mach/gpio.h>
 #include <mach/iomux.h>
 #include <mach/board.h>
-
+#include <linux/time.h>
 //#include <linux/power/ns115-battery.h>
 #include <linux/string.h>
 #include <asm/irq.h>
-#define CONFIG_BATTERY_CW2015_USB_CHARGE
+
+static int usb_init_mode = 0;
 
 struct ns115_battery_gauge  {
     int (*get_battery_mvolts)(void);
@@ -707,6 +708,10 @@ static int rk29_usb_get_online(struct cw2015_device_info *data)
 {
     //  struct rk30_adc_battery_platform_data *pdata = bat->pdata;
     int online = 0; // 0--dischage ,1 ---usb charge, 2 ---standard AC charger,3--- non-standard AC charger
+    struct timespec ts;
+    int time_from_boot;
+    get_monotonic_boottime(&ts);
+    time_from_boot = ts.tv_sec;
 
     if (1 == dwc_vbus_status())
     {
@@ -715,12 +720,10 @@ static int rk29_usb_get_online(struct cw2015_device_info *data)
         else
             online = 1; // connect to pc
     }
-    else if(dwc_otg_check_dpdm() == 1)
+    else if(time_from_boot < 20)//if(dwc_otg_check_dpdm() == 1)
     {
-        if (0 == get_gadget_connect_flag())
-            online = 3; // non-standard AC charger
-        else
-            online = 1; // connect to pc
+        DBG("time_from_boot: %d",time_from_boot);
+        online = usb_init_mode;
     }
     else
     {
@@ -745,7 +748,7 @@ static int rk29_ac_usb_get_property(struct power_supply *psy,
         case POWER_SUPPLY_PROP_ONLINE:
             if (psy->type == POWER_SUPPLY_TYPE_MAINS)
             {
-                if (rk29_ac_get_online(g_cw2015))
+                if (rk29_usb_get_online(g_cw2015))
                     val->intval = 1;
                 else
                     val->intval = 0;
@@ -918,6 +921,9 @@ static int cw2015_probe(struct i2c_client *client,
             }
             gpio_direction_input(pdata->batt_low_pin);
     }
+
+    usb_init_mode=dwc_otg_check_dpdm();
+    DBG("usb_init_mode:%d\n",usb_init_mode);
 
     printk("%s ok. %d ---\n",__FUNCTION__,__LINE__);
         return 0;                   //return Ok

@@ -382,6 +382,11 @@ config BATTERY_CW2015
 	help
 	  cw2015 chip.
 
+config BATTERY_CW2015_USB_CHARGE
+	tristate "CW2015 support usb charge"
+	help
+	  cw2015 chip.
+
 config RT5025_SUPPORT_ACUSB_DUALIN
 	bool "RT5025 AC/USB Dualin Option"
 	depends on POWER_RT5025
