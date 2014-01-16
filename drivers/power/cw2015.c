@@ -15,6 +15,7 @@
 //#include <linux/power/ns115-battery.h>
 #include <linux/string.h>
 #include <asm/irq.h>
+#define CONFIG_BATTERY_CW2015_USB_CHARGE
 
 struct ns115_battery_gauge  {
     int (*get_battery_mvolts)(void);
