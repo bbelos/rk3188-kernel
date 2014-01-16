@@ -1037,6 +1037,20 @@ static int rk616_power_deinit(void)
 	
 	return 0;
 }
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
+static struct rk616_platform_data rk616_pdata = {
+	.power_init = rk616_power_on_init,
+	.power_deinit = rk616_power_deinit,
+	.scl_rate   = RK616_SCL_RATE,
+	.lcd0_func = INPUT,             //port lcd0 as input
+	.lcd1_func = INPUT,             //port lcd1 as input
+ 	.lvds_ch_nr = 1,		//the number of used lvds channel  
+	.hdmi_irq = INVALID_GPIO,
+	.spk_ctl_gpio = RK30_PIN2_PD7,
+	.hp_ctl_gpio = RK30_PIN0_PC7,//RK30_PIN0_PC1,
+    //.phone_ctl_gpio = RK30_PIN0_PC7,
+};
+#else
 static struct rk616_platform_data rk616_pdata = {
 	.power_init = rk616_power_on_init,
 	.power_deinit = rk616_power_deinit,
@@ -1049,6 +1063,8 @@ static struct rk616_platform_data rk616_pdata = {
 	.hp_ctl_gpio = RK30_PIN0_PC7,//RK30_PIN0_PC1,
     //.phone_ctl_gpio = RK30_PIN0_PC7,
 };
+#endif
+
 #endif
 
 #ifdef CONFIG_RK_HDMI
