@@ -53,7 +53,24 @@ choice
 		depends on TCHIP_MACH_TR785
 		bool "v01 for tr785"
        
+	config TCHIP_MACH_TRQ7
+		bool "TRQ7, PLDT product, and select the follow Customer"
+
 endchoice
+
+choice 
+	prompt "Select TRQ7 for AoRan or LingJu"
+	depends on TCHIP_MACH_TRQ7
+	default TCHIP_MACH_TRQ7_AR
+
+	config TCHIP_MACH_TRQ7_AR
+		bool "TRQ7 for AoRan"
+
+	config TCHIP_MACH_TRQ7_LJ
+		bool "TRQ7 for LingJu"
+
+endchoice
+
 
 #########################################
 #           T-Chip Series Boards        #
