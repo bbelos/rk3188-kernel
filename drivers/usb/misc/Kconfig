@@ -243,4 +243,9 @@ config USB_YUREX
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called yurex.
-
+	  
+config USB_DOCK_TCHIP
+	tristate "T-Chip TRQ7 usb dock"
+	depends on USB
+	help
+	  For TRQ7 project. USB dock.
