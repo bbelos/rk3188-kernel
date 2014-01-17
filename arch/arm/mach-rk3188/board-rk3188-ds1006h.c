@@ -1433,7 +1433,7 @@ static struct pwm_platform_data pwm_regulator_info[2] = {
 		.suspend_voltage = 1050000,
 		.min_uV=1000000,
 		.max_uV	= 1375000,
-		.coefficient = 470,	//57.5%
+		.coefficient = 430,	//57.5%
 		.pwm_voltage_map = pwm_voltage_map,
 		.init_data	= &pwm_regulator_init_dcdc[1],
 	},
@@ -2603,15 +2603,13 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level1[] = {
 };
 // ds1006h 10'
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
-        {.frequency = 312 * 1000,       .index = 925 * 1000},
+        {.frequency = 312 * 1000,       .index = 950 * 1000},
         {.frequency = 504 * 1000,       .index = 950 * 1000},
         {.frequency = 816 * 1000,       .index = 1000 * 1000},
-        {.frequency = 1008 * 1000,      .index = 1075 * 1000},
+        {.frequency = 1008 * 1000,      .index = 1100 * 1000},
         {.frequency = 1200 * 1000,      .index = 1200 * 1000},
-        {.frequency = 1416 * 1000,      .index = 1250 * 1000},
-#if !defined(CONFIG_TCHIP_MACH_TR1088) && !defined(CONFIG_TCHIP_MACH_TR7088)
+        {.frequency = 1416 * 1000,      .index = 1275 * 1000},
         {.frequency = 1608 * 1000,      .index = 1350 * 1000},
-#endif
         {.frequency = CPUFREQ_TABLE_END},
 };
 //if you board is good for volt quality,select dvfs_arm_table_volt_level0
@@ -2645,15 +2643,15 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {
 static struct cpufreq_frequency_table dvfs_ddr_table_volt_level0[] = {
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
 	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1050 * 1000},
-	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1100 * 1000},
-        {.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,     .index = 1150 * 1000},
+	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1125 * 1000},
+        {.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,     .index = 1175 * 1000},
 	//{.frequency = 528 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 
 static struct cpufreq_frequency_table dvfs_ddr_table_t[] = {
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
-	{.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1150 * 1000},
+	{.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1175 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 #define dvfs_ddr_table dvfs_ddr_table_volt_level0

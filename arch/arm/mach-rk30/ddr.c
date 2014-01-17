@@ -2835,7 +2835,7 @@ void __sramlocalfunc ddr_update_odt(void)
         }
     }
 #ifdef USE_LPDDR2
-    tmp = (0x1<<28) | (0x3<<15) | (0x3<<10) | (0x19<<5) | 0x19;
+    tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0x1b<<5) | 0x1b;
 #else
     tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0xb<<5) | 0xb;  //DS=34ohm,ODT=171ohm
 #endif
