@@ -374,6 +374,7 @@ enum {
 	V4L2_IDENT_NT99252 = 64163,    /* oyyf@rock-chips.com : nt99252 support */
 	V4L2_IDENT_NT99240 = 64164,    /* oyyf@rock-chips.com : nt99252 support */
 
+	V4L2_IDENT_MCNEX = 64165,
 
 	/* Don't just add new IDs at the end: KEEP THIS LIST ORDERED BY ID! */
 };

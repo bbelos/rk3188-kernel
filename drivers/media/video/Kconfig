@@ -949,6 +949,10 @@ config SOC_CAMERA_OV2640_RK
 	  This is a ov2640 camera driver for rockchip
 	  
 
+config SOC_CAMERA_MCNEX
+	tristate "mcnex sensor support for rochchip"
+	depends on SOC_CAMERA && I2C
+
 config SOC_CAMERA_OV3640
 	tristate "ov3640 camera support for rockchip"
 	depends on SOC_CAMERA && I2C && VIDEO_RK29
