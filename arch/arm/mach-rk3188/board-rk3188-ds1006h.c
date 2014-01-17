@@ -2719,7 +2719,9 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
         {.frequency = 1008 * 1000,      .index = 1100 * 1000},
         {.frequency = 1200 * 1000,      .index = 1200 * 1000},
         {.frequency = 1416 * 1000,      .index = 1275 * 1000},
+#if !defined(CONFIG_TCHIP_MACH_TR1088)
         {.frequency = 1608 * 1000,      .index = 1350 * 1000},
+#endif
         {.frequency = CPUFREQ_TABLE_END},
 };
 //if you board is good for volt quality,select dvfs_arm_table_volt_level0
