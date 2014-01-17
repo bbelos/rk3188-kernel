@@ -123,7 +123,7 @@ config LCD_HDMI_1024x768
 	---help---
 	if support RK610, this setting can support dual screen output
 
-config LCD_HSD07PFW1
+config LCD_HDMI_1024X600
         depends on MFD_RK610
         bool "RGB Hannstar LCD_HDMI_1024X600"
 
@@ -192,6 +192,8 @@ config LCD_LD089WU1_MIPI
 	bool "mipi dsi lcd LD089WU1 1920X1200"
 config LCD_B080XAN02_MIPI
 	bool "mipi dsi lcd B080XAN02 1024X768"	
+config LCD_HSD07PFW1
+	bool "screen for HSD07PFW1"
 config LCD_RK3168_FAC
         bool "RK3168 for factoryTool"     
 config LCD_LP079X01_MIPI
