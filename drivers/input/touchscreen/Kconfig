@@ -1083,6 +1083,11 @@ config TOUCHSCREEN_FT5X0X
 		tristate "ft5x0x touchscreen panel support "
 		depends on I2C2_RK29 || I2C2_RK30
 
+config TOUCHSCREEN_MELFAS 
+	tristate "MELFAS touchscreen driver" 
+	help 
+		Say Y here if you have a MELFAS touchscreen. 
+
 config ATMEL_MXT1386
         tristate "ATMEL_MXT1386 touchscreen panel support"
         depends on I2C

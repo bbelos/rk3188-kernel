@@ -111,6 +111,7 @@ obj-y += zet62xx/
 obj-y += aw5x0x/
 
 obj-y += gsl_point_id.o
+obj-$(CONFIG_TOUCHSCREEN_MELFAS) += melfas_ts.o mms100_ISP_download.o
 ifeq ($(CONFIG_TCHIP_MACH_TR785),y)
 $(obj)/gsl_point_id.o: $(srctree)/$(obj)/gsl_point_id_tr785
 	cp $(srctree)/$(obj)/gsl_point_id_tr785 $(obj)/gsl_point_id.o

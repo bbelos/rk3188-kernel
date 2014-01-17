@@ -59,6 +59,10 @@
 #if defined(CONFIG_MFD_RK616)
 #include <linux/mfd/rk616.h>
 #endif
+#ifdef CONFIG_TOUCHSCREEN_MELFAS
+#include <linux/melfas_ts.h>
+#endif
+
 #if defined(CONFIG_RK_HDMI)
 	#include "../../../drivers/video/rockchip/hdmi/rk_hdmi.h"
 #endif
@@ -166,6 +170,103 @@ int get_harware_version()
 }
 EXPORT_SYMBOL_GPL(get_harware_version);
 
+#if defined (CONFIG_TOUCHSCREEN_MELFAS)
+#define TOUCH_ENABLE_PIN        RK30_PIN1_PB4
+#define TOUCH_INT_PIN           RK30_PIN1_PB2
+#define TOUCH_RESET_PIN         RK30_PIN0_PD4
+#define TOUCH_PWR_PIN           INVALID_GPIO
+
+#define GPIO_TOUCH_EN  TOUCH_ENABLE_PIN
+#define GPIO_TOUCH_INT TOUCH_INT_PIN 
+#define GPIO_TOUCH_RST TOUCH_RESET_PIN
+
+int melfas_init_platform_hw(void)
+{
+	int ret;
+
+	//rk30_mux_api_set(GPIO4D0_SMCDATA8_TRACEDATA8_NAME, GPIO4D_GPIO4D0);
+	//rk30_mux_api_set(GPIO4C2_SMCDATA2_TRACEDATA2_NAME, GPIO4C_GPIO4C2);
+	//rk30_mux_api_set(GPIO0C7_TRACECTL_SMCADDR3_NAME, GPIO0C_GPIO0C7);
+	//printk("%s:0x%x,0x%x\n",__func__,rk30_mux_api_get(GPIO4D0_SMCDATA8_TRACEDATA8_NAME),rk30_mux_api_get(GPIO4C2_SMCDATA2_TRACEDATA2_NAME));
+	
+	printk("%s\r\n", __func__);
+	if (TOUCH_PWR_PIN != INVALID_GPIO) {
+			ret = gpio_request(TOUCH_PWR_PIN, "melfas power pin");
+			if (ret != 0) {
+					gpio_free(TOUCH_PWR_PIN);
+					printk("melfas gpio_request power error\n");
+					return -EIO;
+			}
+			gpio_direction_output(TOUCH_PWR_PIN, 0);
+			gpio_set_value(TOUCH_PWR_PIN, GPIO_HIGH);
+			msleep(100);
+			gpio_set_value(TOUCH_PWR_PIN, GPIO_LOW);
+	        printk("%s: power pin init ok!\r\n", __func__);
+	}
+	
+	if (TOUCH_ENABLE_PIN != INVALID_GPIO) {
+			ret = gpio_request(TOUCH_ENABLE_PIN, "melfas enable pin");
+			if (ret != 0) {
+					gpio_free(TOUCH_ENABLE_PIN);
+					printk("melfas gpio_request enable error\n");
+					return -EIO;
+			}
+			gpio_direction_output(TOUCH_ENABLE_PIN, 0);
+			//gpio_set_value(TOUCH_ENABLE_PIN, GPIO_LOW);
+			gpio_set_value(TOUCH_ENABLE_PIN, GPIO_HIGH);
+			msleep(100);
+	}
+
+	if (TOUCH_RESET_PIN != INVALID_GPIO) {
+			ret = gpio_request(TOUCH_RESET_PIN, "melfas reset pin");
+			if (ret != 0) {
+					gpio_free(TOUCH_RESET_PIN);
+					printk("melfas gpio_request reset error\n");
+					return -EIO;
+			}
+			gpio_direction_output(TOUCH_RESET_PIN, 0);
+			gpio_set_value(TOUCH_RESET_PIN, GPIO_LOW);
+			msleep(10);
+			gpio_set_value(TOUCH_RESET_PIN, GPIO_HIGH);
+			msleep(500);
+	        printk("%s: reset pin init ok!\r\n", __func__);
+	}
+	
+	if (GPIO_TOUCH_INT != INVALID_GPIO) {
+			ret = gpio_request(GPIO_TOUCH_INT, "melfas irq pin");
+			if (ret != 0) {
+					gpio_free(GPIO_TOUCH_INT);
+					printk("melfas gpio_request irq error\n");
+					return -EIO;
+			}
+			gpio_direction_input(GPIO_TOUCH_INT);
+			gpio_pull_updown(TOUCH_INT_PIN, GPIO_HIGH);
+	        printk("%s: reset irq init ok!\r\n", __func__);
+	}	
+	
+	return 0;
+}
+
+static void melfas_touch_power_enable(int en)
+{
+//`	gpio_direction_output(TOUCH_RESET_PIN, en);
+}
+
+
+static struct melfas_tsi_platform_data melfas_touch_platform_data = {
+	.max_x = 600,
+	.max_y = 1024,
+	.max_pressure = 255,
+	.max_area = 255, // ice cream "max_area"
+	//.gpio_scl = GPIO_TSP_SCL,
+	//.gpio_sda = GPIO_TSP_SDA,
+	.power_enable = melfas_touch_power_enable,
+	.init_platform_hw = melfas_init_platform_hw,
+};
+
+
+
+#endif
 #if defined(CONFIG_TOUCHSCREEN_GSLX680) || defined(CONFIG_TOUCHSCREEN_GSLX68X) || defined(CONFIG_TOUCHSCREEN_GSL2682)
 #define TOUCH_RESET_PIN RK30_PIN0_PB6
 #define TOUCH_EN_PIN NULL
@@ -2289,6 +2390,15 @@ static struct i2c_board_info __initdata i2c2_info[] = {
 		.platform_data = &ct36x_info,
 	},
 #endif
+
+#if defined (CONFIG_TOUCHSCREEN_MELFAS)
+        {
+                I2C_BOARD_INFO("melfas_mms100_MIP", 0x48),
+                .irq            = GPIO_TOUCH_INT , 
+                .platform_data = &melfas_touch_platform_data,
+        },
+#endif
+
 #if defined (CONFIG_LS_CM3217)
 	{
 		.type          = "lightsensor",
