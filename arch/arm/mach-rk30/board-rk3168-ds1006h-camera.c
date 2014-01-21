@@ -123,8 +123,11 @@ static void rk_cif_power(int on)
     	regulator_enable(ldo_28);
    // 	printk("%s set ldo7 vcc28_cif=%dmV end\n", __func__, regulator_get_voltage(ldo_28));
     	regulator_put(ldo_28);
-
+#if defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
     	regulator_set_voltage(ldo_18, 1200000, 1200000);
+#else
+    	regulator_set_voltage(ldo_18, 1800000, 1800000);
+#endif
     //	regulator_set_suspend_voltage(ldo, 1800000);
     	regulator_enable(ldo_18);
     //	printk("%s set ldo1 vcc18_cif=%dmV end\n", __func__, regulator_get_voltage(ldo_18));
