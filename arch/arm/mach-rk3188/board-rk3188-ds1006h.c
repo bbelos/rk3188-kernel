@@ -90,6 +90,10 @@
        //#define GS2_ORIGENTATION_STK8312       { 0, 0, 1,1, 0, 0,  0, -1, 0} //z,x,y
 	#define GS2_ORIGENTATION_STK8312      { 0, 0, -1,-1, 0, 0,  0, -1, 0} //z,x,y
 	#define GS2_ORIGENTATION_MMA7660       { 1, 0, 0,0, -1, 0,  0, 0, -1}
+#elif defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
+     #define GS2_ORIGENTATION_MC3230         {-1, 0, 0, 0, 1, 0, 0, 0, -1}
+     #define GS2_ORIGENTATION_STK8312        {0, 1, 0, -1, 0, 0, 0, 0, 1}
+     #define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1} 
 #else
 	#define GS2_ORIGENTATION_MC3230         {0, 1, 0, 1, 0, 0, 0, 0, -1}
 	#define GS2_ORIGENTATION_STK8312        {0, 1, 0, 1, 0, 0, 0, 0, -1}
@@ -139,7 +143,7 @@ static struct rk29_keys_button key_button[] = {
     {
         .desc   = "vol-",
         .code   = KEY_VOLUMEDOWN,
-#if defined(CONFIG_TCHIP_MACH_TR785)
+#if !defined(CONFIG_TCHIP_MACH_TR785)
         .adc_value      = 171,
 #else
         .adc_value      = 1,
@@ -519,6 +523,18 @@ static struct rk29_bl_info rk29_bl_info = {
 	.io_deinit = rk29_backlight_io_deinit,
 	.pwm_suspend = rk29_backlight_pwm_suspend,
 	.pwm_resume = rk29_backlight_pwm_resume,
+#elif defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
+        .min_brightness = 40,
+        .max_brightness = 250,
+		.brightness_mode = BRIGHTNESS_MODE_ELONGATION,
+		.pre_div = 30 * 1000,  // pwm output clk: 30k;
+		.pre_div = 10 * 1000,  // pwm output clk: 30k;
+		.pwm_id = PWM_ID,
+		.bl_ref = !PWM_EFFECT_VALUE,
+		.io_init = rk29_backlight_io_init,
+		.io_deinit = rk29_backlight_io_deinit,
+		.pwm_suspend = rk29_backlight_pwm_suspend,
+		.pwm_resume = rk29_backlight_pwm_resume,
 #else
         .min_brightness = 65,
         .max_brightness = 150,
@@ -545,7 +561,11 @@ static struct platform_device rk29_device_backlight = {
 
 #if defined (CONFIG_SENSORS_STK8312)
 
+#if defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
+#define STK8312_INT_PIN   RK30_PIN1_PB5
+#else
 #define STK8312_INT_PIN   RK30_PIN0_PB7
+#endif
 
 static struct gsensor_platform_data STK8312_info = {
     .model= 8312,
@@ -782,6 +802,15 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_PIN        RK30_PIN1_PB2
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_PWR_IOMUX      GPIO1_B2
+#elif defined (CONFIG_TCHIP_MACH_TRQ7_LJ)
+#define LCD_CS_PIN         RK30_PIN3_PD4        // ssd2828 RESET pin
+#define LCD_CS_VALUE       GPIO_HIGH
+#define LCD_CS_IOMUX       GPIO3_D4
+#define LCD_PWR_PIN        INVALID_GPIO    // LCD_EN pin
+#define LCD_PWR_VALUE      GPIO_HIGH
+#define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_EN_PIN         RK30_PIN0_PB0    // LCD_EN pin
+#define LCD_EN_VALUE       GPIO_LOW
 #else
 #define LCD_CS_PIN         RK30_PIN1_PB5
 #define LCD_CS_IOMUX       GPIO1_B5
@@ -814,6 +843,9 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 		}
 		else
 		{
+#ifdef LCD_CS_IOMUX
+			iomux_set(LCD_CS_IOMUX);
+#endif
 			gpio_direction_output(LCD_CS_PIN, LCD_CS_VALUE);
 		}
 	}
@@ -884,7 +916,8 @@ static int rk_fb_io_enable(void)
 	return 0;
 }
 
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined (CONFIG_TCHIP_MACH_TRQ7)
+
 
 #if defined(CONFIG_LCDC1_RK3188)
 struct rk29fb_info lcdc1_screen_info = {
@@ -905,7 +938,6 @@ struct rk29fb_info lcdc0_screen_info = {
 	
 };
 #endif
-
 
 #else
 #if defined(CONFIG_LCDC0_RK3188)
@@ -1174,9 +1206,26 @@ static struct rk616_platform_data rk616_pdata = {
 
 #ifdef CONFIG_RK_HDMI
 #define RK_HDMI_RST_PIN 			RK30_PIN3_PB2
+
+#define RK_HDMI_EN_PIN              RK30_PIN3_PA0
+#define RK_HDMI_EN_ENABLE           GPIO_LOW
+#define RK_HDMI_EN_IOMUX            GPIO3_A0
+
 static int rk_hdmi_power_init(void)
 {
 	int ret;
+
+	if(RK_HDMI_EN_PIN != INVALID_GPIO)
+	{
+	    iomux_set(RK_HDMI_EN_IOMUX);
+	    if (gpio_request(RK_HDMI_EN_PIN, NULL)) {
+	        printk("func %s, line %d: request gpio fail\n", __FUNCTION__, __LINE__);
+	        return -1;
+	    }
+		gpio_direction_output(RK_HDMI_EN_PIN, RK_HDMI_EN_ENABLE);
+		printk("func %s, line %d: set  RK_HDMI_EN_PIN low=%d\n", __FUNCTION__, __LINE__,gpio_get_value(RK_HDMI_EN_PIN) );
+	}
+
 
 	if(RK_HDMI_RST_PIN != INVALID_GPIO)
 	{
@@ -1193,7 +1242,7 @@ static int rk_hdmi_power_init(void)
 	return 0;
 }
 static struct rk_hdmi_platform_data rk_hdmi_pdata = {
-	//.io_init = rk_hdmi_power_init,
+	.io_init = rk_hdmi_power_init,
 };
 #endif
 #ifdef CONFIG_ION
@@ -1597,14 +1646,19 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
 
     .wake_host_irq      = { // BT_HOST_WAKE, for bt wakeup host when it is in deep sleep
         .gpio           = {
-#if defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
             .io         = RK30_PIN3_PC7, // set io to INVALID_GPIO for disable it
 #else
             .io         = RK30_PIN0_PA5, // set io to INVALID_GPIO for disable it
 #endif
             .enable     = GPIO_LOW,      // set GPIO_LOW for falling, set 0 for rising
             .iomux      = {
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
+            	.name       = "bt_wake_host",
+           		.fgpio      = GPIO3_C7,
+#else
                 .name   = NULL,
+#endif
             },
         },
     },
@@ -1792,6 +1846,7 @@ static struct platform_device device_tcc_bt = {
 };
 #endif
 
+#define ATX8_RST_PIN    RK30_PIN3_PD7
 
 static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SWITCH_GPIO) 
@@ -2482,6 +2537,16 @@ static struct i2c_board_info __initdata i2c4_info[] = {
         },
 #endif
 
+#if defined (CONFIG_SND_SOC_ES8323) 
+#if defined (CONFIG_TCHIP_MACH_TRQ7_LJ)
+        {
+                .type                   = "es8323",
+                .addr                   = 0x10,
+                .flags                  = 0,
+        },
+#endif
+#endif
+
 };
 #endif
 
@@ -2609,6 +2674,9 @@ static void __init machine_rk30_board_init(void)
 	
         gpio_direction_output(POWER_ON_PIN, GPIO_HIGH);
 
+	gpio_request(ATX8_RST_PIN, "ATX8_RST_PIN");
+	gpio_direction_output(ATX8_RST_PIN, GPIO_LOW);
+	gpio_free(ATX8_RST_PIN);
 
 	rk30_i2c_register_board_info();
 	spi_register_board_info(board_spi_devices, ARRAY_SIZE(board_spi_devices));
