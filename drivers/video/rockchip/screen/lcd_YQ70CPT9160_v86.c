@@ -7,20 +7,23 @@
 #define SCREEN_TYPE		SCREEN_RGB
 #define LVDS_FORMAT       	LVDS_8BIT_1
 #define OUT_FACE		OUT_P666
-#define DCLK			33000000
-#define LCDC_ACLK      		50000000     //29 lcdc axi DMA ÆµÂÊ
+
+#define DCLK			48000000        // 65000000
+#define LCDC_ACLK        	500000000//312000000           //29 lcdc axi DMA ÆµÂÊ
 
 /* Timing */
-#define H_PW			30//48 //10
-#define H_BP			10//40 //100
-#define H_VD			800 //1024
-#define H_FP			210// //210
+#define H_PW			20
+#define H_BP			140
+#define H_VD			1024
+#define H_FP			160
 
-#define V_PW			13//10
-#define V_BP			10// //10
-#define V_VD			480 //768
-#define V_FP			22 //18
+#define V_PW			3
+#define V_BP			20
+#define V_VD			600
+#define V_FP			12
 
+#define LCD_WIDTH       	154
+#define LCD_HEIGHT      	86
 /* Other */
 #define DCLK_POL		0
 #define DEN_POL			0
