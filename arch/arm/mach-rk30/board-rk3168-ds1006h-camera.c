@@ -38,6 +38,8 @@ Comprehensive camera device registration:
 #include "../mach-rk3188/tchip_camera_setup_tr1088.h"
 #elif defined(CONFIG_TCHIP_MACH_TR7088)
 #include "../mach-rk3188/tchip_camera_setup_tr7088.h"
+#elif defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
+#include "../mach-rk3188/tchip_camera_setup_trq7_lj.h"
 #else
 static struct rkcamera_platform_data new_camera[] = {
     new_camera_device_ex(RK29_CAM_SENSOR_OV5642,
@@ -95,10 +97,10 @@ static struct rkcamera_platform_data new_camera[] = {
  * author: ddl@rock-chips.com
  *****************************************************************************************/
 #ifdef CONFIG_VIDEO_RK29
-#define CONFIG_SENSOR_POWER_IOCTL_USR	   0 //define this refer to your board layout
+#define CONFIG_SENSOR_POWER_IOCTL_USR	   1 //define this refer to your board layout
 #define CONFIG_SENSOR_RESET_IOCTL_USR	   0
 #define CONFIG_SENSOR_POWERDOWN_IOCTL_USR	   0
-#define CONFIG_SENSOR_FLASH_IOCTL_USR	   1
+#define CONFIG_SENSOR_FLASH_IOCTL_USR	   0
 
 static void rk_cif_power(int on)
 {
@@ -122,7 +124,7 @@ static void rk_cif_power(int on)
    // 	printk("%s set ldo7 vcc28_cif=%dmV end\n", __func__, regulator_get_voltage(ldo_28));
     	regulator_put(ldo_28);
 
-    	regulator_set_voltage(ldo_18, 1800000, 1800000);
+    	regulator_set_voltage(ldo_18, 1200000, 1200000);
     //	regulator_set_suspend_voltage(ldo, 1800000);
     	regulator_enable(ldo_18);
     //	printk("%s set ldo1 vcc18_cif=%dmV end\n", __func__, regulator_get_voltage(ldo_18));
