@@ -41,6 +41,10 @@ choice
     config TCHIP_MACH_TR7088
 		bool "TR7088, Public 7' Machine"
 
+    config TCHIP_MACH_TR7088TN
+		depends on TCHIP_MACH_TR7088
+		bool "TR7088, Public 7' TNscreen Machine"
+
 	config TCHIP_MACH_TR785
 		bool "TR785, Public 7.85' Machine"
 		select TCHIP_MACHINE

@@ -410,7 +410,10 @@ static struct spi_board_info board_spi_devices[] = {
 #define LCD_DISP_ON_PIN
 
 #ifdef  LCD_DISP_ON_PIN
-#if defined(CONFIG_TCHIP_MACH_TR7088)
+#if defined(CONFIG_TCHIP_MACH_TR7088TN)
+#define BL_EN_PIN         RK30_PIN0_PA2
+#define BL_EN_VALUE       GPIO_HIGH
+#elif defined(CONFIG_TCHIP_MACH_TR7088)
 #define BL_EN_PIN         RK30_PIN0_PB0//RK30_PIN0_PA2
 #define BL_EN_VALUE       GPIO_LOW//GPIO_HIGH
 #else
@@ -432,7 +435,7 @@ static int rk29_backlight_io_init(void)
 	}
 
 	gpio_direction_output(BL_EN_PIN, 0);
-#if defined(CONFIG_TCHIP_MACH_TR7088)
+#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN)
 	gpio_set_value(RK30_PIN0_PA2, 1);//gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
 #else
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
@@ -794,6 +797,14 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_PIN        RK30_PIN1_PB2
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_PWR_IOMUX      GPIO1_B2
+#elif defined(CONFIG_TCHIP_MACH_TR7088TN) 
+#define LCD_CS_PIN         INVALID_GPIO
+#define LCD_CS_VALUE       GPIO_HIGH
+#define LCD_EN_PIN         RK30_PIN0_PB0//INVALID_GPIO
+#define LCD_EN_VALUE       GPIO_LOW
+#define LCD_PWR_PIN        RK30_PIN1_PB2
+#define LCD_PWR_VALUE      GPIO_HIGH
+#define LCD_PWR_IOMUX      GPIO1_B2
 #elif defined(CONFIG_TCHIP_MACH_TR7088)
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -861,7 +872,7 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 		}
 		else
 		{
-		#if !defined(CONFIG_TCHIP_MACH_TR7088)
+		#if !defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7088TN)
 			gpio_direction_output(LCD_EN_PIN, LCD_EN_VALUE);
 		#endif
 			
@@ -1120,7 +1131,7 @@ static struct rk610_codec_platform_data rk610_codec_pdata = {
 #else
 #define RK616_RST_PIN 			RK30_PIN3_PB2
 #endif
-#if defined(CONFIG_TCHIP_MACH_TR1088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) 
 #define RK616_PWREN_PIN			RK30_PIN0_PA3
 #else
 #define RK616_PWREN_PIN			INVALID_GPIO//RK30_PIN0_PA3
