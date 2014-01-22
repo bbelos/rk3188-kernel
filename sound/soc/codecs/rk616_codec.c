@@ -2767,6 +2767,7 @@ static int rk616_probe(struct snd_soc_codec *codec)
 	if (rk616_mfd && rk616_mfd->pdata && rk616_mfd->pdata->spk_ctl_gpio) {
 		gpio_request(rk616_mfd->pdata->spk_ctl_gpio, NULL);
 		gpio_direction_output(rk616_mfd->pdata->spk_ctl_gpio, GPIO_LOW);
+		gpio_pull_updown(rk616_mfd->pdata->spk_ctl_gpio, GPIOPullDown);
 		rk616->spk_ctl_gpio = rk616_mfd->pdata->spk_ctl_gpio;
 	} else {
 		printk("%s : rk616 or pdata or spk_ctl_gpio is NULL!\n", __func__);
