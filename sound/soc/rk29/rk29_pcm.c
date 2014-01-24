@@ -36,7 +36,11 @@
 #define DBG(x...) do { } while (0)
 #endif
 
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
+#define INFIN_LOOP
+#else
 //#define INFIN_LOOP
+#endif
 #ifdef INFIN_LOOP
 #define DMA_INFIN_LOOP() rk29_dma_has_infiniteloop()
 #else
