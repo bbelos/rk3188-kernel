@@ -2802,18 +2802,31 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level1[] = {
         {.frequency = CPUFREQ_TABLE_END},
 };
 // ds1006h 10'
+#if defined(CONFIG_TCHIP_MACH_TR1088) ||  defined(CONFIG_TCHIP_MACH_TR7088)
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
         {.frequency = 312 * 1000,       .index = 950 * 1000},
         {.frequency = 504 * 1000,       .index = 950 * 1000},
-        {.frequency = 816 * 1000,       .index = 1000 * 1000},
+        {.frequency = 816 * 1000,       .index = 1025 * 1000},
         {.frequency = 1008 * 1000,      .index = 1100 * 1000},
         {.frequency = 1200 * 1000,      .index = 1225 * 1000},
-        {.frequency = 1416 * 1000,      .index = 1275 * 1000},
+        {.frequency = 1416 * 1000,      .index = 1300 * 1000},
 #if !defined(CONFIG_TCHIP_MACH_TR1088)
         {.frequency = 1608 * 1000,      .index = 1350 * 1000},
 #endif
         {.frequency = CPUFREQ_TABLE_END},
 };
+#else
+static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
+        {.frequency = 312 * 1000,       .index = 950 * 1000},
+        {.frequency = 504 * 1000,       .index = 950 * 1000},
+        {.frequency = 816 * 1000,       .index = 1025 * 1000},
+        {.frequency = 1008 * 1000,      .index = 1100 * 1000},
+        {.frequency = 1200 * 1000,      .index = 1225 * 1000},
+        {.frequency = 1416 * 1000,      .index = 1300 * 1000},
+        {.frequency = 1608 * 1000,      .index = 1350 * 1000},
+        {.frequency = CPUFREQ_TABLE_END},
+};
+#endif
 //if you board is good for volt quality,select dvfs_arm_table_volt_level0
 #define dvfs_arm_table dvfs_arm_table_volt_level2
 
