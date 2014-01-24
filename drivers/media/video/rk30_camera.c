@@ -917,7 +917,6 @@ static struct resource rk_camera_resource_host_1[] = {
 };
 #endif
 
-#if 0   //edit by zouxf, for remove  "rk_camera_platform_data.gpio"
 static void rk_init_camera_plateform_data(void)
 {
     int i,dev_idx;
@@ -935,8 +934,6 @@ static void rk_init_camera_plateform_data(void)
         }
     }
 }
-#endif
-
 
 static void rk30_camera_request_reserve_mem(void)
 {
@@ -1039,14 +1036,11 @@ static int rk_register_camera_devices(void)
     int host_registered_0,host_registered_1;
     struct rkcamera_platform_data *new_camera;
     
-#if 0   //edit by zouxf, for remove  "rk_camera_platform_data.gpio"
 	rk_init_camera_plateform_data();
-#endif
 
     host_registered_0 = 0;
     host_registered_1 = 0;
     
-#if 0   //edit by zouxf, for remove  "rk_camera_platform_data.gpio"
     for (i=0; i<RK_CAM_NUM; i++) {
         if (rk_camera_platform_data.register_dev[i].device_info.name) {
             
@@ -1067,7 +1061,6 @@ static int rk_register_camera_devices(void)
             } 
         }
     }
-#endif
 
     
     i=0;
@@ -1093,13 +1086,11 @@ static int rk_register_camera_devices(void)
     }  
     #endif
 
-#if 0   //edit by zouxf, for remove  "rk_camera_platform_data.gpio"
     for (i=0; i<RK_CAM_NUM; i++) {
         if (rk_camera_platform_data.register_dev[i].device_info.name) {
             platform_device_register(&rk_camera_platform_data.register_dev[i].device_info);
         }
     }
-#endif
 
     if (rk_camera_platform_data.sensor_register)
        (rk_camera_platform_data.sensor_register)(); 
