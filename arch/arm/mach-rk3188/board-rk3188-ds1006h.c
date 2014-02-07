@@ -50,6 +50,10 @@
 #include <linux/regulator/rk29-pwm-regulator.h>
 #include <plat/ddr.h>
 
+#ifdef CONFIG_CW2015_BATTERY
+	#include <linux/power/cw2015_battery.h>
+#endif
+
 #if defined(CONFIG_CT36X_TS)
 #include <linux/ct36x.h>
 #endif
@@ -1536,6 +1540,61 @@ static struct platform_device rk30_device_adc_battery = {
         },
 };
 #endif
+
+#ifdef CONFIG_CW2015_BATTERY
+/*
+   note the follow array must set depend on the battery that you use
+      you must send the battery to cellwise-semi the contact information:
+         name: chen gan; tel:13416876079; E-mail: ben.chen@cellwise-semi.com
+	  */
+#if defined(CONFIG_TCHIP_MACH_TR1088)
+static char config_info[SIZE_BATINFO] = { 
+0x15,0x7E,0x5F,0x62,0x63,
+0x61,0x5B,0x56,0x54,0x4F,
+0x4A,0x45,0x40,0x35,0x2B,
+0x22,0x1E,0x1B,0x23,0x2C,
+0x3E,0x56,0x6E,0x6C,0x64,
+0x59,0x0C,0x29,0x18,0x30,
+0x41,0x44,0x42,0x3C,0x36,
+0x50,0x3A,0x19,0x31,0x1C,
+0x00,0x23,0x52,0x87,0x8F,
+0x91,0x94,0x52,0x82,0x8C,
+0x92,0x96,0x7F,0x5E,0xA3,
+0xCB,0x2F,0x7D,0x72,0xA5,
+0xB5,0xC1,0x7E,0x09,
+};
+
+#else
+static u8 config_info[SIZE_BATINFO] = {
+        0x15, 0x42, 0x60, 0x59, 0x52,
+        0x58, 0x4D, 0x48, 0x48, 0x44,
+       0x44, 0x46, 0x49, 0x48, 0x32,
+        0x24, 0x20, 0x17, 0x13, 0x0F,
+        0x19, 0x3E, 0x51, 0x45, 0x08,
+        0x76, 0x0B, 0x85, 0x0E, 0x1C,
+        0x2E, 0x3E, 0x4D, 0x52, 0x52,
+        0x57, 0x3D, 0x1B, 0x6A, 0x2D,
+        0x25, 0x43, 0x52, 0x87, 0x8F,
+        0x91, 0x94, 0x52, 0x82, 0x8C,
+        0x92, 0x96, 0xFF, 0x7B, 0xBB,
+        0xCB, 0x2F, 0x7D, 0x72, 0xA5,
+        0xB5, 0xC1, 0x46, 0xAE 
+};
+#endif
+
+static struct cw_bat_platform_data cw_bat_platdata = {
+        .dc_det_pin      = RK30_PIN0_PB2,
+        .bat_low_pin    = INVALID_GPIO,//RK30_PIN0_PB1,
+        .chg_ok_pin   = RK30_PIN0_PA6,
+        .dc_det_level    = GPIO_LOW,
+        .bat_low_level  = GPIO_LOW,
+        .chg_ok_level = GPIO_HIGH,
+
+        .cw_bat_config_info     = config_info,
+
+	};
+#endif
+
 #ifdef CONFIG_RK30_PWM_REGULATOR
 static int pwm_voltage_map[] = {
 	800000,825000,850000, 875000,900000, 925000 ,950000, 975000,1000000, 1025000, 1050000, 1075000, 1100000, 1125000, 1150000, 1175000, 1200000, 1225000, 1250000, 1275000, 1300000, 1325000, 1350000,1375000
@@ -1953,6 +2012,17 @@ static struct i2c_board_info __initdata i2c0_info[] = {
                 .platform_data = &cw2015_info,
         },
 #endif
+
+#if defined (CONFIG_CW2015_BATTERY)
+        {
+                .type           = "cw201x",
+                .addr           = 0x62,
+                .flags          = 0,
+                .platform_data  = &cw_bat_platdata,
+	},
+#endif
+										
+
 	
 #if defined (CONFIG_GS_MMA8452)
 	{
