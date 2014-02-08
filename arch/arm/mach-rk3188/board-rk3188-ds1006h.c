@@ -1589,8 +1589,9 @@ static struct cw_bat_platform_data cw_bat_platdata = {
         .dc_det_level    = GPIO_LOW,
         .bat_low_level  = GPIO_LOW,
         .chg_ok_level = GPIO_HIGH,
-
-        .cw_bat_config_info     = config_info,
+		.is_usb_charge = 1,
+        .chg_mode_sel_pin = INVALID_GPIO,
+		.cw_bat_config_info     = config_info,
 
 	};
 #endif
