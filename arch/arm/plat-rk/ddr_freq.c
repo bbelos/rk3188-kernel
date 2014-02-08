@@ -50,6 +50,7 @@ enum SYS_STATUS {
 	SYS_STATUS_REBOOT,	// 0x100
 	SYS_STATUS_LCDC0,	// 0x200
 	SYS_STATUS_LCDC1,	// 0x400
+	SYS_STATUS_WIFIDISPLAY,
 };
 
 struct ddr {
@@ -127,7 +128,9 @@ static noinline void ddrfreq_work(unsigned long sys_status)
 	      && (s & (1 << SYS_STATUS_LCDC1))
 	      ) {
 		ddrfreq_mode(false, &ddr.dualview_rate, "dual-view");
-	} else if ((ddr.video_rate || ddr.video_low_rate) && (s & (1 << SYS_STATUS_VIDEO))) {
+	} else if (ddr.normal_rate && (s & (1 << SYS_STATUS_WIFIDISPLAY))) {
+		ddrfreq_mode(false, &ddr.normal_rate, "wifi-display(dual-view)");
+	}else if ((ddr.video_rate || ddr.video_low_rate) && (s & (1 << SYS_STATUS_VIDEO))) {
 		if(ddr.video_low_rate && (s & (1 << SYS_STATUS_VIDEO_720P)))
 			ddrfreq_mode(false, &ddr.video_low_rate, "video low");
 		else if(ddr.video_rate && (s & (1 << SYS_STATUS_VIDEO_1080P)))
@@ -354,6 +357,12 @@ static ssize_t video_state_write(struct file *file, const char __user *buffer,
 			ddrfreq_clear_sys_status(SYS_STATUS_VIDEO_1080P);
 		}
 		break;
+	case '2':
+		ddrfreq_clear_sys_status(SYS_STATUS_WIFIDISPLAY);
+		break;
+	case '3':
+		ddrfreq_set_sys_status(SYS_STATUS_WIFIDISPLAY);
+		break;
 	default:
 		vfree(buf);
 		return -EINVAL;
@@ -474,6 +483,13 @@ static int ddrfreq_scanfreq_datatraing_3168(void)
 
         ddr_get_datatraing_value_3168(false,dqstr_value,min_freq);
     }
+    if (clk_set_rate(ddr.clk, max_freq*MHZ) != 0)
+    {
+        pr_err("failed to clk_set_rate ddr.clk %dhz\n",dqstr_freq*MHZ);
+    }
+    dqstr_value++;
+    ddr_get_datatraing_value_3168(false,dqstr_value,min_freq);
+
     ddr_get_datatraing_value_3168(true,0,min_freq);
     dprintk(DEBUG_DDR,"get datatraing from %dMhz to %dMhz\n",min_freq,max_freq);
     return 0;
@@ -637,7 +653,7 @@ static int ddrfreq_late_init(void)
 
 	register_reboot_notifier(&ddrfreq_reboot_notifier);
 
-	pr_info("verion 3.2 20130917\n");
+	pr_info("verion 3.2 20131126\n");
 	pr_info("fix cpu pause bug\n");
 	dprintk(DEBUG_DDR, "normal %luMHz video %luMHz video_low %luMHz dualview %luMHz idle %luMHz suspend %luMHz reboot %luMHz\n",
 		ddr.normal_rate / MHZ, ddr.video_rate / MHZ, ddr.video_low_rate / MHZ, ddr.dualview_rate / MHZ, ddr.idle_rate / MHZ, ddr.suspend_rate / MHZ, ddr.reboot_rate / MHZ);
