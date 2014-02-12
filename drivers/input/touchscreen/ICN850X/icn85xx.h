@@ -99,6 +99,18 @@ History :
 #include <mach/board.h>
 #include <mach/gpio.h>
 
+#if defined(CONFIG_TCHIP_MACH_TR7888)
+#define CTP_IRQ_PORT             RK30_PIN1_PB7 // tchip use board define
+#define CTP_IRQ_MODE             0
+#define CTP_RST_PORT             RK30_PIN0_PB6
+#define CTP_WAKEUP_PORT          0
+#define CTP_REPORT_PROTOCOL      1   //0: A protocol
+                                     //1: B protocol
+#define POWER_PORT				 RK30_PIN1_PB5
+#define SCREEN_MAX_X             (768)
+#define SCREEN_MAX_Y             (1024)
+#define ICN85XX_I2C_SCL          400*1000
+#else
 #define CTP_IRQ_PORT             RK30_PIN1_PB7 // tchip use board define
 #define CTP_IRQ_MODE             0
 #define CTP_RST_PORT             RK30_PIN0_PB6
@@ -108,7 +120,7 @@ History :
 #define SCREEN_MAX_X             (1024)
 #define SCREEN_MAX_Y             (600)
 #define ICN85XX_I2C_SCL          400*1000
-
+#endif
 #endif
 
 #if SUPPORT_SPREADTRUM
@@ -162,8 +174,6 @@ extern int sprd_3rdparty_tp_ldo_level;
 
 #if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
 #define POWER_PORT          RK30_PIN1_PB5
-#else
-#define POWER_PORT          INVALID_GPIO
 #endif
 
 
@@ -410,7 +420,7 @@ struct icn85xx_ts_data {
 
 #pragma pack(1)
 typedef struct{
-    unsigned char  wr;         //write read flag£¬0:R  1:W
+    unsigned char  wr;         //write read flag\A3\AC0:R  1:W
     unsigned char  flag;       //0:
     unsigned char  circle;     //polling cycle 
     unsigned char  times;      //plling times
