@@ -519,6 +519,17 @@ static struct rk29_bl_info rk29_bl_info = {
 	.io_deinit = rk29_backlight_io_deinit,
 	.pwm_suspend = rk29_backlight_pwm_suspend,
 	.pwm_resume = rk29_backlight_pwm_resume,
+#elif defined(CONFIG_TCHIP_MACH_TR7888)
+        .min_brightness = 50,
+        .max_brightness = 240,
+        .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
+	.pre_div = 10 * 1000,  // pwm output clk: 30k;
+	.pwm_id = PWM_ID,
+	.bl_ref = !PWM_EFFECT_VALUE,
+	.io_init = rk29_backlight_io_init,
+	.io_deinit = rk29_backlight_io_deinit,
+	.pwm_suspend = rk29_backlight_pwm_suspend,
+	.pwm_resume = rk29_backlight_pwm_resume,
 #elif defined(CONFIG_TCHIP_MACH_TR7088TN)
         .min_brightness = 50,
         .max_brightness = 164,
@@ -828,6 +839,14 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_PIN        RK30_PIN1_PB2
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_PWR_IOMUX      GPIO1_B2
+#elif defined(CONFIG_TCHIP_MACH_TR7888)
+#define LCD_CS_PIN         INVALID_GPIO
+#define LCD_CS_VALUE       GPIO_HIGH
+#define LCD_EN_PIN         RK30_PIN0_PB0//RK30_PIN0_PB0//INVALID_GPIO
+#define LCD_EN_VALUE       GPIO_LOW
+#define LCD_PWR_PIN        INVALID_GPIO
+#define LCD_PWR_VALUE      GPIO_HIGH
+#define LCD_PWR_IOMUX      GPIO1_B2
 #elif defined (CONFIG_TCHIP_MACH_TRQ7_LJ)
 #define LCD_CS_PIN         RK30_PIN3_PD4        // ssd2828 RESET pin
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -887,10 +906,13 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 		}
 		else
 		{
-		#if !defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7088TN)
+		#if !defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7088TN) 
 			gpio_direction_output(LCD_EN_PIN, LCD_EN_VALUE);
 		#endif
-			
+		
+		#if defined(CONFIG_TCHIP_MACH_TR7888)
+			gpio_direction_output(LCD_EN_PIN, LCD_EN_VALUE);
+		#endif
 		}
 	}
 	if(LCD_PWR_PIN !=INVALID_GPIO)
@@ -942,7 +964,7 @@ static int rk_fb_io_enable(void)
 	return 0;
 }
 
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined (CONFIG_TCHIP_MACH_TRQ7)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined (CONFIG_TCHIP_MACH_TRQ7) || defined(CONFIG_TCHIP_MACH_TR7888)
 
 
 #if defined(CONFIG_LCDC1_RK3188)
@@ -1146,7 +1168,7 @@ static struct rk610_codec_platform_data rk610_codec_pdata = {
 #else
 #define RK616_RST_PIN 			RK30_PIN3_PB2
 #endif
-#if defined(CONFIG_TCHIP_MACH_TR1088) 
+#if defined(CONFIG_TCHIP_MACH_TR1088)  || defined(CONFIG_TCHIP_MACH_TR7888)
 #define RK616_PWREN_PIN			RK30_PIN0_PA3
 #else
 #define RK616_PWREN_PIN			INVALID_GPIO//RK30_PIN0_PA3
@@ -1200,7 +1222,7 @@ static int rk616_power_deinit(void)
 	
 	return 0;
 }
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7888)
 static struct rk616_platform_data rk616_pdata = {
 	.power_init = rk616_power_on_init,
 	.power_deinit = rk616_power_deinit,
@@ -2910,7 +2932,7 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level1[] = {
         {.frequency = CPUFREQ_TABLE_END},
 };
 // ds1006h 10'
-#if defined(CONFIG_TCHIP_MACH_TR1088) ||  defined(CONFIG_TCHIP_MACH_TR7088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) ||  defined(CONFIG_TCHIP_MACH_TR7088) ||  defined(CONFIG_TCHIP_MACH_TR7888)
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
         {.frequency = 312 * 1000,       .index = 950 * 1000},
         {.frequency = 504 * 1000,       .index = 950 * 1000},
@@ -2918,7 +2940,7 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
         {.frequency = 1008 * 1000,      .index = 1100 * 1000},
         {.frequency = 1200 * 1000,      .index = 1225 * 1000},
         {.frequency = 1416 * 1000,      .index = 1300 * 1000},
-#if !defined(CONFIG_TCHIP_MACH_TR1088)
+#if !defined(CONFIG_TCHIP_MACH_TR1088) ||  !defined(CONFIG_TCHIP_MACH_TR7888)
         {.frequency = 1608 * 1000,      .index = 1350 * 1000},
 #endif
         {.frequency = CPUFREQ_TABLE_END},

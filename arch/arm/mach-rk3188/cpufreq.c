@@ -491,7 +491,7 @@ static int rk3188_cpufreq_init_cpu0(struct cpufreq_policy *policy)
 	}
 	low_battery_freq = get_freq_from_table(low_battery_freq);
 	clk_enable_dvfs(cpu_clk);
-#if !defined(CONFIG_TCHIP_MACH_TR1088) && !defined(CONFIG_TCHIP_MACH_TR7088)  
+#if !defined(CONFIG_TCHIP_MACH_TR1088) && !defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7888)  
 	if(rk_tflag()){
 #define RK3188_T_LIMIT_FREQ	(1416 * 1000)
 		dvfs_clk_enable_limit(cpu_clk, 0, RK3188_T_LIMIT_FREQ * 1000);
@@ -656,7 +656,7 @@ static int rk3188_cpufreq_target(struct cpufreq_policy *policy, unsigned int tar
 	unsigned int i, new_freq = target_freq, new_rate, cur_rate;
 	int ret = 0;
 	bool is_private;
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7888)
     if(target_freq > RK3188T_LIMIT_FREQ){
         target_freq=RK3188T_LIMIT_FREQ;
     }
