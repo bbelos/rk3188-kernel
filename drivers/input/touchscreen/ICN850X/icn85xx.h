@@ -160,7 +160,7 @@ extern int sprd_3rdparty_tp_ldo_level;
 
 #endif
 
-#if defined(CONFIG_TCHIP_MACH_TR7088)
+#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
 #define POWER_PORT          RK30_PIN1_PB5
 #else
 #define POWER_PORT          INVALID_GPIO
