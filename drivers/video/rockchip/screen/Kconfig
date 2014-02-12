@@ -144,8 +144,11 @@ config LCD_RK3168_AUO_A080SN03
 config LCD_RK2928_A720
        bool "RK2928 A720 panel 800x480"
 
-config LCD_RK2926_V86
+config LCD_RK2926_800x600_V86
 	bool "RK2926 v86 panel 800x480"
+
+config LCD_RK2926_V86
+	bool "RK2926 v86 panel 1024x600"
 
 config LCD_RK3168_86V
 	bool "RK3168 86v panel 800x480"
