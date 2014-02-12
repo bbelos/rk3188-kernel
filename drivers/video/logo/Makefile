@@ -4,6 +4,7 @@ obj-$(CONFIG_LOGO)			+= logo.o
 obj-$(CONFIG_LOGO_LINUX_MONO)		+= logo_linux_mono.o
 obj-$(CONFIG_LOGO_LINUX_VGA16)		+= logo_linux_vga16.o
 obj-$(CONFIG_LOGO_LINUX_CLUT224_TR7088)	+= tr7088_logo_linux_clut224.o
+obj-$(CONFIG_LOGO_LINUX_CLUT224_TR7078)	+= tr7078_logo_linux_clut224.o
 obj-$(CONFIG_LOGO_LINUX_CLUT224_TR7088TN)	+= tr7088tn_logo_linux_clut224.o
 obj-$(CONFIG_LOGO_LINUX_CLUT224)	+= logo_linux_clut224.o
 obj-$(CONFIG_LOGO_PIPO_CLUT224)	    += logo_pipo_clut224.o

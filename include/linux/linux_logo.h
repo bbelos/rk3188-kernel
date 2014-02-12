@@ -39,6 +39,7 @@ extern const struct linux_logo logo_linux_mono;
 extern const struct linux_logo logo_linux_vga16;
 extern struct linux_logo logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
 extern struct linux_logo tr7088_logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
+extern struct linux_logo tr7078_logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
 extern struct linux_logo tr7088tn_logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
 
 #ifdef CONFIG_LOGO_PIPO_CLUT224
