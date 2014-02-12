@@ -2482,7 +2482,7 @@ void __sramfunc board_pmu_resume(void)
 	#endif
 }
 
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
+#if CONFIG_RK30_PWM_REGULATOR
 int __sramdata gpio3d3_iomux,gpio3d3_do,gpio3d3_dir,gpio3d3_en;
 #else
 int __sramdata gpio3d6_iomux,gpio3d6_do,gpio3d6_dir,gpio3d6_en;
