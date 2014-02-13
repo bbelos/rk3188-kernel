@@ -847,6 +847,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_PIN        INVALID_GPIO
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_TCON_EN			RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
 #elif defined (CONFIG_TCHIP_MACH_TRQ7_LJ)
 #define LCD_CS_PIN         RK30_PIN3_PD4        // ssd2828 RESET pin
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -865,12 +867,16 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_EN_PIN         RK30_PIN0_PB0
 #define LCD_EN_VALUE       GPIO_LOW
+#define LCD_TCON_EN			RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
 #endif
 #else
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
 #define LCD_EN_PIN         RK30_PIN0_PB0
 #define LCD_EN_VALUE       GPIO_LOW
+#define LCD_TCON_EN			RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
 #endif
 
 static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
@@ -929,6 +935,20 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
         	gpio_direction_output(LCD_PWR_PIN, LCD_PWR_VALUE);
       	}
     }
+	if(LCD_TCON_EN !=INVALID_GPIO)
+	{
+  		ret = gpio_request(LCD_TCON_EN, NULL);
+  		if (ret != 0)
+      	{
+        	gpio_free(LCD_TCON_EN);
+        	printk(KERN_ERR "request lcd tcon en pin fail!\n");
+        	return -1;
+      	}
+      	else
+      	{
+        	gpio_direction_output(LCD_TCON_EN, LCD_TCON_EN_VALUE);
+      	}
+    }
 	return 0;
 }
 static int rk_fb_io_disable(void)
@@ -945,6 +965,10 @@ static int rk_fb_io_disable(void)
       	{
         	gpio_set_value(LCD_PWR_PIN, !LCD_PWR_VALUE);
       	}
+	if(LCD_TCON_EN !=INVALID_GPIO)
+  	{
+    	gpio_set_value(LCD_TCON_EN, !LCD_TCON_EN_VALUE);
+  	}
 	return 0;
 }
 static int rk_fb_io_enable(void)
@@ -961,6 +985,10 @@ static int rk_fb_io_enable(void)
       	{
         	gpio_set_value(LCD_PWR_PIN, LCD_PWR_VALUE);
       	}
+	if(LCD_TCON_EN !=INVALID_GPIO)
+  	{
+    	gpio_set_value(LCD_TCON_EN, LCD_TCON_EN_VALUE);
+  	}
 	return 0;
 }
 
