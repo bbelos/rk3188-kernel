@@ -213,6 +213,11 @@ static int gsensor_direct_x = 1;
 static int gsensor_direct_y = 1;
 static int gsensor_direct_z = 0;
 static int gsensor_xy_revert = 0;
+#elif defined(CONFIG_TCHIP_MACH_TR7888)
+static int gsensor_direct_x = 1;
+static int gsensor_direct_y = 1;
+static int gsensor_direct_z = 1;
+static int gsensor_xy_revert = 1;
 #else
 static int gsensor_direct_x = 0;
 static int gsensor_direct_y = 0;
@@ -836,9 +841,15 @@ static int STK831x_ReportValue(struct stk831x_data *stk)
 	//stk->raw_data[0] = stk->raw_data[0] * 981 / 965 ;
 	//stk->raw_data[1] = stk->raw_data[1] * 981 / 965 ;
 	//stk->raw_data[2] = stk->raw_data[2] * 981 / 965 ;
-	input_report_abs(stk->input_dev, ABS_X, stk->raw_data[0]); //x
-	input_report_abs(stk->input_dev, ABS_Z, -stk->raw_data[1]); //y
-	input_report_abs(stk->input_dev, ABS_Y, stk->raw_data[2]); //z
+	#if defined(CONFIG_TCHIP_MACH_TR7888)
+		input_report_abs(stk->input_dev, ABS_X, stk->raw_data[0]); //x
+		input_report_abs(stk->input_dev, ABS_Z, stk->raw_data[1]); //y
+		input_report_abs(stk->input_dev, ABS_Y, stk->raw_data[2]); //z
+	#else
+		input_report_abs(stk->input_dev, ABS_X, stk->raw_data[0]); //x
+		input_report_abs(stk->input_dev, ABS_Z, -stk->raw_data[1]); //y
+		input_report_abs(stk->input_dev, ABS_Y, stk->raw_data[2]); //z
+	#endif
 	input_sync(stk->input_dev);
 	return 0;
 }
