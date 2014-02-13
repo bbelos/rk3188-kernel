@@ -833,7 +833,7 @@ struct rk29fb_info lcdc1_screen_info = {
 	.io_init   = NULL,
 	.io_disable = NULL,
 	.io_enable = NULL,
-	.set_screen_info = NULL,
+	.set_screen_info = hdmi_init_lcdc,
 };
 #endif
 
@@ -1007,7 +1007,7 @@ static struct rk610_codec_platform_data rk610_codec_pdata = {
 #else
 #define RK616_RST_PIN 			RK30_PIN3_PB2
 #endif
-#if defined(CONFIG_TCHIP_MACH_TR1088) 
+#if defined(CONFIG_TCHIP_MACH_TR7078) 
 #define RK616_PWREN_PIN			RK30_PIN0_PA3
 #else
 #define RK616_PWREN_PIN			INVALID_GPIO//RK30_PIN0_PA3
