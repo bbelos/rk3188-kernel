@@ -109,6 +109,18 @@ static void rk_cif_power(int on)
 	ldo_18 = regulator_get(NULL, "ldo1");	// vcc18_cif
 	if (ldo_28 == NULL || IS_ERR(ldo_28) || ldo_18 == NULL || IS_ERR(ldo_18)){
         printk("get cif ldo failed!\n");
+        if(on ==0 )
+        {
+        #if defined(CONFIG_TCHIP_MACH_TR7088)
+            gpio_set_value(RK30_PIN3_PB4,GPIO_HIGH);
+        #endif
+        }
+        else
+        {
+        #if defined(CONFIG_TCHIP_MACH_TR7088)
+            gpio_set_value(RK30_PIN3_PB4,GPIO_LOW);
+        #endif
+        }
 		return;
 	    }
     if(on == 0){	
