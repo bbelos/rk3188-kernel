@@ -793,6 +793,8 @@ static struct rk_sensor_reg sensor_fullres_lowfps_data[] ={
 	{0x96 , 0xb0},  
 	{0x97 , 0x06},
 	{0x98 , 0x40},
+
+		{0xb6 , 0x03},
                 
 	SensorEnd 
 
@@ -828,6 +830,9 @@ static struct rk_sensor_reg sensor_preview_data[] =
 	{0x96 , 0x58},
 	{0x97 , 0x03},
 	{0x98 , 0x20},
+
+
+			{0xb6 , 0x03},
 	SensorEnd
 };
 /* 1280x720 */
