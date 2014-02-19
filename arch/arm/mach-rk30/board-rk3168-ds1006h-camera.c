@@ -38,6 +38,8 @@ Comprehensive camera device registration:
 #include "../mach-rk3188/tchip_camera_setup_tr1088.h"
 #elif defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
 #include "../mach-rk3188/tchip_camera_setup_tr7088.h"
+#elif defined(CONFIG_TCHIP_MACH_TR7888)
+#include "../mach-rk3188/tchip_camera_setup_tr7888.h"
 #elif defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
 #include "../mach-rk3188/tchip_camera_setup_trq7_lj.h"
 #else

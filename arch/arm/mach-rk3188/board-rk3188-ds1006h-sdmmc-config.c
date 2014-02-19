@@ -177,7 +177,7 @@ int rk31sdk_get_sdio_wifi_voltage(void)
     /******************************************************************************
     **  Please tell me how much wifi-module uses voltage in your project.  
     ******************************************************************************/
-#if defined(CONFIG_BCM4329) || defined(CONFIG_BCM4319) || defined(CONFIG_RKWIFI)
+#if defined(CONFIG_BCM4329) || defined(CONFIG_BCM4319) || defined(CONFIG_RKWIFI) || defined(CONFIG_NMC1XXX_WIFI_MODULE)
     voltage = 1800 ; //power 1800mV
     
 #elif defined(CONFIG_MT5931_MT6622)||defined(CONFIG_MT5931) || defined(CONFIG_MTK_MT5931)
