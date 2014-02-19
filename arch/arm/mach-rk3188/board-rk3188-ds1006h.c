@@ -117,6 +117,31 @@ static struct platform_device device_headset_switch = {
 };
 #endif
 
+#if defined(CONFIG_TCHIP_MACH_TR7888)
+static struct rk29_keys_button key_button[] = {
+	{
+		.desc	= "play",
+		.code	= KEY_POWER,
+		.gpio	= RK30_PIN0_PA4, 
+		.active_low = PRESS_LEV_LOW,
+		.wakeup	= 1,
+	},
+	{
+		.desc   = "vol+",
+		.code   = KEY_VOLUMEUP,
+		.adc_value      = 1,
+		.gpio = INVALID_GPIO,
+		.active_low = PRESS_LEV_LOW,
+	},
+    {
+        .desc   = "vol-",
+        .code   = KEY_VOLUMEDOWN,
+        .adc_value      = 171,
+        .gpio   = INVALID_GPIO,
+        .active_low = PRESS_LEV_LOW,
+    },
+};
+#else
 static struct rk29_keys_button key_button[] = {
 	{
 		.desc	= "play",
@@ -156,6 +181,7 @@ static struct rk29_keys_button key_button[] = {
         .active_low = PRESS_LEV_LOW,
     },
 };
+#endif
 struct rk29_keys_platform_data rk29_keys_pdata = {
 	.buttons	= key_button,
 	.nbuttons	= ARRAY_SIZE(key_button),
