@@ -22,7 +22,7 @@
 
 #include <linux/types.h>
 #include <linux/rfkill.h>
-#define CONFIG_BK3515A_COMBO
+
 #define RFKILL_RK_GPIO_NAME_SIZE   64
 
 struct rfkill_rk_iomux {

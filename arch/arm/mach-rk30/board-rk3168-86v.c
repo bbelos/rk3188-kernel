@@ -1504,23 +1504,45 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
     .type               = RFKILL_TYPE_BLUETOOTH,
 
     .poweron_gpio       = { // BT_REG_ON
+#if defined(CONFIG_TCHIP_MACH_TR7078)
+        .io             = RK30_PIN3_PC6, //RK30_PIN3_PC7,
+#else
         .io             = INVALID_GPIO, //RK30_PIN3_PC7,
+#endif
         .enable         = GPIO_HIGH,
         .iomux          = {
             .name       = "bt_poweron",
+#if defined(CONFIG_TCHIP_MACH_TR7078)
+            .fgpio      = GPIO3_C6,
+#else
             .fgpio      = GPIO3_C7,
+#endif
         },
     },
 
     .reset_gpio         = { // BT_RST
+#if defined(CONFIG_TCHIP_MACH_TR7078)
+        .io             = INVALID_GPIO, // set io to INVALID_GPIO for disable it
+#else
         .io             = RK30_PIN3_PD1, // set io to INVALID_GPIO for disable it
+#endif
         .enable         = GPIO_LOW,
         .iomux          = {
             .name       = "bt_reset",
             .fgpio      = GPIO3_D1,
        },
    }, 
-
+#if defined(CONFIG_TCHIP_MACH_TR7078)
+    .wake_gpio          = { // BT_WAKE, use to control bt's sleep and wakeup
+        .io             = RK30_PIN1_PA1, // set io to INVALID_GPIO for disable it
+        .enable         = GPIO_LOW,
+        .iomux          = {
+            .name       = "gpio1a1_uart0sout_name",
+            .fgpio      = GPIO1_A1,
+            .fmux       = UART0_SOUT,
+        },
+    },
+#else
     .wake_gpio          = { // BT_WAKE, use to control bt's sleep and wakeup
         .io             = RK30_PIN3_PC6, // set io to INVALID_GPIO for disable it
         .enable         = GPIO_HIGH,
@@ -1529,7 +1551,21 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
             .fgpio      = GPIO3_C6,
         },
     },
+#endif
 
+#if defined(CONFIG_TCHIP_MACH_TR7078)
+    .wake_host_irq      = {
+        .gpio           = { 
+            .io         = RK30_PIN1_PA0,
+            .enable     = GPIO_LOW,
+            .iomux      = {
+                .name   = "uart0_rx",
+                .fgpio  = GPIO1_A0,
+                .fmux   = UART0_SIN,
+            },
+        },
+    },
+#else
     .wake_host_irq      = { // BT_HOST_WAKE, for bt wakeup host when it is in deep sleep
         .gpio           = {
             .io         = RK30_PIN0_PA5, // set io to INVALID_GPIO for disable it
@@ -1539,6 +1575,7 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
             },
         },
     },
+#endif
 
     .rts_gpio           = { // UART_RTS, enable or disable BT's data coming
         .io             = RK30_PIN1_PA3, // set io to INVALID_GPIO for disable it
@@ -2664,7 +2701,11 @@ static void __init machine_rk30_board_init(void)
 
 #if defined(CONFIG_MT5931_MT6622) || defined(CONFIG_MTK_MT6622)
 		clk_set_rate(clk_get_sys("rk_serial.0", "uart"), 24*1000000);
-#endif		
+#endif	
+
+#if defined(CONFIG_BK3515A_COMBO)
+		clk_set_rate(clk_get_sys("rk_serial.0", "uart"), 16*1000000);
+#endif
 }
 
 static void __init rk30_reserve(void)

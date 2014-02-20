@@ -38,6 +38,13 @@ config SDIO_HARD_IRQ
         ---help---
           hard irq wake up polling process
 
+config BK3515A_COMBO
+        depends on NMC1XXX_WIFI_MODULE
+        bool "Combo with bk3515"
+        default n
+        ---help---
+          combo with bk3515
+
 #config NMC1XXX_WIFI_CONTROL_FUNC
 #        bool "Use NMC1XXX_wlan device"
 #        depends on NMC1XXX_WIFI_MODULE
