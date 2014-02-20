@@ -1,0 +1,6 @@
+#!/bin/sh
+
+/sbin/ifconfig wlan0 down
+/sbin/ifconfig wlan1 down
+/sbin/rmmod nmi_wifi
+rmmod cfg80211

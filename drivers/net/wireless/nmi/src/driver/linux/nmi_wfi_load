@@ -1,0 +1,10 @@
+#!/bin/sh
+
+export PATH=/sbin:/bin
+# Use a pathname, as new modutils don't look in the current dir by default
+#modprobe cfg80211
+insmod /lib/modules/$(uname -r)/kernel/net/wireless/cfg80211.ko
+insmod ./binary/linux/x86/nmi_wifi.ko $*
+
+ifconfig wlan0 local0
+ifconfig wlan1 local1

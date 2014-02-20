@@ -1,0 +1,53 @@
+#ARCH = arm
+MAKE = make
+#CC	=  arm-linux-gcc
+#AR	=  arm-linux-ar
+CC	=  gcc
+AR	=  ar
+RM	= rm
+MV  = mv
+ECHO	= echo
+CFLAGS	= -g -Wall
+PROGS   = libdriver.a
+OBJECTS = core_configurator/CoreConfigurator.o core_simulator/CoreConfigSimulator.o nmi_driver_interface/host_interface.o transport/Packet_tx_Rx_socket.o core_simulator/FIFO_Buffer.o transport/Packet_Tx_Rx.o
+
+
+PWD = $(shell pwd)
+OBJDIR = $(PWD)
+OSPWD = $(PWD)/../NMI_OsWrapper
+INCHDR += -I$(PWD)/include -I .
+INCHDR += -I$(OSPWD)/include 
+#INCHDR += -DNMI_LINUX -I$(PWD)/../NMI_OsWrapper/include
+INCHDR += -DNMI_PLATFORM=NMI_LINUX -I$(PWD)/../
+CFLAGS += -DSIMULATION_SHARED_SOCKET
+OSMAKEFILE = $(PWD)/../NMI_OsWrapper/source/linux
+OSLIB = $(PWD)/../NMI_OsWrapper/binary/linux/x86
+
+VPATH = $(OBJDIR)
+VPATH  += source
+
+
+$(OBJDIR)/%.o : %.c
+	$(MAKE) -C $(OSPWD)/source/linux
+	@$(ECHO) "###########################################"
+	@$(ECHO) "#### Building" $<
+	$(CC) $(INCHDR) $(CFLAGS) -c $< -o $@ #-L$(OSLIB) -loswrapper
+
+OBJPROG = $(addprefix $(OBJDIR)/, $(PROGS))
+
+$(OBJPROG): $(addprefix $(OBJDIR)/, $(OBJECTS))
+	@$(ECHO) "###########################################"
+	@$(ECHO) "#### Linking library" $@
+	$(AR) rcs $@ $^
+
+all:build
+Debug:build
+Release:build
+cleanDebug:clean
+cleanRelease:clean
+
+clean:
+	$(RM) -f $(OBJPROG) $(addprefix $(OBJDIR)/, $(OBJECTS))
+
+build: $(OBJPROG)
+

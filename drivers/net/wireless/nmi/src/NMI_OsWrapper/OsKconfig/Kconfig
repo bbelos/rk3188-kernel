@@ -1,0 +1,116 @@
+
+menu "THREADS"
+
+config NMI_THREAD_FEATURE
+	boolean "Enable Using Threads"
+
+config NMI_THREAD_SUSPEND_CONTROL
+	boolean "Enable Suspending Thread"
+	depends on NMI_THREAD_FEATURE
+
+config NMI_THREAD_STRICT_PRIORITY
+	boolean "Enable Setting Thread Priority"
+	depends on NMI_THREAD_FEATURE
+
+endmenu
+
+menu "SEMAPHORES"
+
+config NMI_SEMAPHORE_FEATURE
+	boolean "Enable Using Semaphores"
+
+config NMI_SEMAPHORE_TIMEOUT
+	boolean "Enable Semaphore Timeout"
+	depends on NMI_SEMAPHORE_FEATURE
+
+endmenu
+
+menu "SLEEP"
+
+config NMI_SLEEP_FEATURE
+	boolean "Enable Using Sleep"
+
+config NMI_SLEEP_HI_RES
+	boolean "Enable High Resolution Sleep"
+	depends on NMI_SLEEP_FEATURE
+
+endmenu
+
+menu "TIMER"
+
+config NMI_TIMER_FEATURE
+	boolean "Enable Using Timer"
+	
+config NMI_TIMER_PERIODIC
+	boolean "Enable periodic Timer support"
+	depends on NMI_TIMER_FEATURE
+
+endmenu
+
+menu "MEMORY"
+
+config NMI_MEMORY_FEATURE
+	boolean "Enable dynamic memory management"
+
+config NMI_MEMORY_POOLS
+	boolean "Enable memory manager pools"
+	depends on NMI_MEMORY_FEATURE
+
+config NMI_MEMORY_DEBUG
+	boolean "Enable memory debugging and tracing (could be heavy wieght)"
+	depends on NMI_MEMORY_FEATURE
+
+endmenu
+
+menu "ASSERSIONS"
+
+config NMI_ASSERTION_SUPPORT
+	boolean "Enable assertions"
+	
+endmenu
+
+menu "Utilities"
+
+config NMI_STRING_UTILS
+	boolean "Enable String standard utilities (usually found in string.h)"
+
+endmenu
+
+menu "Message Queue"
+
+config NMI_MSG_QUEUE_FEATURE
+	boolean "Enable Message Queues"
+
+config NMI_MSG_QUEUE_IPC_NAME
+	boolean "Enable IPC communications via named message queues"
+	depends on NMI_MSG_QUEUE_FEATURE
+
+config NMI_MSG_QUEUE_TIMEOUT
+	boolean "Enable Message Queue timeout"
+	depends on NMI_MSG_QUEUE_FEATURE
+
+endmenu
+
+menu "File operations"
+
+config NMI_FILE_OPERATIONS_FEATURE
+	boolean "Enable File operations"
+
+config NMI_FILE_OPERATIONS_STRING_API
+	boolean "Enable API to read/write strings to files"
+	depends on NMI_FILE_OPERATIONS_FEATURE
+
+endmenu
+
+menu "Events"
+
+config NMI_EVENT_FEATURE
+	boolean "Enable Event objects"
+
+config NMI_EVENT_TIMEOUT
+	boolean "Enable Event timeout"
+	depends on NMI_EVENT_FEATURE
+
+endmenu
+
+

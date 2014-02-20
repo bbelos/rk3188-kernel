@@ -1,0 +1,68 @@
+config NMC1XXX_WIFI_MODULE
+#        depends on AM_WIFI_SD_MMC || SD_MMC && SDIO
+    tristate "Newportmedia NMC1XXX wireless cards support"
+    select WIRELESS_EXT
+    select WEXT_PRIV
+    ---help---
+    This module adds support for wireless adapters based on
+    Broadcom NMC1000 chipset.
+
+choice
+    depends on NMC1XXX_WIFI_MODULE
+    prompt "Wi-Fi chipset type"
+    default NMC1000_WIFI_CHIP
+
+	config NMC1000_WIFI_CHIP
+	    bool "NMC1000 without bluetooth"
+	config NMC1100_WIFI_CHIP
+	    bool "NMC1100 with bluetooth"
+
+endchoice
+
+choice
+    depends on NMC1XXX_WIFI_MODULE
+    prompt "Wi-Fi bus type"
+    default NMC1XXX_USE_SDIO
+    
+	config NMC1XXX_USE_SDIO_BUS
+	    bool "communication by SDIO"
+#	    depends on AM_WIFI_SD_MMC || SD_MMC && SDIO
+	config NMC1XXX_USE_SPI_BUS
+	    bool "communication by SPI"
+endchoice
+
+config SDIO_HARD_IRQ
+        depends on NMC1XXX_WIFI_MODULE && NMC1XXX_USE_SDIO
+        bool "SDIO HARD IRQ"
+        default n
+        ---help---
+          hard irq wake up polling process
+
+#config NMC1XXX_WIFI_CONTROL_FUNC
+#        bool "Use NMC1XXX_wlan device"
+#        depends on NMC1XXX_WIFI_MODULE
+#        default n
+#        ---help---
+#           Use this option to get various parameters from architecture specific
+#           NMC1XXX_wlan platform device. Say n if unsure.
+
+config NMC1XXX_HW_OOB_INTR
+        bool "Use out of band interrupt"
+        depends on NMC1XXX_WIFI_MODULE && NMC1XXX_USE_SDIO_BUS
+        default n
+        ---help---
+           Use out of band interrupt for wake on wireless.
+
+#config NMC1XXX_OOB_INTR_ONLY
+#        bool "Use out of band interrupt only"
+#        depends on NMC1XXX_WIFI_MODULE && NMC1XXX_USE_SDIO_BUS
+#        default n
+#        ---help---
+#           Use out of band interrupt for all interrupts(including SDIO interrupts).
+
+config NMC1XXX_ENABLE_DEBUGFS
+	bool "Export debugfs for NMC1XXX status"
+	depends on NMC1XXX_WIFI_MODULE
+	default n
+	---help---
+	   Export status information via debugfs.

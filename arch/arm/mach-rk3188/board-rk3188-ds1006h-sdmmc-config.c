@@ -158,6 +158,16 @@ int rk31sdk_get_sdmmc0_pin_io_voltage(void)
     #define RK30SDK_WIFI_GPIO_GPS_LAN                   RK30_PIN4_PD6
     #define RK30SDK_WIFI_GPIO_GPS_LAN_ENABLE_VALUE      GPIO_HIGH    //use 6620 in CDT chip, High--work; Low--no work..
     #endif // #if COMBO_MODULE_MT6620_CDT--#endif
+#elif defined(CONFIG_NMC1000_WIFI_CHIP)
+    #define RK30SDK_WIFI_GPIO_POWER_N                   INVALID_GPIO//RK30_PIN3_PD0
+    #define RK30SDK_WIFI_GPIO_POWER_ENABLE_VALUE        GPIO_HIGH
+
+    #define RK30SDK_WIFI_GPIO_RESET_N                   RK30_PIN3_PD1
+    #define RK30SDK_WIFI_GPIO_RESET_ENABLE_VALUE        GPIO_HIGH
+
+    #define RK30SDK_WIFI_GPIO_WIFI_INT_B                RK30_PIN3_PD2
+    #define RK30SDK_WIFI_GPIO_WIFI_INT_B_ENABLE_VALUE   GPIO_HIGH
+
 #endif 
 
 int rk31sdk_get_sdio_wifi_voltage(void)
@@ -179,7 +189,7 @@ int rk31sdk_get_sdio_wifi_voltage(void)
     voltage = 3300 ; //power 3300V
 #else
     //default, sdio use 3.0V
-    voltage = 3000 ; //power 3000V
+    voltage = 3300 ; //power 3000V
 #endif
 
     return voltage;
