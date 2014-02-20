@@ -1780,6 +1780,61 @@ struct platform_device pwm_regulator_device[2] = {
 
 #ifdef CONFIG_RFKILL_RK
 // bluetooth rfkill device, its driver in net/rfkill/rfkill-rk.c
+#if defined(CONFIG_TCHIP_MACH_TR7888)
+static struct rfkill_rk_platform_data rfkill_rk_platdata = {
+    .type               = RFKILL_TYPE_BLUETOOTH,
+
+    .poweron_gpio       = { // BT_REG_ON
+        .io             = RK30_PIN3_PC6, //RK30_PIN3_PC7,
+        .enable         = GPIO_HIGH,
+        .iomux          = {
+            .name       = "bt_poweron",
+            .fgpio      = GPIO3_C6,
+        },
+    },
+
+    .reset_gpio         = { // BT_RST
+        .io             = INVALID_GPIO, // set io to INVALID_GPIO for disable it
+        .enable         = GPIO_LOW,
+        .iomux          = {
+            .name       = "bt_reset",
+            .fgpio      = GPIO3_D1,
+       },
+   }, 
+   
+    .wake_gpio          = { // BT_WAKE, use to control bt's sleep and wakeup
+        .io             = RK30_PIN1_PA1, // set io to INVALID_GPIO for disable it
+        .enable         = GPIO_LOW,
+        .iomux          = {
+            .name       = "gpio1a1_uart0sout_name",
+            .fgpio      = GPIO1_A1,
+            .fmux       = UART0_SOUT,
+        },
+    },
+
+    .wake_host_irq      = {
+        .gpio           = { 
+            .io         = RK30_PIN1_PA0,
+            .enable     = GPIO_LOW,
+            .iomux      = {
+                .name   = "uart0_rx",
+                .fgpio  = GPIO1_A0,
+                .fmux   = UART0_SIN,
+            },
+        },
+    },
+
+    .rts_gpio           = { // UART_RTS, enable or disable BT's data coming
+        .io             = RK30_PIN1_PA3, // set io to INVALID_GPIO for disable it
+        .enable         = GPIO_LOW,
+        .iomux          = {
+            .name       = "bt_rts",
+            .fgpio      = GPIO1_A3,
+            .fmux       = UART0_RTSN,
+        },
+    },
+};
+#else
 static struct rfkill_rk_platform_data rfkill_rk_platdata = {
     .type               = RFKILL_TYPE_BLUETOOTH,
 
@@ -1876,6 +1931,7 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
         },
     },
 };
+#endif
 
 static struct platform_device device_rfkill_rk = {
     .name   = "rfkill_rk",
