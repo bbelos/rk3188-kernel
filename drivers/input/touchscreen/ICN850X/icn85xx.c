@@ -2327,7 +2327,7 @@ static int icn85xx_ts_probe(struct i2c_client *client, const struct i2c_device_i
         }
 
 #else
-        if(fwVersion > curVersion)
+        if(fwVersion != curVersion)
         {
             retry = 5;
             while(retry > 0)
