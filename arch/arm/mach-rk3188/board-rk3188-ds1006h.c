@@ -2821,8 +2821,10 @@ static void __init machine_rk30_board_init(void)
 
 #if defined(CONFIG_MT5931_MT6622) || defined(CONFIG_MTK_MT6622)
 		clk_set_rate(clk_get_sys("rk_serial.0", "uart"), 24*1000000);
-#endif		
+#endif	
+#if defined(CONFIG_BK3515A_COMBO)
 		clk_set_rate(clk_get_sys("rk_serial.0", "uart"), 16*1000000);
+#endif
 }
 
 #define HD_SCREEN_SIZE 1920UL*1200UL*4*3
