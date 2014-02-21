@@ -159,7 +159,7 @@ int rk31sdk_get_sdmmc0_pin_io_voltage(void)
     #define RK30SDK_WIFI_GPIO_GPS_LAN_ENABLE_VALUE      GPIO_HIGH    //use 6620 in CDT chip, High--work; Low--no work..
     #endif // #if COMBO_MODULE_MT6620_CDT--#endif
 #elif defined(CONFIG_NMC1000_WIFI_CHIP)
-    #define RK30SDK_WIFI_GPIO_POWER_N                   INVALID_GPIO//RK30_PIN3_PD0
+    #define RK30SDK_WIFI_GPIO_POWER_N                   RK30_PIN3_PD0
     #define RK30SDK_WIFI_GPIO_POWER_ENABLE_VALUE        GPIO_HIGH
 
     #define RK30SDK_WIFI_GPIO_RESET_N                   RK30_PIN3_PD1
