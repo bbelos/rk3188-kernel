@@ -86,9 +86,19 @@ static void init_touchVersion(void)
 	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_touchs);
 }
 
+static void init_gsensorVersion(void)
+{
+	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_misc);
+}
+
 static void init_wifiVersion(void)
 {
 	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_wifis);
+}
+
+static void init_btVersion(void)
+{
+	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_bts);
 }
 
 static void init_modemVersion(void)
@@ -99,6 +109,11 @@ static void init_modemVersion(void)
 static void init_hdmiVersion(void)
 {
 	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_hdmis);
+}
+
+static void init_batteryVersion(void)
+{
+	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_battery);
 }
 
 static void init_cameraVersion(void)
@@ -257,14 +272,17 @@ static void rk29_init_Version(void)
 	 */
 	strcat(tchip_version, "(");
 	init_boardVersion();
+	init_encryptVersion();
 	init_rk61x();
 	init_toolscreen();
 	init_codecVersion();
 	init_touchVersion();
+	init_gsensorVersion();
 	init_wifiVersion();
-	init_encryptVersion();
+	init_btVersion();
+	init_batteryVersion();
 	init_cameraVersion();
-	init_gsensor();
+	//init_gsensor();
 	init_hdmiVersion();
 	init_gpsVersion();
 	init_modemVersion();

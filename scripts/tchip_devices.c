@@ -123,6 +123,9 @@ static const struct tchip_device tchip_touchs[] =
 #ifdef  CONFIG_TOUCHSCREEN_ICN83XX
 	{.name = "ICN83XX",.active = 1},
 #endif
+#ifdef  CONFIG_TOUCHSCREEN_ICN850X
+	{.name = "ICN850X",.active = 1},
+#endif
 };
 
 /*
@@ -322,6 +325,13 @@ static const struct tchip_device tchip_wifis[] =
 		.active = 1,
 	},
 #endif
+#ifdef	CONFIG_NMC1000_WIFI_CHIP
+	[TCSI_GET_WIFI_INDEX(TCSI_WIFI_NMC1000)] =
+	{
+		.name = "NMC1000",
+		.active = 1,
+	},
+#endif
 #ifdef	CONFIG_ESP8089
 	[TCSI_GET_WIFI_INDEX(TCSI_WIFI_ESP8089)] =
 	{
@@ -355,6 +365,26 @@ static const struct tchip_device tchip_wifis[] =
 		.name = "NMC1XXX",
 		.active = 1,
 	},
+#endif
+};
+
+/**
+*bt support list
+*/
+static const struct tchip_device tchip_bts[] =
+{
+#if defined(CONFIG_BK3515A_COMBO)
+    {.name = "BK3515",.active = 1},
+#endif
+};
+
+/**
+*battery support list
+*/
+static const struct tchip_device tchip_battery[] =
+{
+#if defined(CONFIG_BATTERY_CW2015)
+    {.name = "CW201X",.active = 1},
 #endif
 };
 
