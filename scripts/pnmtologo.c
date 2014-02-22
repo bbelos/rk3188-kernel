@@ -267,8 +267,13 @@ static void write_header(void)
 	fprintf(out, " *  Linux logo %s\n", logoname);
 	fputs(" */\n\n", out);
 	fputs("#include <linux/linux_logo.h>\n\n", out);
+#if defined(CONFIG_TCHIP_MIX_HDMD)
+    fprintf(out, "static unsigned char %s_data[%d*%d] __initdata = {\n",
+        logoname,1280,800);
+#else
 	fprintf(out, "static unsigned char %s_data[] __initdata = {\n",
 		logoname);
+#endif
 }
 
 static void write_footer(void)
