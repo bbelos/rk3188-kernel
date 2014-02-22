@@ -318,6 +318,15 @@ endchoice
 endmenu
 #caixx add end 
 
+#############################3 
+#add tchip function
+#############################
+config TCHIP_MIX_HDMD
+       default n
+       bool "Tchip Machine Mix HD and MD Reselution "
+       ---help---
+         Define HD or MD Machine Reselution by add [tchip_resolution=HD/MD] in parameter file.
+
 #########################################
 #           T-Chip Series Boards        #
 choice

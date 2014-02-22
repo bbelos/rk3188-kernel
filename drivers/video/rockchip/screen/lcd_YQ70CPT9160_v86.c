@@ -6,8 +6,8 @@
 /* Base */
 #define SCREEN_TYPE		SCREEN_RGB
 #define LVDS_FORMAT       	LVDS_8BIT_1
-//#define OUT_FACE		OUT_P666
-#define OUT_FACE	    	OUT_D888_P666
+#define OUT_FACE		OUT_P888
+//#define OUT_FACE	    	OUT_D888_P666
 
 #define DCLK			48000000        // 65000000
 #define LCDC_ACLK        	500000000//312000000           //29 lcdc axi DMA ÆµÂÊ
@@ -40,5 +40,19 @@
 
 #define LCD_WIDTH       	154    //need modify
 #define LCD_HEIGHT      	85
+
+#if defined(CONFIG_TCHIP_MIX_HDMD)
+#define DCLK_MD                 48000000        //
+#define LCDC_ACLK_MD            500000000//312000000 
+#define H_PW_MD                 30
+#define H_BP_MD                 16
+#define H_VD_MD                 800
+#define H_FP_MD                 210
+
+#define V_PW_MD                 13
+#define V_BP_MD                 10
+#define V_VD_MD                 480
+#define V_FP_MD                 22
+#endif // 800x480
 
 #endif

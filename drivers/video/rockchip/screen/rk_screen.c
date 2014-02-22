@@ -9,7 +9,17 @@
 extern uint lcd_param[LCD_PARAM_MAX];
 #endif
 
+#if defined (CONFIG_TCHIP_MIX_HDMD)
+int tchip_resolution = 1; //0: 800X480   1: 1024X600
+void tchip_resolution_setup(char *str)
+{
+    if(str[0] == 'M' && str[1] == 'D')
+        tchip_resolution = 0;
+    printk(KERN_INFO "####### tchip_resolution = %s, tchip_resolution_value = %d\n", str, tchip_resolution);
+}
 
+__setup("tchip_resolution=",tchip_resolution_setup);
+#endif
 
 
 // if we use one lcdc with jetta for dual display,we need these configration
@@ -235,7 +245,10 @@ void set_lcd_info(struct rk29fb_screen *screen, struct rk29lcd_info *lcd_info )
 	screen->face = OUT_FACE;
 	screen->lvds_format = LVDS_FORMAT;  //lvds data format
 
-	
+#if defined(CONFIG_TCHIP_MIX_HDMD)
+    if(tchip_resolution == 1)
+    {
+#endif
 	screen->x_res = H_VD;		//screen resolution
 	screen->y_res = V_VD;
 
@@ -251,7 +264,27 @@ void set_lcd_info(struct rk29fb_screen *screen, struct rk29lcd_info *lcd_info )
 	screen->upper_margin = V_BP;
 	screen->lower_margin = V_FP;
 	screen->vsync_len = V_PW;
+#if defined(CONFIG_TCHIP_MIX_HDMD)
+    }
+    else
+    {
+	screen->x_res = H_VD_MD;		//screen resolution
+	screen->y_res = V_VD_MD;
 
+	screen->width = LCD_WIDTH;
+	screen->height = LCD_HEIGHT;
+
+    
+	screen->lcdc_aclk = LCDC_ACLK_MD; // Timing 
+	screen->pixclock = DCLK_MD;
+	screen->left_margin = H_BP_MD;
+	screen->right_margin = H_FP_MD;
+	screen->hsync_len = H_PW_MD;
+	screen->upper_margin = V_BP_MD;
+	screen->lower_margin = V_FP_MD;
+	screen->vsync_len = V_PW_MD;
+    }
+#endif
 	
 	screen->pin_hsync = HSYNC_POL; //Pin polarity 
 	screen->pin_vsync = VSYNC_POL;
@@ -359,6 +392,24 @@ size_t get_fb_size(void)
 	return ALIGN(size,SZ_1M);
 }
 #else
+#if defined(CONFIG_TCHIP_MIX_HDMD)
+size_t get_fb_size(void)
+{
+	size_t size = 0;
+	#if defined(CONFIG_THREE_FB_BUFFER)
+        if(tchip_resolution == 1)
+		    size = ((H_VD)*(V_VD)<<2)* 3; //three buffer
+        else
+            size = ((H_VD_MD)*(V_VD_MD)<<2)* 3; //three buffer
+	#else
+        if(tchip_resolution == 1)
+		    size = ((H_VD)*(V_VD)<<2)<<1; //two buffer
+        else
+            size = ((H_VD_MD)*(V_VD_MD)<<2)<<1; //two buffer
+	#endif
+	return ALIGN(size,SZ_1M);
+}
+#else
 size_t get_fb_size(void)
 {
 	size_t size = 0;
@@ -369,4 +420,5 @@ size_t get_fb_size(void)
 	#endif
 	return ALIGN(size,SZ_1M);
 }
+#endif
 #endif
