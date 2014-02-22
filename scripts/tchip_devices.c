@@ -359,13 +359,6 @@ static const struct tchip_device tchip_wifis[] =
 #endif
 	},
 #endif
-#ifdef	CONFIG_NMC1XXX_WIFI_MODULE
-	[TCSI_GET_WIFI_INDEX(TCSI_WIFI_NMC1XXX)] =
-	{
-		.name = "NMC1XXX",
-		.active = 1,
-	},
-#endif
 };
 
 /**
