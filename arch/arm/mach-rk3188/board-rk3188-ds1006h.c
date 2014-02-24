@@ -861,6 +861,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_PIN        RK30_PIN1_PB2
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
 #elif defined(CONFIG_TCHIP_MACH_TR7088TN) 
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -869,6 +871,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_PIN        RK30_PIN1_PB2
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
 #elif defined(CONFIG_TCHIP_MACH_TR7088)
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -877,6 +881,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_PIN        RK30_PIN1_PB2
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
 #elif defined(CONFIG_TCHIP_MACH_TR7888)
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -896,6 +902,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_IOMUX      GPIO1_B2
 #define LCD_EN_PIN         RK30_PIN0_PB0    // LCD_EN pin
 #define LCD_EN_VALUE       GPIO_LOW
+#define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
 #else
 #define LCD_CS_PIN         RK30_PIN1_PB5
 #define LCD_CS_IOMUX       GPIO1_B5
@@ -905,7 +913,7 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_VALUE      GPIO_HIGH
 #define LCD_EN_PIN         RK30_PIN0_PB0
 #define LCD_EN_VALUE       GPIO_LOW
-#define LCD_TCON_EN			RK30_PIN0_PB4
+#define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
 #endif
 #else
