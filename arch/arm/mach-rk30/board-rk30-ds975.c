@@ -44,6 +44,7 @@
 #include <linux/regulator/machine.h>
 #include <linux/rfkill-rk.h>
 #include <linux/sensor-dev.h>
+#include <plat/ddr.h>
 #if defined(CONFIG_HDMI_RK30)
 	#include "../../../drivers/video/rockchip/hdmi/rk_hdmi.h"
 #endif
@@ -218,6 +219,7 @@ Comprehensive camera device registration:
                           
 */
 static struct rkcamera_platform_data new_camera[] = {                          
+    # if 0
     new_camera_device(RK29_CAM_SENSOR_OV2659,
                         back,
                         RK30_PIN1_PD6,
@@ -231,7 +233,43 @@ static struct rkcamera_platform_data new_camera[] = {
                         0,
                         0,
                         3,
-                        0),                        
+                        0),
+    # else
+    new_camera_device_ex(RK29_CAM_SENSOR_OV2659,
+			    back,
+			    0,
+			    INVALID_VALUE,
+			    INVALID_VALUE,
+			    INVALID_VALUE,
+			    INVALID_VALUE,
+			    RK30_PIN1_PD6,
+			    CONS(RK29_CAM_SENSOR_OV2659,_PWRDN_ACTIVE),
+			    false,
+			    CONS(RK29_CAM_SENSOR_OV2659,_FULL_RESOLUTION),
+			    0,
+			    3,
+			    250000,
+			    CONS(RK29_CAM_SENSOR_OV2659,_I2C_ADDR),
+			    0,
+			    24),
+		new_camera_device_ex(RK29_CAM_SENSOR_OV2659,
+			    front,
+			    0,
+			    INVALID_VALUE,
+			    INVALID_VALUE,
+			    INVALID_VALUE,
+			    INVALID_VALUE,
+			    RK30_PIN1_PB7,
+			    CONS(RK29_CAM_SENSOR_OV2659,_PWRDN_ACTIVE),
+			    false,
+			    CONS(RK29_CAM_SENSOR_OV2659,_FULL_RESOLUTION),
+			    0,
+			    3,
+			    250000,
+			    CONS(RK29_CAM_SENSOR_OV2659,_I2C_ADDR),
+			    0,
+			    24),
+    # endif
     new_camera_device_end
 };
 /*---------------- Camera Sensor Macro Define Begin  ------------------------*/
@@ -1075,7 +1113,7 @@ static struct sensor_platform_data lis3dh_info = {
 	.irq_enable = 1,
 	.poll_delay_ms = 30,
         .init_platform_hw = lis3dh_init_platform_hw,
-	.orientation = {0, -1, 0, 0, 0, -1, -1, 0, 0},
+	.orientation = {1, 0, 0, 0, -1, 0, 0, 0, -1},
 };
 #endif
 
@@ -1459,6 +1497,7 @@ static struct platform_device rk29_device_adc_battery = {
 
 #ifdef CONFIG_ION
 #define ION_RESERVE_SIZE        (80 * SZ_1M)
+#define ION_RESERVE_SIZE_120M   (120 * SZ_1M)
 static struct ion_platform_data rk30_ion_pdata = {
 	.nr = 1,
 	.heaps = {
@@ -1466,7 +1505,7 @@ static struct ion_platform_data rk30_ion_pdata = {
 			.type = ION_HEAP_TYPE_CARVEOUT,
 			.id = ION_NOR_HEAP_ID,
 			.name = "norheap",
-			.size = ION_RESERVE_SIZE,
+//			.size = ION_RESERVE_SIZE,
 		}
 	},
 };
@@ -2126,8 +2165,21 @@ static void __init machine_rk30_board_init(void)
 
 static void __init rk30_reserve(void)
 {
+	int size, ion_reserve_size;
 #ifdef CONFIG_ION
-	rk30_ion_pdata.heaps[0].base = board_mem_reserve_add("ion", ION_RESERVE_SIZE);
+//	rk30_ion_pdata.heaps[0].base = board_mem_reserve_add("ion", ION_RESERVE_SIZE);
+	size = ddr_get_cap() >> 20;
+	if(size >= 1024) { // DDR >= 1G, set ion to 120M
+               rk30_ion_pdata.heaps[0].size = ION_RESERVE_SIZE_120M;
+               ion_reserve_size = ION_RESERVE_SIZE_120M;
+	}
+	else {
+               rk30_ion_pdata.heaps[0].size = ION_RESERVE_SIZE;
+               ion_reserve_size = ION_RESERVE_SIZE;
+	}
+	printk("ddr size = %d M, set ion_reserve_size size to %d\n", size, ion_reserve_size);
+	//rk30_ion_pdata.heaps[0].base = board_mem_reserve_add("ion", ION_RESERVE_SIZE);
+	rk30_ion_pdata.heaps[0].base = board_mem_reserve_add("ion", ion_reserve_size);
 #endif
 #ifdef CONFIG_FB_ROCKCHIP
 	resource_fb[0].start = board_mem_reserve_add("fb0", RK30_FB0_MEM_SIZE);
