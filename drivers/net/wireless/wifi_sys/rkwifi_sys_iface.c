@@ -208,6 +208,10 @@ static ssize_t wifi_chip_read(struct class *cls, char *_buf)
     printk("Current WiFi chip is ESP8089.\n");
 #endif
 
+#ifdef CONFIG_NMC1000_WIFI_CHIP
+    count = sprintf(_buf, "%s", "NMC1XXX");
+    printk("Current WiFi chip is NMC1XXX.\n");
+#endif
     return count;
 }
 
