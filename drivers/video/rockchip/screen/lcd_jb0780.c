@@ -10,7 +10,7 @@
 #define OUT_FACE	    	OUT_P888//OUT_D888_P666 //depend on hardware connection
 
 
-#define DCLK	          	61000000
+#define DCLK	          	65000000
 #define LCDC_ACLK         	300000000           //29 lcdc axi DMA ÆµÂÊ
 
 /* Timing */
