@@ -22,11 +22,17 @@
 #include "icn85xx.h"
 
 #if COMPILE_FW_WITH_DRIVER
-#if defined(CONFIG_LCD_RK2926_V86)
-#include "icn85xx_fw_TN.h"
+
+#if defined(CONFIG_TCHIP_MACH_TR7078) || defined(CONFIG_TCHIP_MACH_TR7088) 
+    #if defined(CONFIG_LCD_RK2926_V86)
+        #include "tr7088_icn85xx_fw_TN.h"
+    #else
+        #include "tr7088_icn85xx_fw_IPS.h"
+    #endif
 #else
-#include "icn85xx_fw.h"
+    #include "icn85xx_fw.h"
 #endif
+
 #endif
 
 static struct i2c_client *this_client;
