@@ -34,7 +34,11 @@ typedef uint32_t uint32;
 
 //#define ENABLE_DDR_CLCOK_GPLL_PATH  //for RK3188
 #ifdef USE_LPDDR2
+#if defined(CONFIG_TCHIP_MACH_TR7888)
+#define DDR3_DDR2_ODT_DLL_DISABLE_FREQ    (666)
+#else
 #define DDR3_DDR2_ODT_DLL_DISABLE_FREQ    (200)
+#endif
 #else
 #define DDR3_DDR2_ODT_DLL_DISABLE_FREQ    (333)
 #endif
@@ -42,8 +46,14 @@ typedef uint32_t uint32;
 #define PD_IDLE                       (0X40)  //unit:DDR clk cycle, and 0 for disable auto power-down
 
 #ifdef USE_LPDDR2
+#if defined(CONFIG_TCHIP_MACH_TR7888)
+#if (DDR3_DDR2_ODT_DLL_DISABLE_FREQ > 666)
+#error
+#endif
+#else
 #if (DDR3_DDR2_ODT_DLL_DISABLE_FREQ > 200)
 #error
+#endif
 #endif
 #else
 #if (DDR3_DDR2_ODT_DLL_DISABLE_FREQ > 333)
