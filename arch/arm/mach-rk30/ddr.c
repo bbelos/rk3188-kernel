@@ -28,13 +28,13 @@
 
 typedef uint32_t uint32;
 
-#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR7078)
+#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088) || defined(CONFIG_TCHIP_MACH_TR7078)
 #define USE_LPDDR2
 #endif
 
 //#define ENABLE_DDR_CLCOK_GPLL_PATH  //for RK3188
 #ifdef USE_LPDDR2
-#if defined(CONFIG_TCHIP_MACH_TR7888)
+#if defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
 #define DDR3_DDR2_ODT_DLL_DISABLE_FREQ    (666)
 #else
 #define DDR3_DDR2_ODT_DLL_DISABLE_FREQ    (200)
@@ -46,7 +46,7 @@ typedef uint32_t uint32;
 #define PD_IDLE                       (0X40)  //unit:DDR clk cycle, and 0 for disable auto power-down
 
 #ifdef USE_LPDDR2
-#if defined(CONFIG_TCHIP_MACH_TR7888)
+#if defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
 #if (DDR3_DDR2_ODT_DLL_DISABLE_FREQ > 666)
 #error
 #endif

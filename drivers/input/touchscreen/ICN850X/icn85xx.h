@@ -99,7 +99,7 @@ History :
 #include <mach/board.h>
 #include <mach/gpio.h>
 
-#if defined(CONFIG_TCHIP_MACH_TR7888)
+#if defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
 #define CTP_IRQ_PORT             RK30_PIN1_PB7 // tchip use board define
 #define CTP_IRQ_MODE             0
 #define CTP_RST_PORT             RK30_PIN0_PB6

@@ -111,6 +111,9 @@ obj-$(CONFIG_SOC_CAMERA_GC2015)		+= gc2015.o
 ifeq ($(CONFIG_TCHIP_MACH_TR7888),y)
 obj-$(CONFIG_SOC_CAMERA_GC2035)         += gc2035_old.o
 obj-$(CONFIG_SOC_CAMERA_GC0329)			+= gc0329_old.o
+else ifeq ($(CONFIG_TCHIP_MACH_TR8088),y)
+obj-$(CONFIG_SOC_CAMERA_GC2035)         += gc2035_old.o
+obj-$(CONFIG_SOC_CAMERA_GC0329)			+= gc0329_old.o
 else
 obj-$(CONFIG_SOC_CAMERA_GC2035)         += gc2035.o
 obj-$(CONFIG_SOC_CAMERA_GC0329)			+= gc0329.o
