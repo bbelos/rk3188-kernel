@@ -440,7 +440,7 @@ static struct spi_board_info board_spi_devices[] = {
 #define LCD_DISP_ON_PIN
 
 #ifdef  LCD_DISP_ON_PIN
-#if defined(CONFIG_TCHIP_MACH_TR7088TN)
+#if defined(CONFIG_TCHIP_MACH_TR7088TN) || defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
 #define BL_EN_PIN         RK30_PIN0_PA2
 #define BL_EN_VALUE       GPIO_HIGH
 #elif defined(CONFIG_TCHIP_MACH_TR7088)
@@ -465,7 +465,7 @@ static int rk29_backlight_io_init(void)
 	}
 
 	gpio_direction_output(BL_EN_PIN, 0);
-#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN)
+#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
 	gpio_set_value(RK30_PIN0_PA2, 1);//gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
 #else
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
@@ -558,6 +558,17 @@ static struct rk29_bl_info rk29_bl_info = {
 	.pwm_resume = rk29_backlight_pwm_resume,
 #elif defined(CONFIG_TCHIP_MACH_TR7088TN)
         .min_brightness = 50,
+        .max_brightness = 164,
+        .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
+	.pre_div = 10 * 1000,  // pwm output clk: 30k;
+	.pwm_id = PWM_ID,
+	.bl_ref = !PWM_EFFECT_VALUE,
+	.io_init = rk29_backlight_io_init,
+	.io_deinit = rk29_backlight_io_deinit,
+	.pwm_suspend = rk29_backlight_pwm_suspend,
+	.pwm_resume = rk29_backlight_pwm_resume,
+#elif defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+        .min_brightness = 45,
         .max_brightness = 164,
         .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
 	.pre_div = 10 * 1000,  // pwm output clk: 30k;
@@ -863,7 +874,7 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_IOMUX      GPIO1_B2
 #define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
-#elif defined(CONFIG_TCHIP_MACH_TR7088TN) 
+#elif defined(CONFIG_TCHIP_MACH_TR7088TN) || defined(CONFIG_TCHIP_MACH_TR7088_CUBE) 
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
 #define LCD_EN_PIN         RK30_PIN0_PB0//INVALID_GPIO
@@ -958,7 +969,7 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 		}
 		else
 		{
-		#if !defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7088TN) 
+		#if !defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7088TN) || defined(CONFIG_TCHIP_MACH_TR7088_CUBE) 
 			gpio_direction_output(LCD_EN_PIN, LCD_EN_VALUE);
 		#endif
 		
