@@ -748,7 +748,11 @@ static int rk29_ac_usb_get_property(struct power_supply *psy,
         case POWER_SUPPLY_PROP_ONLINE:
             if (psy->type == POWER_SUPPLY_TYPE_MAINS)
             {
-                if (rk29_usb_get_online(g_cw2015) || rk29_ac_get_online(g_cw2015))
+				if (rk29_ac_get_online(g_cw2015)
+						#ifdef CONFIG_BATTERY_CW2015_USB_CHARGE
+						|| rk29_usb_get_online(g_cw2015)
+						#endif
+					)
                     val->intval = 1;
                 else
                     val->intval = 0;
