@@ -885,6 +885,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_IOMUX      GPIO1_B2
 #define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #elif defined(CONFIG_TCHIP_MACH_TR7088TN) || defined(CONFIG_TCHIP_MACH_TR7088_CUBE) 
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -895,6 +897,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_IOMUX      GPIO1_B2
 #define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #elif defined(CONFIG_TCHIP_MACH_TR7088)
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -905,6 +909,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_IOMUX      GPIO1_B2
 #define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #elif defined(CONFIG_TCHIP_MACH_TR7888)
 #define LCD_CS_PIN         INVALID_GPIO
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -928,6 +934,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_EN_VALUE       GPIO_LOW
 #define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #else
 #define LCD_CS_PIN         RK30_PIN1_PB5
 #define LCD_CS_IOMUX       GPIO1_B5
@@ -939,6 +947,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_EN_VALUE       GPIO_LOW
 #define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #endif
 #else
 #define LCD_CS_PIN         INVALID_GPIO
@@ -948,6 +958,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_TCON_EN			RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
 #define LCD_LVDS_STB		INVALID_GPIO//RK30_PIN1_PB3
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
+#define LCD_LVDS_STB		INVALID_GPIO
 #define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #endif
 
