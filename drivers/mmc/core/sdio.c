@@ -376,6 +376,7 @@ static unsigned mmc_sdio_get_max_clock(struct mmc_card *card)
 		 * mandatory.
 		 */
 		max_dtr = 50000000;
+        printk("[SDIO]Max clock:%d\n",max_dtr);
 	} else {
 		max_dtr = card->cis.max_dtr;
 	}
