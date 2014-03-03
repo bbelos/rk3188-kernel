@@ -484,7 +484,8 @@ static struct platform_driver rk29_backlight_driver = {
 		.name	= "rk29_backlight",
 		.owner	= THIS_MODULE,
 	},
-	.shutdown	= rk29_backlight_shutdown,
+
+	//.shutdown	= rk29_backlight_shutdown,
 };
 
 static int __init rk29_backlight_init(void)
