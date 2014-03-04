@@ -97,16 +97,24 @@ char gDischargeFlag[4] = {"on "};
 
 
 #ifdef CONFIG_BATTERY_RK30_VOL3V8
-#define BATT_MAX_VOL_VALUE                             4120               	//Full  charge volate	 
-#define BATT_ZERO_VOL_VALUE                            3600//3500              	//power down voltage
+#define BATT_MAX_VOL_VALUE                             4150               	//Full  charge volate	 
+#define BATT_ZERO_VOL_VALUE                            3400//3500              	//power down voltage
 #define BATT_NOMAL_VOL_VALUE                         3800            
-
+#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
+static int batt_table[2*BATT_NUM+6] =
+{
+	0x4B434F52,0x7461625F,0x79726574,0,200,120,
+	3400, 3612, 3679, 3734, 3769, 3801, 3840, 3884, 3922, 3949, 4156,  //discharge
+	3743, 3896, 3970, 4009, 4046, 4099, 4141, 4166, 4171, 4174, 4179 	  //charge
+};
+#else
 static int batt_table[2*BATT_NUM+6] =
 {
 	0x4B434F52,0x7461625F,0x79726574,0,100,100,
 	3496, 3548, 3599, 3626, 3655, 3697, 3751, 3812, 3877, 3949, 4030,  //discharge
 	3540, 3785, 3842, 3861, 3915, 3980, 4041, 4135, 4169, 4175, 4185	  //charge
 };
+#endif
 #define adc_to_voltage(adc_val) ((adc_val * BAT_DEFINE_VALUE * (batt_table[4] +batt_table[5])) / (1024 *batt_table[5]))
 #else
 #define BATT_MAX_VOL_VALUE                              8284              	//Full charge voltage
