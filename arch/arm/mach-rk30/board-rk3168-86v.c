@@ -1485,8 +1485,12 @@ static struct pwm_platform_data pwm_regulator_info[2] = {
 		.pwm_iomux_name=GPIO0A4_PWM1_NAME,
 		.pwm_iomux_pwm = PWM1,
 		.pwm_iomux_gpio = GPIO3_D4,
+        #ifdef CONFIG_TCHIP_MACH_TR7078
+		.pwm_voltage = 1200000,
+        #else
 		.pwm_voltage = 1100000,
-		.suspend_voltage = 1050000,
+        #endif
+        .suspend_voltage = 1050000,
 		.min_uV=1000000,
 		.max_uV	= 1400000,
 		.coefficient = 700,	//57.5%
@@ -1499,11 +1503,15 @@ static struct pwm_platform_data pwm_regulator_info[2] = {
 		.pwm_iomux_pwm = PWM0,
 		.pwm_iomux_name=GPIO0A3_PWM0_NAME,
 		.pwm_iomux_gpio = GPIO3_D3,
+        #ifdef CONFIG_TCHIP_MACH_TR7078
+		.pwm_voltage = 1200000,
+        #else
 		.pwm_voltage = 1100000,
+        #endif
 		.suspend_voltage = 1050000,
 		.min_uV=1000000,
 		.max_uV	= 1375000,
-		.coefficient = 470,	//57.5%
+		.coefficient = 430,	//57.5%
 		.pwm_voltage_map = pwm_voltage_map,
 		.init_data	= &pwm_regulator_init_dcdc[1],
 	},
@@ -1816,6 +1824,10 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #ifdef CONFIG_TCC_BT_DEV
         &device_tcc_bt,
+#endif
+#ifdef CONFIG_RK30_PWM_REGULATOR
+    &pwm_regulator_device[1],
+    &pwm_regulator_device[0],
 #endif
 };
 
@@ -2799,16 +2811,21 @@ static struct cpufreq_frequency_table dvfs_gpu_table[] = {
 };
 
 static struct cpufreq_frequency_table dvfs_ddr_table[] = {
-	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
-	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1050 * 1000},
+    {.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
+    {.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1050 * 1000},
 	{.frequency = 400 * 1000 + DDR_FREQ_NORMAL,     .index = 1100 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 #else
 //chenliang
 static struct cpufreq_frequency_table dvfs_arm_table[] = {
+#ifdef CONFIG_TCHIP_MACH_TR7078
+    {.frequency = 312 * 1000,       .index = 1050 * 1000},
+	{.frequency = 504 * 1000,       .index = 1050 * 1000},
+#else
 	{.frequency = 312 * 1000,       .index = 1025 * 1000},
 	{.frequency = 504 * 1000,       .index = 1025 * 1000},
+#endif
 	{.frequency = 816 * 1000,       .index = 1050 * 1000},
 	{.frequency = 1008 * 1000,      .index = 1125 * 1000},
 	{.frequency = 1200 * 1000,      .index = 1200 * 1000},
@@ -2821,14 +2838,17 @@ static struct cpufreq_frequency_table dvfs_gpu_table[] = {
 	{.frequency = 266 * 1000,	.index = 1050 * 1000},
 	{.frequency = 300 * 1000,	.index = 1050 * 1000},
 	{.frequency = 400 * 1000,	.index = 1125 * 1000},
-        {.frequency = 600 * 1000,       .index = 1250 * 1000},
+    {.frequency = 600 * 1000,   .index = 1250 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 
 static struct cpufreq_frequency_table dvfs_ddr_table[] = {
-	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
-	{.frequency = 240 * 1000 + DDR_FREQ_VIDEO,      .index = 1050 * 1000},
-	{.frequency = 300 * 1000 + DDR_FREQ_NORMAL,     .index = 1075 * 1000},
+#if !defined(CONFIG_TCHIP_MACH_TR7078) 
+    //7078È¥µô 200M
+	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1075 * 1000},
+	{.frequency = 240 * 1000 + DDR_FREQ_VIDEO,      .index = 1075 * 1000},
+#endif
+    {.frequency = 300 * 1000 + DDR_FREQ_NORMAL,     .index = 1075 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 #endif
