@@ -2165,7 +2165,7 @@ static int icn85xx_request_input_dev(struct icn85xx_ts_data *icn85xx_ts)
     icn85xx_ts->input_dev->evbit[0] = BIT_MASK(EV_SYN) | BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS) ;
 #if CTP_REPORT_PROTOCOL
     __set_bit(INPUT_PROP_DIRECT, icn85xx_ts->input_dev->propbit);
-    input_mt_init_slots(icn85xx_ts->input_dev, 255);
+    input_mt_init_slots(icn85xx_ts->input_dev, 5);
 #else
     set_bit(ABS_MT_TOUCH_MAJOR, icn85xx_ts->input_dev->absbit);
     set_bit(ABS_MT_POSITION_X, icn85xx_ts->input_dev->absbit);
