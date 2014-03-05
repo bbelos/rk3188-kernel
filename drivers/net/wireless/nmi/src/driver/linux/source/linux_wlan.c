@@ -1674,7 +1674,9 @@ void linux_to_wlan(nmi_wlan_inp_t* nwi,linux_wlan_t* nic){
 	nwi->os_context.txq_spin_lock = (void *)&nic->txq_spinlock;
 	
 	nwi->os_context.txq_wait_event = (void *)&nic->txq_event;
-	//nwi.os_context.rx_buffer_size = LINUX_RX_SIZE;
+#if defined (MEMORY_STATIC)
+	nwi->os_context.rx_buffer_size = LINUX_RX_SIZE;
+#endif
 	nwi->os_context.rxq_critical_section = (void *)&nic->rxq_cs;
 	nwi->os_context.rxq_wait_event = (void *)&nic->rxq_event;
 	nwi->os_context.cfg_wait_event = (void *)&nic->cfg_event;

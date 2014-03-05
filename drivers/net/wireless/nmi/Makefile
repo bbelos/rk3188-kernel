@@ -652,6 +652,8 @@ ifeq ($(strip $(NMC1000_SRC_VERSION)), 7.2)
 
 	ifeq ($(strip $(NMC1000_FW_VERSION)), 3)
 		EXTRA_CFLAGS += -DCOMPLEMENT_BOOT
+		# to use static rx buffer
+		EXTRA_CFLAGS += -DMEMORY_STATIC
 	endif
 endif #7.2
 

@@ -61,8 +61,10 @@ typedef struct {
 		RX buffer
 	**/
 	uint32_t rx_buffer_size;
-	//uint8_t *rx_buffer;
-	//uint32_t rx_buffer_offset;
+#if defined (MEMORY_STATIC)
+	uint8_t *rx_buffer;
+	uint32_t rx_buffer_offset;
+#endif
 
 	/**
 		TX buffer
@@ -2873,7 +2875,9 @@ int nmi_wlan_init(nmi_wlan_inp_t *inp, nmi_wlan_oup_t *oup)
 	g_wlan.rxq_wait = inp->os_context.rxq_wait_event;
 	g_wlan.cfg_wait = inp->os_context.cfg_wait_event;
 	g_wlan.tx_buffer_size = inp->os_context.tx_buffer_size;
-	//g_wlan.rx_buffer_size = inp->os_context.rx_buffer_size;
+#if defined (MEMORY_STATIC)
+	g_wlan.rx_buffer_size = inp->os_context.rx_buffer_size;
+#endif
 
 	//g_wlan.os_func.os_lock(g_wlan.cfg_wait);
 	/***
@@ -2927,7 +2931,7 @@ int nmi_wlan_init(nmi_wlan_inp_t *inp, nmi_wlan_oup_t *oup)
 		}
 		
 /* rx_buffer is not used unless we activate USE_MEM STATIC which is not applicable, allocating such memory is useless*/	
-#if 0	
+#if defined (MEMORY_STATIC)		//#if 0	
 	g_wlan.rx_buffer = (uint8_t *)g_wlan.os_func.os_malloc(g_wlan.rx_buffer_size);
 	if (g_wlan.rx_buffer == NULL) 
 		goto _fail_;
@@ -2973,7 +2977,7 @@ _fail_:
 	if (g_wlan.tx_buffer)
 		g_wlan.os_func.os_free(g_wlan.tx_buffer);
 
-#if 0
+#if defined (MEMORY_STATIC)		// #if 0
 	if (g_wlan.rx_buffer)
 		g_wlan.os_func.os_free(g_wlan.rx_buffer);
 #endif	

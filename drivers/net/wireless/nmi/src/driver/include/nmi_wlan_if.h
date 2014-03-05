@@ -151,7 +151,9 @@ typedef struct {
 	
 	void *txq_wait_event;
 
-	//uint32_t rx_buffer_size;
+#if defined (MEMORY_STATIC)
+	uint32_t rx_buffer_size;
+#endif
 	void *rxq_critical_section;
 	void *rxq_wait_event;
 

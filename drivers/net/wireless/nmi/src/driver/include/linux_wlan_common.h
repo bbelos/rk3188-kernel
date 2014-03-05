@@ -100,6 +100,10 @@ extern atomic_t DEBUG_LEVEL;
 #define FN_OUT	//PRINT_D("<<<\n")
 
 //#define LINUX_RX_SIZE	(8*1024)
+#if defined (MEMORY_STATIC)
+//#define MEMORY_STATIC
+#define LINUX_RX_SIZE	(96*1024)
+#endif
 #define LINUX_TX_SIZE	(64*1024)
 
 #if defined (NM73131_0_BOARD)
