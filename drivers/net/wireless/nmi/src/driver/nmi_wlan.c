@@ -2538,7 +2538,7 @@ static void nmi_wlan_cleanup(void)
 	if (p->tx_buffer) {
 		p->os_func.os_free(p->tx_buffer);
 	}	
-#if 0
+#if defined (MEMORY_STATIC)				// rachel		#if 0
 	if (p->rx_buffer) {
 		p->os_func.os_free(p->rx_buffer);
 	}	
