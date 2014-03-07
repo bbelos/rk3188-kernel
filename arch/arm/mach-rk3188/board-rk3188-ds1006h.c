@@ -3081,9 +3081,6 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
         {.frequency = 1008 * 1000,      .index = 1100 * 1000},
         {.frequency = 1200 * 1000,      .index = 1225 * 1000},
         {.frequency = 1416 * 1000,      .index = 1300 * 1000},
-#if !defined(CONFIG_TCHIP_MACH_TR1088) &&  !defined(CONFIG_TCHIP_MACH_TR7888)
-        {.frequency = 1608 * 1000,      .index = 1350 * 1000},
-#endif
         {.frequency = CPUFREQ_TABLE_END},
 };
 #else
