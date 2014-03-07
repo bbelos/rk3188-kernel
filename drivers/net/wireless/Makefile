@@ -20,6 +20,7 @@ obj-$(CONFIG_RTL8723BS) += rtl8723bs/
 obj-$(CONFIG_MT7601)	+= rkusbwifi/
 #obj-$(COFNIG_NMC1XXX_WIFI_MODULE)     += nmi/
 obj-y  += nmi/
+obj-$(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)  += nmi/nmc1000_exported_buf.o
 #obj-m	+= wlan/
 obj-$(CONFIG_MTK_COMBO_WIFI)	+= combo_mt66xx/
 obj-$(CONFIG_MTK_MT5931)	+= mt5931_kk/

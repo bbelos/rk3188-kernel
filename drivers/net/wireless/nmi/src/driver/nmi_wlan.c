@@ -2226,7 +2226,12 @@ static int nmi_wlan_firmware_download(const uint8_t *buffer, uint32_t buffer_siz
 
 	blksz = (1ul << 12); /* Bug 4703: 4KB Good enough size for most platforms = PAGE_SIZE. */
 	/* Allocate a DMA coherent  buffer. */
-	dma_buffer = (uint8_t *)g_wlan.os_func.os_malloc(blksz);
+	#if defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)		// extern memory
+	//dma_buffer = (uint8_t *)g_wlan.os_func.os_malloc(blksz);
+	extern void * get_fw_buffer(void);
+	dma_buffer = (uint8_t *)get_fw_buffer();
+	printk("[MMM] dma_buffer = 0x%x\n", dma_buffer);
+	#endif
 	if (dma_buffer == NULL) {
 		/*EIO	5*/
 		ret = -5;
@@ -2275,7 +2280,9 @@ static int nmi_wlan_firmware_download(const uint8_t *buffer, uint32_t buffer_siz
 	} while (offset < buffer_size); 
 
 _fail_:
+		#if !defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)			// extern memory
 		if(dma_buffer) g_wlan.os_func.os_free(dma_buffer);
+		#endif
 _fail_1:
 
 	return (ret < 0)? ret:0;
@@ -2488,6 +2495,10 @@ static int nmi_wlan_stop(void)
 	return ret;
 }
 
+// tony
+uint8_t* g_tx_buffer = NULL;
+uint8_t* g_rx_buffer = NULL;
+
 static void nmi_wlan_cleanup(void)
 {
 	nmi_wlan_dev_t *p = (nmi_wlan_dev_t *)&g_wlan;
@@ -2535,14 +2546,20 @@ static void nmi_wlan_cleanup(void)
 	/**
 		clean up buffer
 	**/
+	#if !defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)		// extern memory
 	if (p->tx_buffer) {
 		p->os_func.os_free(p->tx_buffer);
+		g_tx_buffer = NULL;	// tony
 	}	
+	
 #if defined (MEMORY_STATIC)				// rachel		#if 0
 	if (p->rx_buffer) {
 		p->os_func.os_free(p->rx_buffer);
+		g_rx_buffer = NULL;	// tony
 	}	
 #endif	
+	#endif		// extern memory
+	
 	p->os_func.os_enter_cs(p->hif_lock);
 
 #ifndef NMI_OPTIMIZE_SLEEP_INT
@@ -2923,19 +2940,32 @@ int nmi_wlan_init(nmi_wlan_inp_t *inp, nmi_wlan_oup_t *oup)
 	/**
 		alloc tx, rx buffer
 	**/
-	g_wlan.tx_buffer = (uint8_t *)g_wlan.os_func.os_malloc(g_wlan.tx_buffer_size);
+	#if defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)		// extern memory
+	extern void * get_tx_buffer(void);
+	extern void * get_rx_buffer(void);
+	printk("[MMM] malloc before, g_tx_buf = 0x%x, g_rx_buf = 0x%x\n", g_tx_buffer, g_rx_buffer);
+	if(g_tx_buffer == NULL)
+		//g_tx_buffer = (uint8_t *)g_wlan.os_func.os_malloc(g_wlan.tx_buffer_size);
+		g_tx_buffer = (uint8_t *)get_tx_buffer();	
+	printk("[MMM] tx_buffer = 0x%x\n", g_tx_buffer);
+	g_wlan.tx_buffer = g_tx_buffer;
 	if (g_wlan.tx_buffer == NULL) {
 		/* ENOBUFS	105 */
 		ret = -105;
 		goto _fail_;
-		}
+	}
 		
 /* rx_buffer is not used unless we activate USE_MEM STATIC which is not applicable, allocating such memory is useless*/	
 #if defined (MEMORY_STATIC)		//#if 0	
-	g_wlan.rx_buffer = (uint8_t *)g_wlan.os_func.os_malloc(g_wlan.rx_buffer_size);
+	if(g_rx_buffer == NULL)
+		//g_rx_buffer = (uint8_t *)g_wlan.os_func.os_malloc(g_wlan.rx_buffer_size);
+		g_rx_buffer = (uint8_t *)get_rx_buffer();
+	printk("[MMM] rx_buffer =0x%x\n", g_rx_buffer);
+	g_wlan.rx_buffer = g_rx_buffer;
 	if (g_wlan.rx_buffer == NULL) 
 		goto _fail_;
 #endif
+	#endif		// extern memory
 
 	/**
 		export functions
@@ -2974,13 +3004,15 @@ int nmi_wlan_init(nmi_wlan_inp_t *inp, nmi_wlan_oup_t *oup)
 
 _fail_:	
 	
+#if !defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)			// extern memory
 	if (g_wlan.tx_buffer)
-		g_wlan.os_func.os_free(g_wlan.tx_buffer);
+		g_wlan.os_func.os_free(g_tx_buffer);
 
 #if defined (MEMORY_STATIC)		// #if 0
 	if (g_wlan.rx_buffer)
-		g_wlan.os_func.os_free(g_wlan.rx_buffer);
+		g_wlan.os_func.os_free(g_rx_buffer);
 #endif	
+#endif			// extern memory
 	return ret;
 
 }
