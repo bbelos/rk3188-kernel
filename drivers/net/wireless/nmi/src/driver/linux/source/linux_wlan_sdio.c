@@ -30,7 +30,7 @@
 #elif defined (PLAT_UBUNTU_X86)  // tony
  #define MAX_SPEED 25000000
 #elif defined (PLAT_RKXXXX)
-#define MAX_SPEED 25000000
+#define MAX_SPEED 50000000
 #else
 #define MAX_SPEED 50000000
 #endif
