@@ -915,6 +915,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_PWR_IOMUX      GPIO1_B2
 #define LCD_TCON_EN			RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		RK30_PIN1_PB3
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #elif defined (CONFIG_TCHIP_MACH_TRQ7_LJ)
 #define LCD_CS_PIN         RK30_PIN3_PD4        // ssd2828 RESET pin
 #define LCD_CS_VALUE       GPIO_HIGH
@@ -945,6 +947,8 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_EN_VALUE       GPIO_LOW
 #define LCD_TCON_EN			RK30_PIN0_PB4
 #define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO//RK30_PIN1_PB3
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #endif
 
 static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
@@ -1017,6 +1021,20 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
         	gpio_direction_output(LCD_TCON_EN, LCD_TCON_EN_VALUE);
       	}
     }
+	if(LCD_LVDS_STB !=INVALID_GPIO)
+	{
+  		ret = gpio_request(LCD_LVDS_STB, NULL);
+  		if (ret != 0)
+      	{
+        	gpio_free(LCD_LVDS_STB);
+        	printk(KERN_ERR "request lcd tcon en pin fail!\n");
+        	return -1;
+      	}
+      	else
+      	{
+        	gpio_direction_output(LCD_LVDS_STB, LCD_LVDS_STB_VALUE);
+      	}
+    }
 	return 0;
 }
 static int rk_fb_io_disable(void)
@@ -1037,6 +1055,10 @@ static int rk_fb_io_disable(void)
   	{
     	gpio_set_value(LCD_TCON_EN, !LCD_TCON_EN_VALUE);
   	}
+	if(LCD_LVDS_STB !=INVALID_GPIO)
+  	{
+    	gpio_set_value(LCD_LVDS_STB, !LCD_LVDS_STB_VALUE);
+  	}
 	return 0;
 }
 static int rk_fb_io_enable(void)
@@ -1056,6 +1078,10 @@ static int rk_fb_io_enable(void)
 	if(LCD_TCON_EN !=INVALID_GPIO)
   	{
     	gpio_set_value(LCD_TCON_EN, LCD_TCON_EN_VALUE);
+  	}
+	if(LCD_LVDS_STB !=INVALID_GPIO)
+  	{
+    	gpio_set_value(LCD_LVDS_STB, LCD_LVDS_STB_VALUE);
   	}
 	return 0;
 }
