@@ -127,6 +127,11 @@ struct nmi_wfi_key {
   int seq_len;
   u32 cipher;
 };  
+struct nmi_wfi_wep_key {
+  u8 * key;
+  u8 key_len;
+  u8  key_idx;
+};  
 
 struct sta_info
 {
@@ -161,9 +166,8 @@ struct NMI_WFI_priv {
 	
 	NMI_Bool bCfgScanning;
 	NMI_Uint32 u32RcvdChCount;
-
-	NMI_Uint32 u32LastScannedNtwrksCountShadow;
-	tstrNetworkInfo astrLastScannedNtwrksShadow[MAX_NUM_SCANNED_NETWORKS_SHADOW];
+	
+	
 
 	NMI_Uint8 au8AssociatedBss[ETH_ALEN];
 	struct sta_info  assoc_stainfo;
@@ -180,7 +184,8 @@ struct NMI_WFI_priv {
     struct net_device *dev;
     struct napi_struct napi;
  	NMI_WFIDrvHandle hNMIWFIDrv;
- 	tstrHostIFpmkidAttr pmkid_list;
+	NMI_WFIDrvHandle hNMIWFIDrv_2;
+	tstrHostIFpmkidAttr pmkid_list;
 	struct NMI_WFI_stats netstats;  
 	NMI_Uint8 NMI_WFI_wep_default;
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
@@ -192,6 +197,13 @@ struct NMI_WFI_priv {
 	struct nmi_wfi_key* nmi_gtk[MAX_NUM_STA];
 	struct nmi_wfi_key* nmi_ptk[MAX_NUM_STA];
 	NMI_Uint8  nmi_groupkey;
+	//semaphores
+	NMI_SemaphoreHandle SemHandleUpdateStats;
+	NMI_SemaphoreHandle hSemScanReq;
+	//
+	NMI_Bool gbAutoRateAdjusted;
+	
+	
 };
 
 typedef struct
@@ -201,20 +213,27 @@ typedef struct
 
 }struct_frame_reg;
 
+
+#define NUM_CONCURRENT_IFC 2
+typedef struct{
+uint8_t aSrcAddress[ETH_ALEN];
+uint8_t aBSSID[ETH_ALEN];
+uint32_t drvHandler;
+struct net_device* nmc_netdev;
+}tstrInterfaceInfo;
 typedef struct{
 	int mac_status;
 	int nmc1000_initialized;
 
-	#ifdef NMI_P2P
-	struct_frame_reg g_struct_frame_reg[num_reg_frame];
-	#endif
+	
 	#if (!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO)
 	unsigned short dev_irq_num;
 	#endif
 	nmi_wlan_oup_t oup;
-	int monitor_flag;
 	int close;
-	struct net_device_stats netstats; 
+	uint8_t u8NoIfcs;
+	tstrInterfaceInfo strInterfaceInfo[NUM_CONCURRENT_IFC];
+	uint8_t open_ifcs;
 	struct mutex txq_cs;
 
 	/*Added by Amr - BugID_4720*/
@@ -247,12 +266,11 @@ typedef struct{
 	struct task_struct* rxq_thread;
 	struct task_struct* txq_thread;
 
-	unsigned char eth_src_address[6];
-	unsigned char eth_dst_address[6];
+	unsigned char eth_src_address[NUM_CONCURRENT_IFC][6];
+	//unsigned char eth_dst_address[6];
 
 	const struct firmware* nmc_firmware; /* Bug 4703 */
 
-	struct net_device* nmc_netdev;
 	struct net_device* real_ndev;
 #ifdef NMI_SDIO
 	int already_claim;
@@ -261,8 +279,21 @@ typedef struct{
 	struct spi_device* nmc_spidev;
 #endif
 
-	NMI_Uint8 iftype;
 } linux_wlan_t;
+
+typedef struct 
+{
+	uint8_t u8IfIdx;
+	NMI_Uint8 iftype;
+	int monitor_flag;
+	int mac_opened;
+	#ifdef NMI_P2P
+	struct_frame_reg g_struct_frame_reg[num_reg_frame];
+	#endif
+struct net_device* nmc_netdev;
+struct net_device_stats netstats; 
+
+}perInterface_wlan_t;
 
 struct NMI_WFI_mon_priv
 {

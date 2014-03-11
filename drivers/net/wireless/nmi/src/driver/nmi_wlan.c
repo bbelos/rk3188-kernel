@@ -24,11 +24,13 @@ extern void NMI_WFI_mgmt_rx(uint8_t *buff, uint32_t size);
 extern void frmw_to_linux(uint8_t *buff, uint32_t size);
 int sdio_xfer_cnt(void);
 uint32_t nmi_get_chipid(uint8_t update);
+NMI_Uint16 Set_machw_change_vir_if(NMI_Bool bValue);
 
 //static uint32_t vmm_table[NMI_VMM_TBL_SIZE];
 //static uint32_t vmm_table_rbk[NMI_VMM_TBL_SIZE];
 
 //static uint32_t vmm_table_rbk[NMI_VMM_TBL_SIZE];
+
 
 typedef struct {
 	int quit;
@@ -109,6 +111,8 @@ static uint32_t NMI_GP_REG_1 = 0;
 
 static nmi_wlan_dev_t g_wlan; 
 
+INLINE void chip_allow_sleep(void);
+INLINE void chip_wakeup(void);
 /********************************************
 
 	Debug
@@ -135,6 +139,33 @@ static void nmi_debug(uint32_t flag, char *fmt, ...)
 	return;
 }
 
+static CHIP_PS_STATE_T genuChipPSstate = CHIP_WAKEDUP;
+
+/*BugID_5213*/
+/*acquire_bus() and release_bus() are made INLINE functions*/
+/*as a temporary workaround to fix a problem of receiving*/
+/*unknown interrupt from FW*/
+INLINE void acquire_bus(BUS_ACQUIRE_T acquire)
+{
+
+	g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);
+	#ifndef NMI_OPTIMIZE_SLEEP_INT	
+		if(genuChipPSstate != CHIP_WAKEDUP)
+	#endif	
+		{
+			if(acquire == ACQUIRE_AND_WAKEUP)
+				chip_wakeup();
+		}
+	
+}
+INLINE void release_bus(BUS_RELEASE_T release)
+{
+	#ifdef NMI_OPTIMIZE_SLEEP_INT
+		if(release == RELEASE_ALLOW_SLEEP)
+			chip_allow_sleep();
+	#endif
+	g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);
+}
 /********************************************
 
 	Queue
@@ -145,7 +176,7 @@ static void nmi_wlan_txq_remove(struct txq_entry_t *tqe)
 {
 	
 	nmi_wlan_dev_t *p = (nmi_wlan_dev_t *)&g_wlan;
-	unsigned long flags;
+	//unsigned long flags;
 	//p->os_func.os_spin_lock(p->txq_spinlock, &flags);
 	if (tqe==p->txq_head) 
 	{
@@ -337,7 +368,7 @@ uint32_t Pending_Acks=0;
 
 
 
-static int inline Init_TCP_tracking()
+static int inline Init_TCP_tracking(void)
 {
 	
 	/*uint32_t i;
@@ -394,7 +425,7 @@ static int inline add_TCP_Pending_Ack(uint32_t Ack,uint32_t Session_index,struct
 	}
 	return 0;
 }
-static int inline remove_TCP_related()
+static int inline remove_TCP_related(void)
 {
 	nmi_wlan_dev_t *p = (nmi_wlan_dev_t *)&g_wlan;
 	unsigned long flags;
@@ -726,11 +757,11 @@ static struct rxq_entry_t *nmi_wlan_rxq_remove(void)
 
 ********************************************/
 
-static CHIP_PS_STATE_T genuChipPSstate = CHIP_WAKEDUP;
+
 
 #ifdef NMI_OPTIMIZE_SLEEP_INT
 	
-INLINE void chip_allow_sleep()
+INLINE void chip_allow_sleep(void)
 {
 	uint32_t reg=0;
 
@@ -892,12 +923,10 @@ void chip_sleep_manually(NMI_Uint32 u32SleepTime)
 		/* chip is already sleeping. Do nothing */
 		return;
 	}
-#ifdef NMI_OPTIMIZE_SLEEP_INT
-	chip_allow_sleep();
-#endif
+	acquire_bus(ACQUIRE_ONLY);
 
-	g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);
 
+	/* We don't need this anymore*/
 	if(nmi_get_chipid(NMI_FALSE) >= 0x1002a0)
 	{
 		// Switch PMU clock source to internal.
@@ -910,10 +939,15 @@ void chip_sleep_manually(NMI_Uint32 u32SleepTime)
 
 	g_wlan.hif_func.hif_read_reg(0x1C0C, &val32);
 	val32 |= (1<<0);
+
+#ifdef NMI_OPTIMIZE_SLEEP_INT
+	chip_allow_sleep();
+#endif
+
 	g_wlan.hif_func.hif_write_reg(0x1C0C, val32);
 
 	genuChipPSstate = CHIP_SLEEPING_MANUAL;
-	g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);
+	release_bus(RELEASE_ONLY);
 
 }
 
@@ -958,13 +992,13 @@ static int nmi_wlan_handle_txq(void)
 			tp_size &= ~0x3;
 		}
 
-		p->os_func.os_enter_cs(p->hif_lock);
+		acquire_bus(ACQUIRE_AND_WAKEUP);
 		reg |= (1<<1);
 		ret = p->hif_func.hif_write_reg(NMI_HOST_VMM_CTL, reg);
 		if (!ret) {
 			nmi_debug(N_ERR, "[nmi txq]: fail can't write reg host_vmm_ctl..\n");
 			break;
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 		}
 
 		do {
@@ -982,10 +1016,10 @@ static int nmi_wlan_handle_txq(void)
 
 		if (!ret) {
 			nmi_debug(N_ERR, "[nmi txq]: fail can't read reg vmm_tx_tbl_base...\n");
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 			break;
 		}
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
 		
 		if (dma_addr != 0) {
 			uint32_t header;
@@ -997,7 +1031,7 @@ static int nmi_wlan_handle_txq(void)
 			memcpy(txb, &header, 4);
 			memcpy(&txb[buf_offset], tqe->buffer, tqe->buffer_size);
 
-			p->os_func.os_enter_cs(p->hif_lock);
+			acquire_bus(ACQUIRE_AND_WAKEUP);
 			if ((p->io_func.io_type & 0x1) == HIF_SPI) {
 				if (tqe->type) {
 					dma_addr += NMI_AHB_DATA_MEM_BASE;
@@ -1018,7 +1052,7 @@ static int nmi_wlan_handle_txq(void)
 			}
 
 
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(ACQUIRE_AND_WAKEUP);
 			if (ret) {
 				tqe->status = 1;
 				if (tqe->tx_complete_func)
@@ -1052,6 +1086,8 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 	int vmm_sz = 0;
 	struct txq_entry_t *tqe;
 	int ret = 0;
+	int counter;
+	int timeout;
 	uint32_t vmm_table[NMI_VMM_TBL_SIZE];
 	//printk("T");
 	p->txq_exit = 0;
@@ -1136,14 +1172,8 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 			PRINT_D(TX_DBG,"Mark the last entry in VMM table - number of previous entries = %d\n",i);
 			vmm_table[i] = 0x0;	/* mark the last element to 0 */
 		}
-		p->os_func.os_enter_cs(p->hif_lock);
-	#ifndef NMI_OPTIMIZE_SLEEP_INT	
-		if(genuChipPSstate != CHIP_WAKEDUP)
-	#endif	
-		{
-			chip_wakeup();
-		}
-		
+		acquire_bus(ACQUIRE_AND_WAKEUP);
+		counter = 0;
 		do {
 
 			ret = p->hif_func.hif_read_reg(NMI_HOST_TX_CTRL, &reg);
@@ -1159,26 +1189,29 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 				PRINT_D(TX_DBG,"Writing VMM table ... with Size = %d\n",((i+1)*4));
 				break;
 			} else {
+			counter++;
+			if(counter > 200)
+			{
+				counter = 0;
+				printk("Looping in tx ctrl , forcce quit\n");
+				ret = p->hif_func.hif_write_reg(NMI_HOST_TX_CTRL, 0);	
+				break;
+			}
 				/**
 					wait for vmm table is ready
 				**/
 				PRINT_WRN(GENERIC_DBG, "[nmi txq]: warn, vmm table not clear yet, wait... \n");
-				p->os_func.os_leave_cs(p->hif_lock);
+				release_bus(RELEASE_ALLOW_SLEEP);
 				p->os_func.os_sleep(3);	/* wait 3 ms */
-				p->os_func.os_enter_cs(p->hif_lock);
-		#ifndef NMI_OPTIMIZE_SLEEP_INT
-				if(genuChipPSstate != CHIP_WAKEDUP)
-				{
-					chip_wakeup();
-				}
-		#endif
+				acquire_bus(ACQUIRE_AND_WAKEUP);
 			}
 		} while (!p->quit);
 
 		if(!ret) {
 			goto _end_;
 		}
-		int timeout = 200;
+
+		timeout = 200;
 		do {
 
 			/**
@@ -1218,15 +1251,9 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 					//entries = ((reg>>3)&0x2f);
 					break;
 				} else{
-					p->os_func.os_leave_cs(p->hif_lock);
+					release_bus(RELEASE_ALLOW_SLEEP);
 					p->os_func.os_sleep(3);	/* wait 3 ms */
-					p->os_func.os_enter_cs(p->hif_lock);
-				#ifndef NMI_OPTIMIZE_SLEEP_INT
-					if(genuChipPSstate != CHIP_WAKEDUP)
-					{
-						chip_wakeup();
-					}
-				#endif
+					acquire_bus(ACQUIRE_AND_WAKEUP);
 					PRINT_WRN(GENERIC_DBG, "Can't get VMM entery - reg = %2x\n",reg);
 				}
 			} while (--timeout);
@@ -1271,7 +1298,7 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 
 		/* since copying data into txb takes some time, then 
 		allow the bus lock to be released let the RX task go. */
-		p->os_func.os_leave_cs(p->hif_lock); 
+		release_bus(RELEASE_ALLOW_SLEEP);
 
 		/**
 			Copy data to the TX buffer
@@ -1314,7 +1341,11 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 				/*buffer offset = HOST_HDR_OFFSET in other cases: NMI_MGMT_PKT*/
 				/* and NMI_DATA_PKT_MAC_HDR*/
 				else if (tqe->type == NMI_NET_PKT){
+					char * pBSSID = ((struct tx_complete_data*)(tqe->priv))->pBssid;
 					buffer_offset = ETH_ETHERNET_HDR_OFFSET;
+					//copy the bssid at the sart of the buffer
+					//printk("BSSID[%x][%x][%x]\n",pBSSID[0],pBSSID[1],pBSSID[2]);
+					memcpy(&txb[offset+4],pBSSID ,6);
 				}
 #ifdef NMI_FULLY_HOSTING_AP
 				else if (tqe->type == NMI_FH_DATA_PKT)
@@ -1325,6 +1356,7 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 				else{
 					buffer_offset = HOST_HDR_OFFSET;
 					}
+				
 				memcpy(&txb[offset+buffer_offset], tqe->buffer, tqe->buffer_size);
 				offset += vmm_sz;				
 				i++;
@@ -1347,13 +1379,7 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 			lock the bus
 		**/
 		//PRINT_D(GENERIC_DBG,"Locking hif_lock\n");
-		p->os_func.os_enter_cs(p->hif_lock);
-	#ifndef NMI_OPTIMIZE_SLEEP_INT	
-		if(genuChipPSstate != CHIP_WAKEDUP)
-		{
-			chip_wakeup();
-		}
-	#endif //NMI_OPTIMIZE_SLEEP_INT
+		acquire_bus(ACQUIRE_AND_WAKEUP);
 #if DMA_VER == DMA_VER_2
 	if(g_wlan.use_dma_v2) {
 			ret = p->hif_func.hif_clear_int_ext(ENABLE_TX_VMM);
@@ -1418,10 +1444,8 @@ static int nmi_wlan_handle_txq(uint32_t* pu32TxqCount)
 				nmi_debug(N_ERR, "[nmi txq]: fail can't block tx...\n");
 	}
 _end_:	 
-	#ifdef NMI_OPTIMIZE_SLEEP_INT
-		chip_allow_sleep();
-	#endif
-		p->os_func.os_leave_cs(p->hif_lock);
+
+		release_bus(RELEASE_ALLOW_SLEEP);
 		if (ret != 1)
 			break;
 	} while(0);
@@ -1470,7 +1494,6 @@ static void nmi_wlan_handle_rxq(void)
 		
 		do {
 			uint32_t header;
-			int i;
 			uint32_t pkt_len, pkt_offset, tp_len;
 			int is_cfg_packet;
 			PRINT_D(RX_DBG,"In the 2nd do-while\n");
@@ -1522,7 +1545,7 @@ static void nmi_wlan_handle_rxq(void)
 				
 				if (p->net_func.rx_indicate) {
 					if (pkt_len > 0) {
-						p->net_func.rx_indicate(&buffer[pkt_offset+offset], pkt_len);
+						p->net_func.rx_indicate(&buffer[offset], pkt_len,pkt_offset);
 						has_packet = 1;
 					}
 				}
@@ -1588,7 +1611,7 @@ static void nmi_wlan_handle_rxq(void)
 static void nmi_unknown_isr(void){
 	g_wlan.hif_func.hif_clear_int();
 	linux_wlan_enable_irq();
-	g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);		
+	release_bus(RELEASE_ALLOW_SLEEP);
 }
 static void nmi_pllupdate_isr(uint32_t int_stats1){
 #if (defined NMI_SDIO) && (!defined NMI_SDIO_IRQ_GPIO)
@@ -1601,7 +1624,7 @@ static void nmi_pllupdate_isr(uint32_t int_stats1){
 	g_wlan.os_func.os_atomic_sleep(NMI_PLL_TO);
 
 	if(!(int_stats1 & DATA_INT)){
-		g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);	
+		release_bus(RELEASE_ALLOW_SLEEP);
 	}
 	else	{
 		printk("[PLL]Pending Data wait\n");
@@ -1631,7 +1654,7 @@ static void nmi_pllupdate_isr(uint32_t int_stats1){
 #endif	
 
 	if((!(int_stats1 & DATA_INT)) &&  (!(int_stats1 & SLEEP_INT))){
-		g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);	
+		release_bus(RELEASE_ALLOW_SLEEP);
 	}
 	else
 		{printk("[PLL]Pending Data wait\n");}
@@ -1658,7 +1681,7 @@ static void nmi_sleeptimer_isr(uint32_t int_stats1){
 	genuChipPSstate = CHIP_SLEEPING_AUTO;
 #endif	
 
-	g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);	
+	release_bus(RELEASE_ALLOW_SLEEP);
 }
 
 #ifdef NMC1000_SINGLE_TRANSFER
@@ -1693,7 +1716,7 @@ static void nmi_wlan_handle_isr(uint32_t int_status1)
 
 	if (!ret) {
 		nmi_debug(N_ERR, "[nmi isr]: fail can't read reg host_rx_ctrl_0...\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
 		return;
 	} 
 
@@ -1708,7 +1731,7 @@ static void nmi_wlan_handle_isr(uint32_t int_status1)
 		buffer = p->os_func.os_malloc(2*1024/*size*/);
 		if (buffer == NULL) {
 			nmi_debug(N_ERR, "[nmi isr]: fail alloc host memory...drop the packets (%d)\n", size);
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 			return;
 		}
 #endif
@@ -1749,7 +1772,7 @@ static void nmi_wlan_handle_isr(uint32_t int_status1)
 
 _end_:
 		if(!(int_stats1 & SLEEP_INT)){
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 		}
 		if (ret) {
 #ifdef MEMORY_STATIC
@@ -1807,7 +1830,7 @@ static void nmi_wlan_handle_isr(void)
 #endif
 	uint8_t *buffer = NULL;
 	uint32_t size, reg;
-	int ret;
+	int ret = 0;
 	struct rxq_entry_t *rqe;
 
 	/**
@@ -1907,10 +1930,10 @@ _end_:
 		**/
 #ifdef PLL_WORKAROUND
 		if(!(int_stats1 & SLEEP_INT)){
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 		}
 #else /* PLL_WORKAROUND */
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
 #endif /* PLL_WORKAROUND */
 
 		if (ret) {
@@ -1949,11 +1972,11 @@ void nmi_handle_isr_v1(void)
 		uint32_t xfer_cnt = 0;		
 
 
-		g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);
+		acquire_bus(ACQUIRE_AND_WAKEUP);
 
 		if(!g_wlan.hif_func.hif_clear_int()){
 			printk("UNKNOWN INT\n");
-			g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 			return;
 		}
 		xfer_cnt = sdio_xfer_cnt();
@@ -1977,7 +2000,7 @@ void nmi_handle_isr_v1(void)
 #else /* ! NMI_SDIO */
 	#ifdef PLL_WORKAROUND
 	uint32_t int_status;
-	g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);
+	acquire_bus(ACQUIRE_AND_WAKEUP);
 	g_wlan.hif_func.hif_read_reg(NMI_INT_STATS,&int_status);
 
 	
@@ -2025,7 +2048,7 @@ void nmi_handle_isr_v1(void)
 	}
 
 #else
-	g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);
+	acquire_bus(ACQUIRE_AND_WAKEUP);
 	nmi_wlan_handle_isr();
 #endif
 #endif
@@ -2073,19 +2096,10 @@ static void nmi_wlan_handle_isr_ext(uint32_t int_status)
 	uint8_t *buffer = NULL;
 	uint32_t size;
 	uint32_t retries=0;
-	int ret;
+	int ret = 0;
 	struct rxq_entry_t *rqe;
 
 
-
-	#ifndef NMI_OPTIMIZE_SLEEP_INT	
-	if(genuChipPSstate != CHIP_WAKEDUP)
-	#endif	
-	{
-		chip_wakeup();
-	}
-
-	
 	/**
 		Get the rx size
 	**/
@@ -2159,10 +2173,6 @@ _end_:
 #endif
 		}
 	}
-
-	#ifdef NMI_OPTIMIZE_SLEEP_INT
-		chip_allow_sleep();
-	#endif
 	
 }
 
@@ -2170,7 +2180,7 @@ void nmi_handle_isr_v2(void)
 {
 	uint32_t int_status;
 
-	g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);
+	acquire_bus(ACQUIRE_AND_WAKEUP);
 	g_wlan.hif_func.hif_read_int(&int_status);
 	
 	if(int_status & PLL_INT_EXT){
@@ -2194,7 +2204,7 @@ void nmi_handle_isr_v2(void)
 #if ((!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO))
 	linux_wlan_enable_irq();
 #endif
-	g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);
+	release_bus(RELEASE_ALLOW_SLEEP);
 }
 #endif /* DMA_VER == DMA_VER_2 */
 
@@ -2222,11 +2232,11 @@ static int nmi_wlan_firmware_download(const uint8_t *buffer, uint32_t buffer_siz
 	uint32_t offset;
 	uint32_t addr, size, size2, blksz;
 	uint8_t *dma_buffer;
-	int ret;
+	int ret = 0;
 
 	blksz = (1ul << 12); /* Bug 4703: 4KB Good enough size for most platforms = PAGE_SIZE. */
 	/* Allocate a DMA coherent  buffer. */
-	#if defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)		// extern memory
+	#if 1		// extern memory
 	//dma_buffer = (uint8_t *)g_wlan.os_func.os_malloc(blksz);
 	extern void * get_fw_buffer(void);
 	dma_buffer = (uint8_t *)get_fw_buffer();
@@ -2251,7 +2261,7 @@ static int nmi_wlan_firmware_download(const uint8_t *buffer, uint32_t buffer_siz
 		addr = BYTE_SWAP(addr);
 		size = BYTE_SWAP(size);
 #endif
-		p->os_func.os_enter_cs(p->hif_lock);
+		acquire_bus(ACQUIRE_ONLY);
 		offset += 8;		
 		while(((int)size) && (offset < buffer_size)) {
 			if(size <= blksz) {
@@ -2268,7 +2278,7 @@ static int nmi_wlan_firmware_download(const uint8_t *buffer, uint32_t buffer_siz
 			offset += size2;
 			size -= size2;			
 		}
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ONLY);
 
 		if (!ret){ 
 			/*EIO	5*/
@@ -2280,7 +2290,7 @@ static int nmi_wlan_firmware_download(const uint8_t *buffer, uint32_t buffer_siz
 	} while (offset < buffer_size); 
 
 _fail_:
-		#if !defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)			// extern memory
+		#if 0			// extern memory
 		if(dma_buffer) g_wlan.os_func.os_free(dma_buffer);
 		#endif
 _fail_1:
@@ -2304,18 +2314,18 @@ static int nmi_wlan_start(void)
 		Set the host interface
 	**/
 #ifdef OLD_FPGA_BITFILE
-	p->os_func.os_enter_cs(p->hif_lock);
+	acquire_bus(ACQUIRE_ONLY);
 	ret = p->hif_func.hif_read_reg(NMI_VMM_CORE_CTL, &reg);
 	if (!ret) {
 		nmi_debug(N_ERR, "[nmi start]: fail read reg vmm_core_ctl...\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
  		return ret;
 	}
 	reg |= (p->io_func.io_type<<2); 
 	ret = p->hif_func.hif_write_reg(NMI_VMM_CORE_CTL, reg);
 	if (!ret) {
 		nmi_debug(N_ERR, "[nmi start]: fail write reg vmm_core_ctl...\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ONLY);
  		return ret;
 	}
 #else
@@ -2327,11 +2337,11 @@ static int nmi_wlan_start(void)
 	} else if (p->io_func.io_type == HIF_SPI) {
 		reg = 1;
 	}
-	p->os_func.os_enter_cs(p->hif_lock);
+	acquire_bus(ACQUIRE_ONLY);
 	ret = p->hif_func.hif_write_reg(NMI_VMM_CORE_CFG, reg);
 	if (!ret) {
 		nmi_debug(N_ERR, "[nmi start]: fail write reg vmm_core_cfg...\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ONLY);
 		/* EIO  5*/
 		ret = -5;
  		return ret;
@@ -2359,7 +2369,7 @@ static int nmi_wlan_start(void)
 	ret = p->hif_func.hif_write_reg(NMI_GP_REG_1, reg);
 	if (!ret) {
 		nmi_debug(N_ERR, "[nmi start]: fail write NMI_GP_REG_1 ...\n");
-		p->os_func.os_unlock(p->hif_lock);
+		release_bus(RELEASE_ONLY);
 		/* EIO  5*/
 		ret = -5;
  		return ret;
@@ -2383,7 +2393,7 @@ static int nmi_wlan_start(void)
 	ret = p->hif_func.hif_read_reg(0x1000, &chipid);
 	if (!ret) {
 		nmi_debug(N_ERR, "[nmi start]: fail read reg 0x1000 ...\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ONLY);
 		/* EIO  5*/
 		ret = -5;
  		return ret;
@@ -2405,7 +2415,7 @@ static int nmi_wlan_start(void)
 	reg |= (1ul << 10);			
 	ret = p->hif_func.hif_write_reg(NMI_GLB_RESET_0, reg);	
 	p->hif_func.hif_read_reg(NMI_GLB_RESET_0,&reg);
-	p->os_func.os_leave_cs(p->hif_lock);
+	release_bus(RELEASE_ONLY);
 
 	return (ret<0)?ret:0;
 }
@@ -2419,18 +2429,12 @@ static int nmi_wlan_stop(void)
 	/**
 		TODO: stop the firmware, need a re-download
 	**/
-	p->os_func.os_enter_cs(p->hif_lock);
-#ifndef NMI_OPTIMIZE_SLEEP_INT
-	if(genuChipPSstate != CHIP_WAKEDUP)
-#endif
-	{
-		chip_wakeup();
-	}
+	acquire_bus(ACQUIRE_AND_WAKEUP);
 	
 	ret = p->hif_func.hif_read_reg(NMI_GLB_RESET_0, &reg);
 	if (!ret) {
 		PRINT_ER("Error while reading reg\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
 		return ret;
 	}
 
@@ -2440,7 +2444,7 @@ static int nmi_wlan_stop(void)
 	ret = p->hif_func.hif_write_reg(NMI_GLB_RESET_0, reg);
 	if (!ret) {
 		PRINT_ER("Error while writing reg\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
 		return ret;
 	}
 	
@@ -2451,7 +2455,7 @@ static int nmi_wlan_stop(void)
 		ret = p->hif_func.hif_read_reg(NMI_GLB_RESET_0, &reg);
 		if (!ret) {
 			PRINT_ER("Error while reading reg\n");
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 			return ret;
 		}
 		PRINT_D(GENERIC_DBG,"Read RESET Reg %x : Retry%d\n",reg,timeout);
@@ -2469,7 +2473,7 @@ static int nmi_wlan_stop(void)
 			ret = p->hif_func.hif_read_reg(NMI_GLB_RESET_0, &reg);
 			if (!ret) {
 			PRINT_ER("Error while reading reg\n");
-			p->os_func.os_leave_cs(p->hif_lock);
+			release_bus(RELEASE_ALLOW_SLEEP);
 			return ret;
 			}
 			PRINT_D(GENERIC_DBG,"Read RESET Reg %x : Retry%d\n",reg,timeout);
@@ -2478,19 +2482,21 @@ static int nmi_wlan_stop(void)
 
 	}while(timeout)	;
 
+#if 1
 /******************************************************************************/
 /* This was add at Bug 4595 to reset the chip while maintaining the bus state */
 /******************************************************************************/
-	reg = ((1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<8)|(1<<9)); 						/**/
+	reg = ((1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<8)|(1<<9)|(1<<26)|(1<<29)|(1<<30)); 						/**/
 																			/**/
 	ret = p->hif_func.hif_write_reg(NMI_GLB_RESET_0, reg);					/**/
 	reg = 0x7FFFFBFF&(~(1<<10));											/**/
 																			/**/
 	ret = p->hif_func.hif_write_reg(NMI_GLB_RESET_0, reg);					/**/
 /******************************************************************************/
+#endif
 
 
-	p->os_func.os_leave_cs(p->hif_lock);
+	release_bus(RELEASE_ALLOW_SLEEP);
 
 	return ret;
 }
@@ -2546,41 +2552,34 @@ static void nmi_wlan_cleanup(void)
 	/**
 		clean up buffer
 	**/
-	#if !defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)		// extern memory
+	#if 0		// extern memory
 	if (p->tx_buffer) {
 		p->os_func.os_free(p->tx_buffer);
 		g_tx_buffer = NULL;	// tony
 	}	
 	
-#if defined (MEMORY_STATIC)				// rachel		#if 0
+#if defined(MEMORY_STATIC)
 	if (p->rx_buffer) {
 		p->os_func.os_free(p->rx_buffer);
 		g_rx_buffer = NULL;	// tony
 	}	
-#endif	
-	#endif		// extern memory
-	
-	p->os_func.os_enter_cs(p->hif_lock);
-
-#ifndef NMI_OPTIMIZE_SLEEP_INT
-	if(genuChipPSstate != CHIP_WAKEDUP)
 #endif
-	{
-		chip_wakeup();
-	}
+	#endif		// extern memory
+	acquire_bus(ACQUIRE_AND_WAKEUP);
+
 	
 	ret = p->hif_func.hif_read_reg(NMI_INT_STATS,&reg); 
 	if (!ret) {
 		PRINT_ER("Error while reading reg\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
 	}
 	PRINT_ER("Writing ABORT reg\n");
   	ret = p->hif_func.hif_write_reg(NMI_INT_STATS,(reg | ABORT_INT ));  
 	if (!ret) {
 		PRINT_ER("Error while writing reg\n");
-		p->os_func.os_leave_cs(p->hif_lock);
+		release_bus(RELEASE_ALLOW_SLEEP);
 	}
-	p->os_func.os_leave_cs(p->hif_lock);
+	release_bus(RELEASE_ALLOW_SLEEP);
 	/**
 		io clean up
 	**/
@@ -2588,12 +2587,14 @@ static void nmi_wlan_cleanup(void)
 
 }
 
-static int nmi_wlan_cfg_commit(int type)
+static int nmi_wlan_cfg_commit(int type,uint32_t drvHandler)
 {
 	nmi_wlan_dev_t *p = (nmi_wlan_dev_t *)&g_wlan;
 	nmi_cfg_frame_t *cfg = &p->cfg_frame;
-	int total_len = p->cfg_frame_offset+4;
+	int total_len = p->cfg_frame_offset+4+ DRIVER_HANDLER_SIZE ;
 	int seq_no = p->cfg_seq_no%256;
+	int driver_handler=(NMI_Uint32)drvHandler;
+
 
 	/**
 		Set up header
@@ -2606,6 +2607,10 @@ static int nmi_wlan_cfg_commit(int type)
 	cfg->wid_header[1] = seq_no;	/* sequence number */
 	cfg->wid_header[2] = (uint8_t)total_len;
 	cfg->wid_header[3] = (uint8_t)(total_len>>8);
+	cfg->wid_header[4] = (uint8_t)driver_handler;
+	cfg->wid_header[5] = (uint8_t)(driver_handler>>8);
+	cfg->wid_header[6] = (uint8_t)(driver_handler>>16);
+	cfg->wid_header[7] = (uint8_t)(driver_handler>>24);
 	p->cfg_seq_no = seq_no;
 
 	/**
@@ -2619,7 +2624,7 @@ static int nmi_wlan_cfg_commit(int type)
 	return 0;
 }
 
-static int nmi_wlan_cfg_set(int start, uint32_t wid, uint8_t *buffer, uint32_t buffer_size, int commit)
+static int nmi_wlan_cfg_set(int start, uint32_t wid, uint8_t *buffer, uint32_t buffer_size, int commit,uint32_t drvHandler)
 {
 	nmi_wlan_dev_t *p = (nmi_wlan_dev_t *)&g_wlan;
 	uint32_t offset;
@@ -2643,8 +2648,8 @@ static int nmi_wlan_cfg_set(int start, uint32_t wid, uint8_t *buffer, uint32_t b
 		p->cfg_frame_in_use = 1;
 
 		/*Edited by Amr - BugID_4720*/
-		if(nmi_wlan_cfg_commit(NMI_CFG_SET))
-			return 0;
+		if(nmi_wlan_cfg_commit(NMI_CFG_SET,drvHandler))
+			ret_size = 0;	//BugID_5213
 		
 		if(p->os_func.os_wait(p->cfg_wait,CFG_PKTS_TIMEOUT))
 		{
@@ -2659,7 +2664,7 @@ static int nmi_wlan_cfg_set(int start, uint32_t wid, uint8_t *buffer, uint32_t b
 	
 	return ret_size;	
 }
-static int nmi_wlan_cfg_get(int start, uint32_t wid, int commit)
+static int nmi_wlan_cfg_get(int start, uint32_t wid, int commit,uint32_t drvHandler)
 {
 	nmi_wlan_dev_t *p = (nmi_wlan_dev_t *)&g_wlan;
 	uint32_t offset;
@@ -2681,8 +2686,8 @@ static int nmi_wlan_cfg_get(int start, uint32_t wid, int commit)
 		p->cfg_frame_in_use = 1;
 
 		/*Edited by Amr - BugID_4720*/
-		if(nmi_wlan_cfg_commit(NMI_CFG_QUERY))
-			return  0;
+		if(nmi_wlan_cfg_commit(NMI_CFG_QUERY,drvHandler))
+			ret_size = 0;	//BugID_5213
 
 		
 		if(p->os_func.os_wait(p->cfg_wait,CFG_PKTS_TIMEOUT))
@@ -2690,7 +2695,7 @@ static int nmi_wlan_cfg_get(int start, uint32_t wid, int commit)
 			printk("Get Timed Out\n");
 			ret_size = 0;	
 		}
-		PRINT_D(GENERIC_DBG, "[NMI]Get Rsponse received\n");
+		PRINT_D(GENERIC_DBG, "[NMI]Get Response received\n");
 		p->cfg_frame_in_use = 0;
 		p->cfg_frame_offset = 0;
 		p->cfg_seq_no += 1;
@@ -2726,13 +2731,9 @@ uint32_t init_chip(void)
 	uint32_t reg,ret=0;
 
 
-	g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);
+	acquire_bus(ACQUIRE_ONLY);
 	chipid = nmi_get_chipid(NMI_TRUE);
-
-
-	printk("ChipID = %x\n",chipid);
-
-	
+		
 	if((chipid & 0xfff) >= 0xd0) {		
 		NMI_INT_STATS = _NMI_INT_STATS_D0_AND_LATER;
 		NMI_GP_REG_1 = _NMI_GP_REG_1_D0_AND_LATER;
@@ -2809,7 +2810,7 @@ uint32_t init_chip(void)
 
 
 
-	g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);
+	release_bus(RELEASE_ONLY);
 
 	return ret;
 
@@ -2849,11 +2850,11 @@ uint8_t core_11b_ready(void)
 {	
 	uint32_t reg_val;
 
-	g_wlan.os_func.os_enter_cs(g_wlan.hif_lock);	
+	acquire_bus(ACQUIRE_ONLY);	
 	g_wlan.hif_func.hif_write_reg(0x16082c,1);
 	g_wlan.hif_func.hif_write_reg(0x161600,0x90);
 	g_wlan.hif_func.hif_read_reg(0x161600,&reg_val);
-	g_wlan.os_func.os_leave_cs(g_wlan.hif_lock);
+	release_bus(RELEASE_ONLY);
 		
 	if(reg_val == 0x90)
 		return 0;		
@@ -2940,7 +2941,7 @@ int nmi_wlan_init(nmi_wlan_inp_t *inp, nmi_wlan_oup_t *oup)
 	/**
 		alloc tx, rx buffer
 	**/
-	#if defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)		// extern memory
+	#if 1		// extern memory
 	extern void * get_tx_buffer(void);
 	extern void * get_rx_buffer(void);
 	printk("[MMM] malloc before, g_tx_buf = 0x%x, g_rx_buf = 0x%x\n", g_tx_buffer, g_rx_buffer);
@@ -2953,7 +2954,7 @@ int nmi_wlan_init(nmi_wlan_inp_t *inp, nmi_wlan_oup_t *oup)
 		/* ENOBUFS	105 */
 		ret = -105;
 		goto _fail_;
-	}
+		}
 		
 /* rx_buffer is not used unless we activate USE_MEM STATIC which is not applicable, allocating such memory is useless*/	
 #if defined (MEMORY_STATIC)		//#if 0	
@@ -3004,18 +3005,53 @@ int nmi_wlan_init(nmi_wlan_inp_t *inp, nmi_wlan_oup_t *oup)
 
 _fail_:	
 	
-#if !defined(CONFIG_NMC1XXX_WIFI_EXTERNL_MEMORY)			// extern memory
+#if 0			// extern memory
 	if (g_wlan.tx_buffer)
-		g_wlan.os_func.os_free(g_tx_buffer);
+		g_wlan.os_func.os_free(g_wlan.tx_buffer);
 
 #if defined (MEMORY_STATIC)		// #if 0
 	if (g_wlan.rx_buffer)
-		g_wlan.os_func.os_free(g_rx_buffer);
+		g_wlan.os_func.os_free(g_wlan.rx_buffer);
 #endif	
 #endif			// extern memory
 	return ret;
 
 }
+
+#define BIT31 (1<<31)
+NMI_Uint16 Set_machw_change_vir_if(NMI_Bool bValue)
+{
+	NMI_Uint16 ret;
+	NMI_Uint32 reg;
+		
+	/*Reset NMI_CHANGING_VIR_IF register to allow adding futrue keys to CE H/W*/
+	(&g_wlan)->os_func.os_enter_cs((&g_wlan)->hif_lock);
+	ret = (&g_wlan)->hif_func.hif_read_reg(NMI_CHANGING_VIR_IF, &reg);
+	if (!ret) 
+	{
+		PRINT_ER("Error while Reading reg NMI_CHANGING_VIR_IF\n");
+	}
+
+	if(bValue== NMI_TRUE)
+	{
+		reg |= (BIT31);
+	}
+	else
+	{
+		reg &= ~(BIT31);
+	}
+		
+	ret = (&g_wlan)->hif_func.hif_write_reg(NMI_CHANGING_VIR_IF, reg);
+			
+	if (!ret) 
+	{
+		PRINT_ER("Error while writing reg NMI_CHANGING_VIR_IF\n");
+	}
+	(&g_wlan)->os_func.os_leave_cs((&g_wlan)->hif_lock);
+	
+	return ret;
+}
+
 #ifdef NMI_FULLY_HOSTING_AP
 nmi_wlan_dev_t* Get_wlan_context(NMI_Uint16* pu16size)
 {

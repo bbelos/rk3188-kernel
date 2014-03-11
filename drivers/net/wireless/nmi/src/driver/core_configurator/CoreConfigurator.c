@@ -202,6 +202,7 @@ static tstrWID gastrWIDs[] =
     {WID_PREAMBLE,                  WID_CHAR},
     {WID_11G_OPERATING_MODE,        WID_CHAR},
     {WID_MAC_ADDR,                  WID_ADR},
+    {WID_IP_ADDRESS,                WID_ADR},
     {WID_ACK_POLICY,                WID_CHAR},
     {WID_PHY_ACTIVE_REG,            WID_CHAR},
     {WID_AUTH_TYPE,                 WID_CHAR},
@@ -450,6 +451,7 @@ INLINE tenuWIDtype get_wid_type(NMI_Uint32 wid_num)
     /* Check for iconfig specific WID types first */
     if((wid_num == WID_BSSID) ||
        (wid_num == WID_MAC_ADDR) ||
+       (wid_num == WID_IP_ADDRESS) ||
        (wid_num == WID_HUT_DEST_ADDR))
     {
         return WID_ADR;
@@ -488,6 +490,19 @@ INLINE NMI_Uint16 get_beacon_period(NMI_Uint8* data)
     bcn_per |= (data[1] << 8) ;
 
     return bcn_per;
+}
+
+INLINE NMI_Uint32 get_beacon_timestamp_lo(NMI_Uint8* data)
+{
+    NMI_Uint32 time_stamp = 0;
+    NMI_Uint32 index    = MAC_HDR_LEN;
+
+    time_stamp |= data[index++];
+    time_stamp |= (data[index++] << 8);
+    time_stamp |= (data[index++] << 16);
+    time_stamp |= (data[index]   << 24);
+
+    return time_stamp;
 }
 
 /* This function extracts the 'frame type' bits from the MAC header of the   */
@@ -820,7 +835,10 @@ NMI_Sint32 ParseNetworkInfo(NMI_Uint8* pu8MsgBuffer, tstrNetworkInfo** ppstrNetw
 
 		/* Get the cap_info */
 		pstrNetworkInfo->u16CapInfo = get_cap_info(pu8msa);
-		
+		#ifdef NMI_P2P
+		pstrNetworkInfo->u32Tsf = get_beacon_timestamp_lo(pu8msa);
+		PRINT_D(CORECONFIG_DBG,"TSF :%x\n",pstrNetworkInfo->u32Tsf );
+		#endif		
 		/* Get SSID */
 		get_ssid(pu8msa, pstrNetworkInfo->au8ssid, &(pstrNetworkInfo->u8SsidLen));
 		
@@ -846,10 +864,13 @@ NMI_Sint32 ParseNetworkInfo(NMI_Uint8* pu8MsgBuffer, tstrNetworkInfo** ppstrNetw
 		pu8IEs = &pu8msa[MAC_HDR_LEN + TIME_STAMP_LEN + BEACON_INTERVAL_LEN + CAP_INFO_LEN];
 		u16IEsLen = u16RxLen - (MAC_HDR_LEN + TIME_STAMP_LEN + BEACON_INTERVAL_LEN + CAP_INFO_LEN);
 
-		pstrNetworkInfo->pu8IEs = (NMI_Uint8*)NMI_MALLOC(u16IEsLen);
-		NMI_memset((void*)(pstrNetworkInfo->pu8IEs), 0, u16IEsLen);
-		
-		NMI_memcpy(pstrNetworkInfo->pu8IEs, pu8IEs, u16IEsLen);
+		if(u16IEsLen > 0)
+		{
+			pstrNetworkInfo->pu8IEs = (NMI_Uint8*)NMI_MALLOC(u16IEsLen);
+			NMI_memset((void*)(pstrNetworkInfo->pu8IEs), 0, u16IEsLen);
+			
+			NMI_memcpy(pstrNetworkInfo->pu8IEs, pu8IEs, u16IEsLen);
+		}
 		pstrNetworkInfo->u16IEsLen = u16IEsLen;
 		
 	}
@@ -2002,7 +2023,7 @@ NMI_Sint32 ConfigWaitResponse(NMI_Char* pcRespBuffer, NMI_Sint32 s32MaxRespBuffL
 */
 #ifdef SIMULATION
 NMI_Sint32 SendConfigPkt(NMI_Uint8 u8Mode, tstrWID* pstrWIDs,
-		NMI_Uint32 u32WIDsCount,NMI_Bool bRespRequired)
+		NMI_Uint32 u32WIDsCount,NMI_Bool bRespRequired,NMI_Uint32 drvHandler)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;	
 	NMI_Sint32 err = NMI_SUCCESS;
@@ -2213,7 +2234,7 @@ extern nmi_wlan_oup_t* gpstrWlanOps;
 *  @version	1.0
 */
 NMI_Sint32 SendConfigPkt(NMI_Uint8 u8Mode, tstrWID* pstrWIDs,
-		NMI_Uint32 u32WIDsCount,NMI_Bool bRespRequired)
+		NMI_Uint32 u32WIDsCount,NMI_Bool bRespRequired,NMI_Uint32 drvHandler)
 {
 	NMI_Sint32 counter = 0,ret = 0;
 	if(gpstrWlanOps == NULL)
@@ -2243,7 +2264,7 @@ NMI_Sint32 SendConfigPkt(NMI_Uint8 u8Mode, tstrWID* pstrWIDs,
 					(counter == u32WIDsCount - 1));
 			if(!gpstrWlanOps->wlan_cfg_get(!counter,
 					pstrWIDs[counter].u16WIDid,
-					(counter == u32WIDsCount - 1)))
+					(counter == u32WIDsCount - 1),drvHandler))
 			{
 				ret = -1;
 				printk("[Sendconfigpkt]Get Timed out\n");
@@ -2271,7 +2292,7 @@ NMI_Sint32 SendConfigPkt(NMI_Uint8 u8Mode, tstrWID* pstrWIDs,
 			if(!gpstrWlanOps->wlan_cfg_set(!counter,
 					pstrWIDs[counter].u16WIDid,pstrWIDs[counter].ps8WidVal,
 					pstrWIDs[counter].s32ValueSize,
-					(counter == u32WIDsCount - 1)))
+					(counter == u32WIDsCount - 1),drvHandler))
 			{
 				ret = -1;
 				printk("[Sendconfigpkt]Set Timed out\n");

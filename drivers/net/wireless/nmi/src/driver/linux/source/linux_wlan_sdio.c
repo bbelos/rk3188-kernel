@@ -22,7 +22,9 @@
 #elif defined (PLAT_ALLWINNER_A20)
  #define MAX_SPEED 45000000 //40000000 //50000000
 #elif defined (PLAT_ALLWINNER_A23)
- #define MAX_SPEED 6000000
+ #define MAX_SPEED 45000000
+#elif defined (PLAT_ALLWINNER_A31)
+ #define MAX_SPEED 45000000
 #elif defined (PLAT_PANDA_ES_OMAP4460)
  #define MAX_SPEED 25000000 //johnny change
 #elif defined(PLAT_WM8880)
@@ -129,7 +131,7 @@ int linux_sdio_cmd52(sdio_cmd52_t *cmd){
 
 volatile int probe = 0; //COMPLEMENT_BOOT
 static int linux_sdio_probe(struct sdio_func *func, const struct sdio_device_id *id){	
-	PRINT_D(INIT_DBG,"SDIO probe \n");
+	PRINT_D(INIT_DBG,"probe function\n");
 
 #ifdef COMPLEMENT_BOOT
 	if(local_sdio_func != NULL)
@@ -142,12 +144,10 @@ static int linux_sdio_probe(struct sdio_func *func, const struct sdio_device_id 
 #endif
 	PRINT_D(INIT_DBG,"Initializing netdev\n");
 	local_sdio_func = func;
-
-    if(nmc_netdev_init()){
+	if(nmc_netdev_init()){
 		PRINT_ER("Couldn't initialize netdev\n");
 		return -1;
 	}
-
 	return 0;
 }
 
@@ -204,6 +204,8 @@ void disable_sdio_interrupt(void){
 static int linux_sdio_set_speed(int speed)
 {
 #if defined(PLAT_AML8726_M3)
+
+    PRINT_ER("@@@@@@@@@@@@[Skip] change SDIO speed to %d @@@@@@@@@\n", speed);
 
 #else
 	struct mmc_ios ios;

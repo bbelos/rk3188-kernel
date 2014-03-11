@@ -25,6 +25,20 @@
 #define AES					(1 << 5)
 #define TKIP					(1 << 6)
 
+#ifdef NMI_P2P
+#define 	GO_INTENT_ATTR_ID       			0x04
+#define 	CHANNEL_LIST_ATTR_ID  		0x0b
+#define 	GO_NEG_REQ_ATTR_ID     		0x00
+#define 	GO_NEG_RSP_ATTR_ID     		0x01
+#define 	ACTION_FRAME       				0xd0
+#define 	PUBLICACTION_CAT   			0x04
+#define 	PUBLICACTION_FRAME 			0x09
+#define 	DEFAULT_CHANNEL    			  7
+#define   P2PELEM_ID          				0xdd
+#define 	GO_INTENT_ATTR_ID        		0x04
+#define 	CHANLIST_ATTR_ID                      	0x0b
+#define 	OPERCHAN_ATTR_ID                      	0x11
+#endif
 
 #define nl80211_SCAN_RESULT_EXPIRE	(3 * HZ)
 #define SCAN_RESULT_EXPIRE				(40 * HZ)
@@ -85,5 +99,5 @@ int NMI_WFI_DeInitHostInt(struct net_device *net);
 int NMI_WFI_InitHostInt(struct net_device *net);
 void NMI_WFI_monitor_rx(uint8_t *buff, uint32_t size);
 int NMI_WFI_deinit_mon_interface(void);
-int NMI_WFI_init_mon_interface(char *name, struct net_device *real_dev );
+struct net_device * NMI_WFI_init_mon_interface(char *name, struct net_device *real_dev );
 #endif

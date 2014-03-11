@@ -30,18 +30,21 @@ DECLARE_NMC_BUFFER(g_fw_buf)
 
 void *get_tx_buffer(void)
 {
+	printk("[mem] tx_buf = 0x%x\n", exported_g_tx_buf);
 	return exported_g_tx_buf;
 }
 EXPORT_SYMBOL(get_tx_buffer);
 
 void *get_rx_buffer(void)
 {
+	printk("[mem] rx_buf = 0x%x\n", exported_g_rx_buf);
 	return exported_g_rx_buf;
 }
 EXPORT_SYMBOL(get_rx_buffer);
 
 void *get_fw_buffer(void)
 {
+	printk("[mem] fw_buf = 0x%x\n", exported_g_fw_buf);
 	return exported_g_fw_buf;
 }
 EXPORT_SYMBOL(get_fw_buffer);

@@ -28,6 +28,7 @@ typedef struct {
 
 	int mac_status;
 	uint8_t mac_address[7];
+	uint8_t ip_address[5];
 	uint8_t bssid[7];
 	uint8_t ssid[34];
 	uint8_t firmware_version[129];
@@ -154,6 +155,7 @@ static nmi_cfg_str_t g_cfg_str[] = {
 	{WID_ASSOC_RES_INFO, g_mac.assoc_rsp},
 	//{WID_11N_P_ACTION_REQ, g_mac.action_req},
 	{WID_FIRMWARE_INFO, g_mac.firmware_version},
+	{WID_IP_ADDRESS, g_mac.ip_address},
 	{WID_NIL, NULL}
 };
 
@@ -274,7 +276,7 @@ static int nmi_wlan_cfg_set_bin(uint8_t *frame, uint32_t offset, uint16_t id, ui
 
 static void nmi_wlan_parse_response_frame(uint8_t *info, int size)
 {
-	uint32_t wid, len, i;
+	uint32_t wid, len=0, i;
 	static int seq = 0;
 
 	while (size>0) {

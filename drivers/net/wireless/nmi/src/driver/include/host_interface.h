@@ -60,12 +60,16 @@
 #define FAIL		0x0000
 #define SUCCESS		0x0001
 
+#define IP_ALEN  4
+
 #define BIT2                    ((NMI_Uint32)(1 << 2))
 #define BIT1                    ((NMI_Uint32)(1 << 1))
 #define BIT0                    ((NMI_Uint32)(1 << 0))
 
 #define AP_MODE     	0x01
 #define STATION_MODE	0x02
+#define GO_MODE	0x03
+#define CLIENT_MODE	0x04
 
 
 #define MAX_NUM_STA                           8
@@ -351,6 +355,37 @@ typedef struct
 	void* u32UserConnectPvoid;
 }tstrNMI_UsrConnReq;
 
+typedef struct
+{
+	NMI_Uint32	u32Address;
+}tstrHostIfSetDrvHandler;
+
+typedef struct
+{
+	NMI_Uint32	u32Mode;
+}tstrHostIfSetOperationMode;
+
+/*BugID_5077*/
+typedef struct
+{
+	NMI_Uint8	u8MacAddress[ETH_ALEN];
+}tstrHostIfSetMacAddress;
+
+/*BugID_5213*/
+typedef struct
+{
+	NMI_Uint8*	u8MacAddress;
+}tstrHostIfGetMacAddress;
+
+/*BugID_5222*/
+typedef struct
+{
+	NMI_Uint8	au8Bssid[ETH_ALEN];
+	NMI_Uint8	u8Ted;
+	NMI_Uint16	u16BufferSize;
+	NMI_Uint16	u16SessionTimeout;
+}tstrHostIfBASessionInfo;
+
 #ifdef NMI_P2P
 typedef struct
 {
@@ -371,6 +406,7 @@ NMI_Uint8       u8Regid;
 
 
 }tstrHostIfRegisterFrame;
+
 
 #define   ACTION         0xD0
 #define   PROBE_REQ   0x40
@@ -414,6 +450,24 @@ typedef struct
 	
 	NMI_Uint8 au8AssociatedBSSID[ETH_ALEN];
 	tstrCfgParamVal strCfgValues;
+//semaphores
+	NMI_SemaphoreHandle gtOsCfgValuesSem;
+	NMI_SemaphoreHandle hSemTestKeyBlock;
+	
+	NMI_SemaphoreHandle hSemTestDisconnectBlock;
+	NMI_SemaphoreHandle hSemGetRSSI;
+	NMI_SemaphoreHandle hSemGetLINKSPEED;
+	NMI_SemaphoreHandle hSemGetCHNL;
+	NMI_SemaphoreHandle hSemInactiveTime;
+//timer handlers
+	NMI_TimerHandle hScanTimer;
+	NMI_TimerHandle hConnectTimer;
+	NMI_TimerHandle hPeriodicRSSI;
+	#ifdef NMI_P2P
+	NMI_TimerHandle hRemainOnChannel;
+	#endif
+
+	NMI_Bool IPaddrObtained;
 }tstrNMI_WFIDrv;
 
 /*!
@@ -809,6 +863,21 @@ NMI_Sint32 host_int_set_join_req(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8bssid,
 							     void* pJoinParams);
 
 /**
+*  @brief 		Flush a join request parameters to FW, but actual connection
+*  @details 	The function is called in situation where NMC is connected to AP and 
+			required to switch to hybrid FW for P2P connection 	
+*  @param[in] handle to the wifi driver,
+*  @return 		Error code indicating success/failure
+*  @note 		
+*  @author		Amr Abdel-Moghny
+*  @date		19 DEC 2013
+*  @version		8.0
+*/
+
+NMI_Sint32 host_int_flush_join_req(NMI_WFIDrvHandle hWFIDrv);
+
+
+/**
 *  @brief 		disconnects from the currently associated network
 *  @details 	 	
 *  @param[in,out] handle to the wifi driver,
@@ -1153,6 +1222,42 @@ NMI_Sint32 host_int_edit_station(NMI_WFIDrvHandle hWFIDrv, tstrNMI_AddStaParam* 
  *  @version		1.0 Description
  */
 NMI_Sint32 host_int_set_power_mgmt(NMI_WFIDrvHandle hWFIDrv, NMI_Bool bIsEnabled, NMI_Uint32 u32Timeout);
+/*  @param[in,out]	hWFIDrv		handle to the wifi driver
+ *  @param[in]	bIsEnabled	TRUE if enabled, FALSE otherwise
+ *  @param[in]	u8count		count of mac address entries in the filter table
+ *
+ *  @return	0 for Success, error otherwise
+ *  @todo
+ *  @sa
+ *  @author		Adham Abozaeid
+ *  @date		24 November 2012
+ *  @version		1.0 Description
+ */
+NMI_Sint32 host_int_setup_multicast_filter(NMI_WFIDrvHandle hWFIDrv, NMI_Bool bIsEnabled, NMI_Uint32 u32count);
+/**
+*  @brief           host_int_setup_ipaddress
+*  @details 	   set IP address on firmware
+*  @param[in]    
+*  @return 	    Error code.
+*  @author		Abdelrahman Sobhy
+*  @date	
+*  @version	1.0
+*/
+NMI_Sint32 host_int_setup_ipaddress(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8IPAddr, NMI_Uint8 idx);
+
+
+NMI_Sint32 host_int_delBASession(NMI_WFIDrvHandle hWFIDrv, char* pBSSID,char TID,void * drvHandler);
+
+/**
+*  @brief           host_int_get_ipaddress
+*  @details 	   get IP address on firmware
+*  @param[in]    
+*  @return 	    Error code.
+*  @author		Abdelrahman Sobhy
+*  @date	
+*  @version	1.0
+*/
+NMI_Sint32 host_int_get_ipaddress(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8IPAddr, NMI_Uint8 idx);
 
 #ifdef NMI_P2P
 /**
@@ -1193,11 +1298,22 @@ NMI_Sint32 host_int_ListenStateExpired(NMI_WFIDrvHandle hWFIDrv);
 */
 NMI_Sint32 host_int_frame_register(NMI_WFIDrvHandle hWFIDrv, NMI_Uint16 u16FrameType,NMI_Bool bReg);
 #endif
+/**
+*  @brief           host_int_set_wfi_drv_handler
+*  @details 	   
+*  @param[in]    
+*  @return 	    Error code.
+*  @author	
+*  @date	
+*  @version	1.0
+*/
+NMI_Sint32 host_int_set_wfi_drv_handler(NMI_Uint32 u32address);
+NMI_Sint32 host_int_set_operation_mode(NMI_WFIDrvHandle hWFIDrv, NMI_Uint32 u32mode);
 
-static NMI_Sint32 Handle_ScanDone(tenuScanEvent enuEvent);
+static NMI_Sint32 Handle_ScanDone(void* drvHandler,tenuScanEvent enuEvent);
 
-static int host_int_addBASession(char* pBSSID,char TID,short int BufferSize,
-	short int SessionTimeout);
+static int host_int_addBASession(NMI_WFIDrvHandle hWFIDrv, char* pBSSID,char TID,short int BufferSize,
+	short int SessionTimeout,void * drvHandler);
 
 
 void host_int_freeJoinParams(void* pJoinParams);

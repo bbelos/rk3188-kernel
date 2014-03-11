@@ -46,6 +46,9 @@
 #endif
 
 #include "svnrevision.h"
+#ifdef FW_VERSION_VERIFICATION
+#include "verify_fw_version.c"
+#endif
 
 #ifdef STATIC_MACADDRESS//brandy_0724 [[
 #include <linux/vmalloc.h>
@@ -107,6 +110,17 @@ unsigned char mac_add[] = {0x00, 0x80, 0xC2, 0x5E, 0xa2, 0xb2};
  #define _linux_wlan_device_detection()         sunxi_mci_rescan_card(NMC1000_SDIO_CARD_ID,1)
  #define _linux_wlan_device_removal()           sunxi_mci_rescan_card(NMC1000_SDIO_CARD_ID,0)
 
+#elif defined(PLAT_ALLWINNER_A31)
+ extern void sw_mci_rescan_card(unsigned id, unsigned insert);
+ extern void wifi_pm_power(int on);
+ #define NMC1000_SDIO_CARD_ID	1
+
+ #define _linux_wlan_device_power_on()          wifi_pm_power(1)
+ #define _linux_wlan_device_power_off()         wifi_pm_power(0)
+
+ #define _linux_wlan_device_detection()         sw_mci_rescan_card(NMC1000_SDIO_CARD_ID,1)
+ #define _linux_wlan_device_removal()           sw_mci_rescan_card(NMC1000_SDIO_CARD_ID,0)
+ 
 #elif defined(PLAT_WMS8304)		// added by rachel
  #include "nmi_custom_gpio.c"
 
@@ -133,26 +147,39 @@ unsigned char mac_add[] = {0x00, 0x80, 0xC2, 0x5E, 0xa2, 0xb2};
 
  #define _linux_wlan_device_detection()         wmt_detect_sdio2()
  #define _linux_wlan_device_removal()           force_remove_sdio2()
-#elif defined(PLAT_CLM9722)
-  #define _linux_wlan_device_power_on()          {}
- #define _linux_wlan_device_power_off()         {}
 
- #define _linux_wlan_device_detection()         {}
- #define _linux_wlan_device_removal()           {}
-#elif defined(PLAT_RKXXXX)		// added by wood
+#elif defined(PLAT_RKXXXX)		
 extern int rk29sdk_wifi_power(int on);
 extern int rk29sdk_wifi_set_carddetect(int val); 
- 
 #define _linux_wlan_device_power_on()          rk29sdk_wifi_power(1)
 #define _linux_wlan_device_power_off()         rk29sdk_wifi_power(0)
 #define _linux_wlan_device_detection()         rk29sdk_wifi_set_carddetect(1)
 #define _linux_wlan_device_removal()           rk29sdk_wifi_set_carddetect(0)
+
+#elif defined(PLAT_CLM9722)
+#define _linux_wlan_device_power_on()          {}
+#define _linux_wlan_device_power_off()         {}
+
+#define _linux_wlan_device_detection()         {}
+#define _linux_wlan_device_removal()           {}
+
 #else
- #define _linux_wlan_device_detection() 	{}
- #define _linux_wlan_device_removal()		{}
- #define _linux_wlan_device_power_on()		{}
- #define _linux_wlan_device_power_off()		{} 
+#define _linux_wlan_device_detection() 	{}
+#define _linux_wlan_device_removal()		{}
+#define _linux_wlan_device_power_on()		{}
+#define _linux_wlan_device_power_off()		{} 
+
 #endif
+
+
+#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+extern NMI_Bool g_obtainingIP;
+#endif
+
+
+extern NMI_Uint16 Set_machw_change_vir_if(NMI_Bool bValue);
+extern void resolve_disconnect_aberration(void* drvHandler);
+extern NMI_Uint8 gau8MulticastMacAddrList[NMI_MULTICAST_TABLE_SIZE][ETH_ALEN];
 
 static int linux_wlan_device_power(int on_off)
 {
@@ -188,8 +215,6 @@ static int linux_wlan_device_detection(int on_off)
     return 0;
 }
 
-extern void resolve_disconnect_aberration(void);
-extern tstrNMI_WFIDrv* gWFiDrvHandle;
 
 #ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
 static int dev_state_ev_handler(struct notifier_block *this, unsigned long event, void *ptr);
@@ -199,9 +224,9 @@ static struct notifier_block g_dev_notifier = {
 };
 #endif
 
-#define nmi_wlan_deinit(nic) 	if(&nic->oup != NULL)	\
-								if(nic->oup.wlan_cleanup != NULL) \
-								        	nic->oup.wlan_cleanup()
+#define nmi_wlan_deinit(nic) 	if(&g_linux_wlan->oup != NULL)	\
+								if(g_linux_wlan->oup.wlan_cleanup != NULL) \
+								        	g_linux_wlan->oup.wlan_cleanup()
 
 //[[ johnny : enable to selecte bin file on Makefile
 #ifndef STA_FIRMWARE
@@ -210,6 +235,10 @@ static struct notifier_block g_dev_notifier = {
 
 #ifndef AP_FIRMWARE
 #define AP_FIRMWARE		"wifi_firmware_ap.bin"
+#endif
+
+#ifndef P2P_CONCURRENCY_FIRMWARE
+#define P2P_CONCURRENCY_FIRMWARE	"wifi_firmware_p2p_concurrency.bin"
 #endif
 //]]
 
@@ -238,30 +267,22 @@ unsigned int int_clrd;
 static int wlan_deinit_locks(linux_wlan_t* nic);
 static void wlan_deinitialize_threads(linux_wlan_t* nic);
 static void linux_wlan_lock(void* vp);
-static void linux_wlan_unlock(void* vp);
+void linux_wlan_unlock(void* vp);
 extern void NMI_WFI_monitor_rx(uint8_t *buff, uint32_t size);
 extern void NMI_WFI_p2p_rx(struct net_device *dev,uint8_t *buff, uint32_t size);
 
 
 static void* internal_alloc(uint32_t size, uint32_t flag);
 static void linux_wlan_tx_complete(void* priv, int status);
-void frmw_to_linux(uint8_t *buff, uint32_t size);
+void frmw_to_linux(uint8_t *buff, uint32_t size,uint32_t pkt_offset);
 static int  mac_init_fn(struct net_device *ndev);
 int  mac_xmit(struct sk_buff *skb, struct net_device *dev);
 int  mac_open(struct net_device *ndev);
 int  mac_close(struct net_device *ndev);
 static struct net_device_stats *mac_stats(struct net_device *dev);
 static int  mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd);
+static void nmi_set_multicast_list(struct net_device *dev);
 
-
-struct tx_complete_data{
-	#ifdef NMI_FULLY_HOSTING_AP
-	struct tx_complete_data* next;
-	#endif
-	int size;
-	void* buff;
-	struct sk_buff *skb;
-};
 
 
 	/*
@@ -270,8 +291,9 @@ struct tx_complete_data{
 	*/
 linux_wlan_t* g_linux_wlan = NULL;
 nmi_wlan_oup_t* gpstrWlanOps;
+NMI_Bool bEnablePS = NMI_TRUE;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
 
 static const struct net_device_ops nmc_netdev_ops = {
 	.ndo_init = mac_init_fn,
@@ -280,6 +302,21 @@ static const struct net_device_ops nmc_netdev_ops = {
 	.ndo_start_xmit = mac_xmit,
 	.ndo_do_ioctl = mac_ioctl,
 	.ndo_get_stats = mac_stats,
+	.ndo_set_rx_mode  = nmi_set_multicast_list,
+	
+};
+#define nmc_set_netdev_ops(ndev) do { (ndev)->netdev_ops = &nmc_netdev_ops; } while(0)
+
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
+
+static const struct net_device_ops nmc_netdev_ops = {
+	.ndo_init = mac_init_fn,
+	.ndo_open = mac_open,
+	.ndo_stop = mac_close,
+	.ndo_start_xmit = mac_xmit,
+	.ndo_do_ioctl = mac_ioctl,
+	.ndo_get_stats = mac_stats,
+	.ndo_set_multicast_list = nmi_set_multicast_list,
 	
 };
 
@@ -296,6 +333,7 @@ static void nmc_set_netdev_ops(struct net_device *ndev)
 	ndev->hard_start_xmit = mac_xmit;
 	ndev->do_ioctl = mac_ioctl;
 	ndev->get_stats = mac_stats;
+	ndev->set_multicast_list = nmi_set_multicast_list,
 }
 
 #endif
@@ -361,49 +399,100 @@ static int DebuggingThreadTask(void* vp)
 
 #endif
 
-#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-NMI_Bool gbIPaddrObtained = NMI_FALSE;
-#endif
 
 #ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
 static int dev_state_ev_handler(struct notifier_block *this, unsigned long event, void *ptr)
 {
-    struct in_ifaddr *dev_iface = (struct in_ifaddr *)ptr;
+	struct in_ifaddr *dev_iface = (struct in_ifaddr *)ptr;
+	struct NMI_WFI_priv* priv;
+	tstrNMI_WFIDrv * pstrWFIDrv;
+	struct net_device * dev=(struct net_device *)dev_iface->ifa_dev->dev;
+	NMI_Uint8 *pIP_Add_buff;
+	NMI_Sint32 s32status = NMI_FAIL;
+	perInterface_wlan_t* nic;
+	NMI_Uint8 null_ip[4]={0};
+	char wlan_dev_name[5]="wlan0";
+	
+	priv= wiphy_priv(dev->ieee80211_ptr->wiphy);
+    pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
 
-    if(dev_iface == NULL)
-    {
-    	NMI_PRINTF("dev_iface = NULL\n");
-    	return NOTIFY_DONE;
-    }
+	nic = netdev_priv(dev);
 
+	//printk("dev_state_ev_handler +++\n");	// tony
+
+	if(dev_iface == NULL)
+	{
+		NMI_PRINTF("dev_iface = NULL\n");
+		return NOTIFY_DONE;
+	}
+
+	if( (memcmp(dev_iface->ifa_label , "wlan0", 5) ) &&( memcmp(dev_iface->ifa_label , "p2p0", 4) ) )
+	{
+		PRINT_D(GENERIC_DBG,"Interface is neither WLAN0 nor P2P0\n");
+		return NOTIFY_DONE;
+	}
+
+	if(pstrWFIDrv == NULL)
+   	{
+   		PRINT_ER("Driver handler = NULL !\n");
+   	}
+   
     switch (event) {
 
-    case NETDEV_UP:
+		case NETDEV_UP:
+			printk("dev_state_ev_handler event=NETDEV_UP %p\n",dev);	// tony
 
-		  gbIPaddrObtained = NMI_TRUE;
+			printk("\n ============== IP Address Obtained ===============\n\n");
 
-		  host_int_set_power_mgmt((NMI_WFIDrvHandle)gWFiDrvHandle, 1, 0);
-		  
-                PRINT_INFO(GENERIC_DBG, "[%s] Up IP\n", dev_iface->ifa_label);
+		
+			/*If we are in station mode or client mode*/
+			if(nic->iftype==STATION_MODE||nic->iftype==CLIENT_MODE)	
+			{
+				g_obtainingIP=NMI_FALSE;
+				PRINT_D(GENERIC_DBG,"IP obtained , enable scan\n");
+			}
+		
+		
 
-                break;
+			if(bEnablePS	== NMI_TRUE)
+				host_int_set_power_mgmt((NMI_WFIDrvHandle)pstrWFIDrv, 1, 0);
 
-    case NETDEV_DOWN:
+            PRINT_D(GENERIC_DBG, "[%s] Up IP\n", dev_iface->ifa_label);
 
-		  gbIPaddrObtained = NMI_FALSE;
+			pIP_Add_buff = (char *) (&(dev_iface->ifa_address));
+			printk("IP add=%d:%d:%d:%d \n",pIP_Add_buff[0],pIP_Add_buff[1],pIP_Add_buff[2],pIP_Add_buff[3]);
+			s32status = host_int_setup_ipaddress((NMI_WFIDrvHandle)pstrWFIDrv, pIP_Add_buff, nic->u8IfIdx);
 
-		   host_int_set_power_mgmt((NMI_WFIDrvHandle)gWFiDrvHandle, 0, 0);
-			resolve_disconnect_aberration();
-		  	
-                PRINT_INFO(GENERIC_DBG, "[%s] Down IP\n", dev_iface->ifa_label);
+			break;
 
-                break;
+		case NETDEV_DOWN:
+			printk("dev_state_ev_handler event=NETDEV_DOWN %p\n",dev);	// tony
+
+			printk("\n ============== IP Address Released ===============\n\n");
+			if(nic->iftype==STATION_MODE||nic->iftype==CLIENT_MODE)	
+			{
+				g_obtainingIP=NMI_FALSE;
+			}
+
+			if(memcmp(dev_iface->ifa_label , wlan_dev_name, 5) == 0)
+		   		host_int_set_power_mgmt((NMI_WFIDrvHandle)pstrWFIDrv, 0, 0);
 				
-    default:
+			resolve_disconnect_aberration(pstrWFIDrv);
+			
+		  	
+			PRINT_D(GENERIC_DBG, "[%s] Down IP\n", dev_iface->ifa_label);
 
-                PRINT_INFO(GENERIC_DBG, "[%s] unknown dev event: %lu\n", dev_iface->ifa_label, event);
+			pIP_Add_buff = null_ip;
+			printk("IP add=%d:%d:%d:%d \n",pIP_Add_buff[0],pIP_Add_buff[1],pIP_Add_buff[2],pIP_Add_buff[3]);
+			s32status = host_int_setup_ipaddress((NMI_WFIDrvHandle)pstrWFIDrv, pIP_Add_buff, nic->u8IfIdx);
 
-                break;
+			break;
+				
+		default:
+			printk("dev_state_ev_handler event=default\n");	// tony
+			PRINT_INFO(GENERIC_DBG, "[%s] unknown dev event: %lu\n", dev_iface->ifa_label, event);
+
+			break;
     }
 
     return NOTIFY_DONE;
@@ -465,6 +554,7 @@ void linux_wlan_disable_irq(int wait){
 #if (!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO)
 static irqreturn_t isr_uh_routine(int irq, void* user_data){
 	linux_wlan_t *nic = (linux_wlan_t*)user_data;
+
 #if defined(PLAT_WMS8304)
 	int pin_state;
 	//printk("isr_uh_routine\n");
@@ -513,7 +603,7 @@ static irqreturn_t isr_uh_routine(int irq, void* user_data){
 #endif//]]
 
     /*While mac is closing cacncel the handling of any interrupts received*/
-	if(nic->close)
+	if(g_linux_wlan->close)
 	{
 		PRINT_ER("Driver is CLOSING: Can't handle UH interrupt\n");
 	#if (RX_BH_TYPE == RX_BH_THREADED_IRQ)
@@ -524,10 +614,10 @@ static irqreturn_t isr_uh_routine(int irq, void* user_data){
 
 	}
 #if (RX_BH_TYPE == RX_BH_WORK_QUEUE)
-	schedule_work(&nic->rx_work_queue);
+	schedule_work(&g_linux_wlan->rx_work_queue);
 	return IRQ_HANDLED;
 #elif (RX_BH_TYPE == RX_BH_KTHREAD)
-	linux_wlan_unlock(&nic->rx_sem);
+	linux_wlan_unlock(&g_linux_wlan->rx_sem);
 	return IRQ_HANDLED;
 #elif (RX_BH_TYPE == RX_BH_THREADED_IRQ)
 	return IRQ_WAKE_THREAD;
@@ -544,12 +634,12 @@ irqreturn_t isr_bh_routine(int irq, void *userdata){
 	nic = (linux_wlan_t*)userdata;
 #else
 static void isr_bh_routine(struct work_struct *work){
-	linux_wlan_t* nic;
-	nic = container_of(work,linux_wlan_t,rx_work_queue);
+	perInterface_wlan_t* nic;
+	nic = (perInterface_wlan_t*)container_of(work,linux_wlan_t,rx_work_queue);
 #endif	
 
 	/*While mac is closing cacncel the handling of any interrupts received*/
-	if(nic->close)
+	if(g_linux_wlan->close)
 	{
 		PRINT_ER("Driver is CLOSING: Can't handle BH interrupt\n");
 	#if (RX_BH_TYPE == RX_BH_THREADED_IRQ)
@@ -564,8 +654,8 @@ static void isr_bh_routine(struct work_struct *work){
 
 	int_rcvdB++;
 	PRINT_D(INT_DBG,"Interrupt received BH\n");
-	if(nic->oup.wlan_handle_rx_isr != 0){
-		nic->oup.wlan_handle_rx_isr();
+	if(g_linux_wlan->oup.wlan_handle_rx_isr != 0){
+		g_linux_wlan->oup.wlan_handle_rx_isr();
 	}else{
 			PRINT_ER("wlan_handle_rx_isr() hasn't been initialized\n");
 		}
@@ -584,7 +674,7 @@ static int isr_bh_routine(void *vp)
 
 	while(1) {
 		linux_wlan_lock(&nic->rx_sem);		
-		if (nic->close){
+		if (g_linux_wlan->close){
 
 			while(!kthread_should_stop())
 				schedule();
@@ -593,8 +683,8 @@ static int isr_bh_routine(void *vp)
 		}
 		int_rcvdB++;
 		PRINT_D(INT_DBG,"Interrupt received BH\n");
-		if(nic->oup.wlan_handle_rx_isr != 0){
-			nic->oup.wlan_handle_rx_isr();
+		if(g_linux_wlan->oup.wlan_handle_rx_isr != 0){
+			g_linux_wlan->oup.wlan_handle_rx_isr();
 		} else{
 				PRINT_ER("wlan_handle_rx_isr() hasn't been initialized\n");
 		}
@@ -672,13 +762,14 @@ static int init_irq(linux_wlan_t* p_nic){
 		PRINT_ER("could not obtain gpio for NMC_INTR\n");
 	}
 
+
 #else
 		/*initialize GPIO and register IRQ num*/						
 		/*GPIO request*/
 		if ((gpio_request(GPIO_NUM, "NMC_INTR") == 0) &&
 		    (gpio_direction_input(GPIO_NUM) == 0)) {
 #if defined (NM73131_0_BOARD)
-			nic->dev_irq_num = IRQ_NMC1000;
+			g_linux_wlan->dev_irq_num = IRQ_NMC1000;
 #else
 			gpio_export(GPIO_NUM, 1);
 			nic->dev_irq_num = OMAP_GPIO_IRQ(GPIO_NUM);
@@ -691,7 +782,7 @@ static int init_irq(linux_wlan_t* p_nic){
 
 
 #if (RX_BH_TYPE == RX_BH_THREADED_IRQ)
-		if( (ret != -1) && ( request_threaded_irq(nic->dev_irq_num, isr_uh_routine, isr_bh_routine,
+		if( (ret != -1) && ( request_threaded_irq(g_linux_wlan->dev_irq_num, isr_uh_routine, isr_bh_routine,
 				  				IRQF_TRIGGER_LOW | IRQF_ONESHOT, /*Without IRQF_ONESHOT the uh will remain kicked in and dont gave a chance to bh*/
 				   				"NMC_IRQ", nic))<0){
 
@@ -706,8 +797,9 @@ static int init_irq(linux_wlan_t* p_nic){
 		}else{			
 
 				PRINT_D(INIT_DBG,"IRQ request succeeded IRQ-NUM= %d on GPIO: %d\n",
-				nic->dev_irq_num,GPIO_NUM);			
+				g_linux_wlan->dev_irq_num,GPIO_NUM);			
 		}
+
 #endif
 	
 	return ret;
@@ -717,8 +809,8 @@ static int init_irq(linux_wlan_t* p_nic){
 static void deinit_irq(linux_wlan_t* nic){
 #if (!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO)
 		/* Deintialize IRQ */
-		if(&nic->dev_irq_num != 0){
-		  free_irq(nic->dev_irq_num, nic);
+		if(&g_linux_wlan->dev_irq_num != 0){
+		  free_irq(g_linux_wlan->dev_irq_num, g_linux_wlan);
  #if defined(PLAT_AML8726_M3) //johnny
 
  #elif defined (PLAT_WMS8304)
@@ -834,7 +926,7 @@ static int linux_wlan_lock_timeout(void* vp,NMI_Uint32 timeout)
 	return error;
 }
 
-static void linux_wlan_unlock(void* vp)
+void linux_wlan_unlock(void* vp)
 {
 	PRINT_D(LOCK_DBG,"Unlocking %p\n",vp);
 	if(vp != NULL)
@@ -978,18 +1070,101 @@ static void linux_wlan_mac_indicate(int flag){
 
 }
 
+struct net_device * GetIfHandler(uint8_t* pMacHeader)
+{
+	uint8_t *Bssid,*Bssid1;
+	int i =0;
+
+	//frmds = ((pMacHeader[1] & 0x02) >> 1);
+	//if(frmds)
+	{
+		Bssid  = pMacHeader+10;
+		Bssid1 = pMacHeader+4;
+	}
+	#if 0
+	else
+	{
+		Bssid = pMacHeader+4;
+		DstAddress = pMacHeader+16;
+	}
+	#endif
+		
+	for(i=0;i<g_linux_wlan->u8NoIfcs;i++)
+	{
+		if(!memcmp(Bssid1,g_linux_wlan->strInterfaceInfo[i].aBSSID,ETH_ALEN) || 
+			!memcmp(Bssid,g_linux_wlan->strInterfaceInfo[i].aBSSID,ETH_ALEN))
+		{
+			//printk("Ctx [%x]\n",g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+			return g_linux_wlan->strInterfaceInfo[i].nmc_netdev;
+		}		
+	}
+	printk("Invalide handle\n");
+	for(i=0;i<25;i++)
+	{
+		printk("%02x ",pMacHeader[i]);
+	}
+	Bssid  = pMacHeader+18;
+	Bssid1 = pMacHeader+12;
+	for(i=0;i<g_linux_wlan->u8NoIfcs;i++)
+	{
+		if(!memcmp(Bssid1,g_linux_wlan->strInterfaceInfo[i].aBSSID,ETH_ALEN) || 
+			!memcmp(Bssid,g_linux_wlan->strInterfaceInfo[i].aBSSID,ETH_ALEN))
+		{
+			printk("Ctx [%p]\n",g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+			return g_linux_wlan->strInterfaceInfo[i].nmc_netdev;
+		}		
+	}
+	printk("\n");
+	return NULL;
+}
+
+int linux_wlan_set_bssid(struct net_device * nmc_netdev,uint8_t * pBSSID)
+{
+	int i = 0;
+	int ret = -1;
+	printk("set bssid on[%p]\n",nmc_netdev);
+	for(i=0;i<g_linux_wlan->u8NoIfcs;i++)
+	{
+		if(g_linux_wlan->strInterfaceInfo[i].nmc_netdev == nmc_netdev)
+		{
+			printk("set bssid [%x][%x][%x]\n",pBSSID[0],pBSSID[1],pBSSID[2]);
+			memcpy(g_linux_wlan->strInterfaceInfo[i].aBSSID,pBSSID,6);
+			ret = 0;
+			break;
+		}		
+	}
+	return ret;
+}
+
+/*BugID_5213*/
+/*Function to get number of connected interfaces*/
+int linux_wlan_get_num_conn_ifcs(void)
+{
+	uint8_t i = 0;
+	uint8_t null_bssid[6] = {0};
+	uint8_t ret_val = 0;
+	
+	for(i=0; i<g_linux_wlan->u8NoIfcs; i++)
+	{
+		if(memcmp(g_linux_wlan->strInterfaceInfo[i].aBSSID, null_bssid, 6))
+		{
+			ret_val++;
+		}
+	}
+	return ret_val;
+}
 
 static int linux_wlan_rxq_task(void* vp){
 
-	linux_wlan_t *pd = (linux_wlan_t*)vp;
 	/* inform nmc1000_wlan_init that RXQ task is started. */
-	linux_wlan_unlock(&pd->rxq_thread_started);
+	linux_wlan_unlock(&g_linux_wlan->rxq_thread_started);
 	while(1) {
-		linux_wlan_lock(&pd->rxq_event);
-		//wait_for_completion(&pd->rxq_event);
-		if (pd->close){
+		linux_wlan_lock(&g_linux_wlan->rxq_event);
+		//wait_for_completion(&g_linux_wlan->rxq_event);
+		
+		if (g_linux_wlan->close){
 			/*Unlock the mutex in the mac_close function to indicate the exiting of the RX thread */
-			linux_wlan_unlock(&pd->rxq_thread_started);
+			linux_wlan_unlock(&g_linux_wlan->rxq_thread_started);
 
 			while(!kthread_should_stop())
 				schedule();
@@ -998,7 +1173,8 @@ static int linux_wlan_rxq_task(void* vp){
 			break;		
 		}
 		PRINT_D(RX_DBG,"Calling wlan_handle_rx_que()\n");
-		pd->oup.wlan_handle_rx_que();		
+		
+		g_linux_wlan->oup.wlan_handle_rx_que();		
 	}
 	return 0;
 }
@@ -1008,7 +1184,6 @@ static int linux_wlan_rxq_task(void* vp){
 static int linux_wlan_txq_task(void* vp)
 {
 	int ret,txq_count;
-	linux_wlan_t *pd = (linux_wlan_t*)vp;
 
 #if defined USE_TX_BACKOFF_DELAY_IF_NO_BUFFERS
 #define TX_BACKOFF_WEIGHT_INCR_STEP (1)
@@ -1021,17 +1196,17 @@ static int linux_wlan_txq_task(void* vp)
 #endif
 
 	/* inform nmc1000_wlan_init that TXQ task is started. */
-	linux_wlan_unlock(&pd->txq_thread_started);
+	linux_wlan_unlock(&g_linux_wlan->txq_thread_started);
 	while(1) {
 		
 		PRINT_D(TX_DBG,"txq_task Taking a nap :)\n");
-		linux_wlan_lock(&pd->txq_event);
+		linux_wlan_lock(&g_linux_wlan->txq_event);
 		//wait_for_completion(&pd->txq_event);
 		PRINT_D(TX_DBG,"txq_task Who waked me up :$\n");
 
-		if (pd->close){
+		if (g_linux_wlan->close){
 		    /*Unlock the mutex in the mac_close function to indicate the exiting of the TX thread */
-			linux_wlan_unlock(&pd->txq_thread_started);
+			linux_wlan_unlock(&g_linux_wlan->txq_thread_started);
 
 			while(!kthread_should_stop())
 				schedule();
@@ -1041,14 +1216,18 @@ static int linux_wlan_txq_task(void* vp)
 		}
 		PRINT_D(TX_DBG,"txq_task handle the sending packet and let me go to sleep.\n");
 #if !defined USE_TX_BACKOFF_DELAY_IF_NO_BUFFERS
-		pd->oup.wlan_handle_tx_que();		
+		g_linux_wlan->oup.wlan_handle_tx_que();		
 #else
 		do {
-			ret = pd->oup.wlan_handle_tx_que(&txq_count);	
-			if(txq_count < FLOW_CONTROL_LOWER_THRESHOLD && netif_queue_stopped(pd->nmc_netdev))
+			ret = g_linux_wlan->oup.wlan_handle_tx_que(&txq_count);	
+			if(txq_count < FLOW_CONTROL_LOWER_THRESHOLD/* && netif_queue_stopped(pd->nmc_netdev)*/)
 			{
 				PRINT_D(TX_DBG,"Waking up queue\n");
-				netif_wake_queue(pd->nmc_netdev);
+				//netif_wake_queue(pd->nmc_netdev);
+				if(netif_queue_stopped(g_linux_wlan->strInterfaceInfo[0].nmc_netdev))
+					netif_wake_queue(g_linux_wlan->strInterfaceInfo[0].nmc_netdev);
+				if(netif_queue_stopped(g_linux_wlan->strInterfaceInfo[1].nmc_netdev))
+					netif_wake_queue(g_linux_wlan->strInterfaceInfo[1].nmc_netdev);
 			}
 
 			if(ret == NMI_TX_ERR_NO_BUF) { /* failed to allocate buffers in chip. */
@@ -1073,7 +1252,7 @@ static int linux_wlan_txq_task(void* vp)
 				}
 			}
 			/*TODO: drop packets after a certain time/number of retry count. */
-		} while(ret == NMI_TX_ERR_NO_BUF&&!pd->close); /* retry sending packets if no more buffers in chip. */
+		} while(ret == NMI_TX_ERR_NO_BUF&&!g_linux_wlan->close); /* retry sending packets if no more buffers in chip. */
 #endif
 	}
 	return 0;
@@ -1082,9 +1261,10 @@ static int linux_wlan_txq_task(void* vp)
 static void linux_wlan_rx_complete(void){
 	PRINT_D(RX_DBG,"RX completed\n");
 }
-int linux_wlan_get_firmware(linux_wlan_t* p_nic){
 
-	linux_wlan_t* nic = p_nic;
+int linux_wlan_get_firmware(perInterface_wlan_t* p_nic){
+
+	perInterface_wlan_t* nic = p_nic;
 	int ret = 0;	
 	const struct firmware* nmc_firmware;
 	char *firmware;
@@ -1092,8 +1272,16 @@ int linux_wlan_get_firmware(linux_wlan_t* p_nic){
 
 	if(nic->iftype == AP_MODE)
 		firmware = AP_FIRMWARE;
-	else
+	else if(nic->iftype == STATION_MODE)
 		firmware = STA_FIRMWARE;
+
+	/*BugID_5137*/
+	else
+	{
+		PRINT_D(GENERIC_DBG,"Get P2P_CONCURRENCY_FIRMWARE\n");
+		firmware = P2P_CONCURRENCY_FIRMWARE;
+	}
+	
 
 	
 	if(nic == NULL){
@@ -1111,19 +1299,19 @@ int linux_wlan_get_firmware(linux_wlan_t* p_nic){
 		root file system with the name specified above */
 
 #ifdef NMI_SDIO
-	if( request_firmware(&nmc_firmware,firmware, &nic->nmc_sdio_func->dev) != 0){
+	if( request_firmware(&nmc_firmware,firmware, &g_linux_wlan->nmc_sdio_func->dev) != 0){
 		PRINT_ER("%s - firmare not available\n",firmware);
 		ret = -1;
 		goto _fail_;
 	}
 #else
-	if( request_firmware(&nmc_firmware,firmware, &nic->nmc_spidev->dev) != 0){
+	if( request_firmware(&nmc_firmware,firmware, &g_linux_wlan->nmc_spidev->dev) != 0){
 		PRINT_ER("%s - firmare not available\n",firmware);
 		ret = -1;
 		goto _fail_;
 	}
 #endif
-	nic->nmc_firmware = nmc_firmware; /* Bug 4703 */
+	g_linux_wlan->nmc_firmware = nmc_firmware; /* Bug 4703 */
 
 _fail_:
 	
@@ -1131,14 +1319,17 @@ _fail_:
 
 }
 
-int repeat_power_cycle(linux_wlan_t* nic);
-static int linux_wlan_start_firmware(linux_wlan_t* nic){
+#ifdef COMPLEMENT_BOOT
+int repeat_power_cycle(perInterface_wlan_t* nic);
+#endif
+
+static int linux_wlan_start_firmware(perInterface_wlan_t* nic){
 
 	static int timeout = 5;
 	int ret = 0;
 	/* start firmware */
 	PRINT_D(INIT_DBG,"Starting Firmware ...\n");
-	ret = nic->oup.wlan_start();
+	ret = g_linux_wlan->oup.wlan_start();
 	if(ret < 0){
 		PRINT_ER("Failed to start Firmware\n");
 		goto _fail_;
@@ -1149,9 +1340,11 @@ static int linux_wlan_start_firmware(linux_wlan_t* nic){
 
 	/* wait for mac ready */
 	PRINT_D(INIT_DBG,"Waiting for Firmware to get ready ...\n");
-	if(ret = linux_wlan_lock_timeout(&nic->sync_event,5000))
+	if( (ret = linux_wlan_lock_timeout(&g_linux_wlan->sync_event,5000)) )
 	{
-#if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23)
+#ifdef COMPLEMENT_BOOT
+ #if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23) || defined(PLAT_ALLWINNER_A31)
+ 
 		if(timeout--)
 		{
 			printk("repeat power cycle[%d]",timeout);
@@ -1163,6 +1356,7 @@ static int linux_wlan_start_firmware(linux_wlan_t* nic){
 			ret = -1;
 			goto _fail_;
 		}
+ #endif
 #endif
 		PRINT_D(INIT_DBG,"Firmware start timed out");
 		goto _fail_;
@@ -1179,9 +1373,8 @@ _fail_:
 static int linux_wlan_firmware_download(linux_wlan_t* p_nic){
 
 	int ret = 0;	
-	linux_wlan_t* nic = p_nic;
 
-	if(nic->nmc_firmware == NULL){
+	if(g_linux_wlan->nmc_firmware == NULL){
 		PRINT_ER("Firmware buffer is NULL\n");
 		ret = -ENOBUFS;
 		goto _FAIL_;
@@ -1190,7 +1383,7 @@ static int linux_wlan_firmware_download(linux_wlan_t* p_nic){
 		do the firmware download
 	**/
 	PRINT_D(INIT_DBG,"Downloading Firmware ...\n");
-	ret = nic->oup.wlan_firmware_download(nic->nmc_firmware->data, nic->nmc_firmware->size);
+	ret = g_linux_wlan->oup.wlan_firmware_download(g_linux_wlan->nmc_firmware->data, g_linux_wlan->nmc_firmware->size);
 	if(ret < 0){
 		goto _FAIL_;
 	}
@@ -1198,8 +1391,8 @@ static int linux_wlan_firmware_download(linux_wlan_t* p_nic){
 	/* Freeing FW buffer */
 	PRINT_D(INIT_DBG,"Freeing FW buffer ...\n");
 	PRINT_D(GENERIC_DBG,"Releasing firmware\n");
-	release_firmware(nic->nmc_firmware);
-	nic->nmc_firmware = NULL;
+	release_firmware(g_linux_wlan->nmc_firmware);
+	g_linux_wlan->nmc_firmware = NULL;
 
 	PRINT_D(INIT_DBG,"Download Succeeded \n");	
 	
@@ -1209,75 +1402,92 @@ _FAIL_:
 
 
 /* startup configuration - could be changed later using iconfig*/
-static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
+static int linux_wlan_init_test_config(struct net_device *dev, linux_wlan_t* p_nic){
 
-	linux_wlan_t* nic = p_nic;	
 	unsigned char c_val[64];
 	#ifndef STATIC_MACADDRESS
-	unsigned char mac_add[] = {0x00, 0x80, 0xC2, 0x5E, 0xa2, 0xb2};
+	unsigned char mac_add[] = {0x00, 0x80, 0xC2, 0x5E, 0xa2, 0xab};
 	#endif
 	unsigned int chipid = 0;
+
+	/*BugID_5077*/
+	struct NMI_WFI_priv *priv;
+	tstrNMI_WFIDrv * pstrWFIDrv;
 	
 	PRINT_D(TX_DBG,"Start configuring Firmware\n");
 	#ifndef STATIC_MACADDRESS
-	get_random_bytes(&mac_add[5], 1);
+	//get_random_bytes(&mac_add[5], 1);
 	#endif
-	   
-	PRINT_D(INIT_DBG,"MAC address is : %02x-%02x-%02x-%02x-%02x-%02x\n", mac_add[0],mac_add[1],mac_add[2],mac_add[3],mac_add[4],mac_add[5]);
+	priv = wiphy_priv(dev->ieee80211_ptr->wiphy);
+	pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
+	PRINT_D(GENERIC_DBG, "Host = %x\n",(NMI_Uint32)pstrWFIDrv);
+
+	printk("MAC address is : %02x-%02x-%02x-%02x-%02x-%02x\n", mac_add[0],mac_add[1],mac_add[2],mac_add[3],mac_add[4],mac_add[5]);
 	chipid = nmi_get_chipid(0);
 
 	
+	if(g_linux_wlan->oup.wlan_cfg_set == NULL)
+	{
+		printk("Null p[ointer\n");
+		goto _fail_;
+	}
 
+	*(int*)c_val = (NMI_Uint32)pstrWFIDrv;
+
+	if (!g_linux_wlan->oup.wlan_cfg_set(1, WID_SET_DRV_HANDLER, c_val, 4, 0,0))
+		goto _fail_;
+	
 	/*to tell fw that we are going to use PC test - NMI specific*/
 	c_val[0] = 0;
-	if (!nic->oup.wlan_cfg_set(1, WID_PC_TEST_MODE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_PC_TEST_MODE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = INFRASTRUCTURE;
-	if (!nic->oup.wlan_cfg_set(0, WID_BSS_TYPE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_BSS_TYPE, c_val, 1, 0,0))
 		goto _fail_;
 
-
-	c_val[0] = RATE_AUTO; /* bug 4275: Enable autorate and limit it to 24Mbps */
-	if (!nic->oup.wlan_cfg_set(0, WID_CURRENT_TX_RATE, c_val, 1, 0))
+	
+	//c_val[0] = RATE_AUTO; /* bug 4275: Enable autorate and limit it to 24Mbps */
+	c_val[0] = RATE_AUTO;
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_CURRENT_TX_RATE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = G_MIXED_11B_2_MODE;
-	if (!nic->oup.wlan_cfg_set(0, WID_11G_OPERATING_MODE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11G_OPERATING_MODE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 1;
-	if (!nic->oup.wlan_cfg_set(0, WID_CURRENT_CHANNEL, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_CURRENT_CHANNEL, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = G_SHORT_PREAMBLE;
-	if (!nic->oup.wlan_cfg_set(0, WID_PREAMBLE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_PREAMBLE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = AUTO_PROT;
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_PROT_MECH, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_PROT_MECH, c_val, 1, 0,0))
 		goto _fail_;
 
 #ifdef SWITCH_LOG_TERMINAL
 	c_val[0] = AUTO_PROT;
-	if (!nic->oup.wlan_cfg_set(0, WID_LOGTerminal_Switch, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_LOGTerminal_Switch, c_val, 1, 0,0))
 		goto _fail_;
 #endif
 	
 	c_val[0] = ACTIVE_SCAN;
-	if (!nic->oup.wlan_cfg_set(0, WID_SCAN_TYPE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_SCAN_TYPE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = SITE_SURVEY_OFF;
-	if (!nic->oup.wlan_cfg_set(0, WID_SITE_SURVEY, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_SITE_SURVEY, c_val, 1, 0,0))
 		goto _fail_;
 
 	*((int *)c_val) = 0xffff; /* Never use RTS-CTS */
-	if (!nic->oup.wlan_cfg_set(0, WID_RTS_THRESHOLD, c_val, 2, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_RTS_THRESHOLD, c_val, 2, 0,0))
 		goto _fail_;
 
 	*((int *)c_val) = 2346;
-	if (!nic->oup.wlan_cfg_set(0, WID_FRAG_THRESHOLD, c_val, 2, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_FRAG_THRESHOLD, c_val, 2, 0,0))
 		goto _fail_;
 
     /*  SSID                                                                 */
@@ -1289,28 +1499,28 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
     /*  --------------------------------------------------------------       */
 #ifndef USE_WIRELESS
 	strcpy(c_val, "nwifi");
-	if (!nic->oup.wlan_cfg_set(0, WID_SSID, c_val, (strlen(c_val)+1), 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_SSID, c_val, (strlen(c_val)+1), 0,0))
 		goto _fail_;
 #endif
 
 	c_val[0] = 0;
-	if (!nic->oup.wlan_cfg_set(0, WID_BCAST_SSID, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_BCAST_SSID, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 1;
-	if (!nic->oup.wlan_cfg_set(0, WID_QOS_ENABLE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_QOS_ENABLE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = NO_POWERSAVE;
-	if (!nic->oup.wlan_cfg_set(0, WID_POWER_MANAGEMENT, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_POWER_MANAGEMENT, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = NO_ENCRYPT; //NO_ENCRYPT, 0x79
-	if (!nic->oup.wlan_cfg_set(0, WID_11I_MODE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11I_MODE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = OPEN_SYSTEM;
-	if (!nic->oup.wlan_cfg_set(0, WID_AUTH_TYPE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_AUTH_TYPE, c_val, 1, 0,0))
 		goto _fail_;
 
     /*  WEP/802 11I Configuration                                            */
@@ -1322,7 +1532,7 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
     /*  ------------------------------------------------------------------   */
 
 	strcpy(c_val, "123456790abcdef1234567890");
-	if (!nic->oup.wlan_cfg_set(0, WID_WEP_KEY_VALUE, c_val, (strlen(c_val)+1), 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_WEP_KEY_VALUE, c_val, (strlen(c_val)+1), 0,0))
 		goto _fail_;
 
     /*  WEP/802 11I Configuration                                            */
@@ -1332,7 +1542,7 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
     /*                  and less than 64 bytes                               */
     /*  ------------------------------------------------------------------   */
 	strcpy(c_val, "12345678");
-	if (!nic->oup.wlan_cfg_set(0, WID_11I_PSK, c_val, (strlen(c_val)), 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11I_PSK, c_val, (strlen(c_val)), 0,0))
 		goto _fail_;
 
     /*  IEEE802.1X Key Configuration                                         */
@@ -1342,7 +1552,7 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
     /*                  and less than 65 bytes                               */
     /*  ------------------------------------------------------------------   */
 	strcpy(c_val, "password");
-	if (!nic->oup.wlan_cfg_set(0, WID_1X_KEY, c_val, (strlen(c_val)+1), 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_1X_KEY, c_val, (strlen(c_val)+1), 0,0))
 		goto _fail_;
 
     /*   IEEE802.1X Server Address Configuration                             */
@@ -1354,31 +1564,31 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
 	c_val[1] = 168;
 	c_val[2] = 1;
 	c_val[3] = 112;
- 	if (!nic->oup.wlan_cfg_set(0, WID_1X_SERV_ADDR, c_val, 4, 0))
+ 	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_1X_SERV_ADDR, c_val, 4, 0,0))
 		goto _fail_;
 
 	c_val[0] = 3;
-	if (!nic->oup.wlan_cfg_set(0, WID_LISTEN_INTERVAL, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_LISTEN_INTERVAL, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 3;
-	if (!nic->oup.wlan_cfg_set(0, WID_DTIM_PERIOD, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_DTIM_PERIOD, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = NORMAL_ACK;
-	if (!nic->oup.wlan_cfg_set(0, WID_ACK_POLICY, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_ACK_POLICY, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 0;
-	if (!nic->oup.wlan_cfg_set(0, WID_USER_CONTROL_ON_TX_POWER, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_USER_CONTROL_ON_TX_POWER, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 48;
-	if (!nic->oup.wlan_cfg_set(0, WID_TX_POWER_LEVEL_11A, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_TX_POWER_LEVEL_11A, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 28;
-	if (!nic->oup.wlan_cfg_set(0, WID_TX_POWER_LEVEL_11B, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_TX_POWER_LEVEL_11B, c_val, 1, 0,0))
 		goto _fail_;
 
     /*  Beacon Interval                                                      */
@@ -1388,11 +1598,11 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
     /*  -------------------------------------------------------------------- */
 
 	*((int *)c_val) = 100;
-	if (!nic->oup.wlan_cfg_set(0, WID_BEACON_INTERVAL, c_val, 2, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_BEACON_INTERVAL, c_val, 2, 0,0))
 		goto _fail_;
 
 	c_val[0] = REKEY_DISABLE;
-	if (!nic->oup.wlan_cfg_set(0, WID_REKEY_POLICY, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_REKEY_POLICY, c_val, 1, 0,0))
 		goto _fail_;
 
     /*  Rekey Time (s) (Used only when the Rekey policy is 2 or 4)           */
@@ -1401,7 +1611,7 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
     /*  Values to set : 32-bit value                                         */
     /*  -------------------------------------------------------------------- */
 	*((int *)c_val) = 84600;
-	if (!nic->oup.wlan_cfg_set(0, WID_REKEY_PERIOD, c_val, 4, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_REKEY_PERIOD, c_val, 4, 0,0))
 		goto _fail_;
 
     /*  Rekey Packet Count (in 1000s; used when Rekey Policy is 3)           */
@@ -1410,15 +1620,15 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
     /*  Values to set : 32-bit Value                                         */
     /*  -------------------------------------------------------------------- */
 	*((int *)c_val) = 500;
-	if (!nic->oup.wlan_cfg_set(0, WID_REKEY_PACKET_COUNT, c_val, 4, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_REKEY_PACKET_COUNT, c_val, 4, 0,0))
 		goto _fail_;
 
 	c_val[0] = 1;
-	if (!nic->oup.wlan_cfg_set(0, WID_SHORT_SLOT_ALLOWED, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_SHORT_SLOT_ALLOWED, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = G_SELF_CTS_PROT;
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_ERP_PROT_TYPE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_ERP_PROT_TYPE, c_val, 1, 0,0))
 		goto _fail_;
 
 	if((chipid & 0xfff) > 0xd0) 
@@ -1426,59 +1636,61 @@ static int linux_wlan_init_test_config(linux_wlan_t* p_nic){
 	else
 		c_val[0] = 0;  /* Disable N */
 		
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_ENABLE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_ENABLE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = HT_MIXED_MODE;
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_OPERATING_MODE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_OPERATING_MODE, c_val, 1, 0,0))
 		goto _fail_;	
 
 	c_val[0] = 1; 	/* TXOP Prot disable in N mode: No RTS-CTS on TX A-MPDUs to save air-time. */
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_TXOP_PROT_DISABLE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_TXOP_PROT_DISABLE, c_val, 1, 0,0))
 		goto _fail_;	
 
 	memcpy(c_val, mac_add, 6);
-	
-	if (!nic->oup.wlan_cfg_set(0, WID_MAC_ADDR, c_val, 6, 0))
+
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_MAC_ADDR, c_val, 6, 0,0))
 		goto _fail_;
 	
 	/**
 		AP only
 	**/
 	c_val[0] = DETECT_PROTECT_REPORT;
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_OBSS_NONHT_DETECTION, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_OBSS_NONHT_DETECTION, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = RTS_CTS_NONHT_PROT;
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_HT_PROT_TYPE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_HT_PROT_TYPE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 0;
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_RIFS_PROT_ENABLE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_RIFS_PROT_ENABLE, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = MIMO_MODE;
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_SMPS_MODE, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_SMPS_MODE, c_val, 1, 0,0))
 		goto _fail_;
 
-	
+
 	if(nmi_get_chipid(NMI_FALSE) >= 0x1002a0)
 		c_val[0] = 7; /* Limit TX rate below MCS-7 for NMC1000F0. Should be changed in to 7 in NMC1002. */
 	else
 		c_val[0] = 6; 
-	
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_CURRENT_TX_MCS, c_val, 1, 0))
+
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_CURRENT_TX_MCS, c_val, 1, 0,0))
 		goto _fail_;
 
 	c_val[0] = 1; /* Enable N with immediate block ack. */
-	if (!nic->oup.wlan_cfg_set(0, WID_11N_IMMEDIATE_BA_ENABLED, c_val, 1, 0))
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_11N_IMMEDIATE_BA_ENABLED, c_val, 1, 0,0))
 		goto _fail_;
 
 	/*Adde by Amr - BugID 4707*/
 	/*A mandatory restart mac has to be done initially.*/
 	/*So wid reset is sent with startup configrations*/
+
 	c_val[0] = 1;
-	if (!nic->oup.wlan_cfg_set(0, WID_RESET, c_val, 1, 1))
+
+	if (!g_linux_wlan->oup.wlan_cfg_set(0, WID_RESET, c_val, 1, 1,(NMI_Uint32)pstrWFIDrv))
 		goto _fail_;
 
 
@@ -1492,7 +1704,7 @@ _fail_:
 /**************************/
 void nmc1000_wlan_deinit(linux_wlan_t *nic) {
   
-	if(nic->nmc1000_initialized)
+	if(g_linux_wlan->nmc1000_initialized)
 	{
 
 		PRINT_D(INIT_DBG,"Deinitializing nmc1000  ...\n");
@@ -1502,7 +1714,7 @@ void nmc1000_wlan_deinit(linux_wlan_t *nic) {
 			return;
 		}
 
-#if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23)
+#if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23) || defined(PLAT_ALLWINNER_A31)
 		// johnny : remove
 		PRINT_D(INIT_DBG,"skip nmi_bus_set_default_speed\n");
 #else
@@ -1513,30 +1725,30 @@ void nmc1000_wlan_deinit(linux_wlan_t *nic) {
 		#if (!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO)
 			linux_wlan_disable_irq(IRQ_WAIT);
 		#else
-		  #if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23)
+		  #if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23) || defined(PLAT_ALLWINNER_A31)
 
 		  #else
-			linux_wlan_lock_mutex((void*)&nic->hif_cs);
+			linux_wlan_lock_mutex((void*)&g_linux_wlan->hif_cs);
 			disable_sdio_interrupt();
-			linux_wlan_unlock_mutex((void*)&nic->hif_cs);
+			linux_wlan_unlock_mutex((void*)&g_linux_wlan->hif_cs);
 		  #endif
 		#endif
 		
 				
 		/* not sure if the following unlocks are needed or not*/
-		if(&nic->rxq_event != NULL){
-			linux_wlan_unlock(&nic->rxq_event);
+		if(&g_linux_wlan->rxq_event != NULL){
+			linux_wlan_unlock(&g_linux_wlan->rxq_event);
 			}
 
-		if(&nic->txq_event != NULL){
-			linux_wlan_unlock(&nic->txq_event);
+		if(&g_linux_wlan->txq_event != NULL){
+			linux_wlan_unlock(&g_linux_wlan->txq_event);
 			}
 
 
 	#if (RX_BH_TYPE == RX_BH_WORK_QUEUE)
 		/*Removing the work struct from the linux kernel workqueue*/
-		if(&nic->rx_work_queue != NULL)
-			flush_work(&nic->rx_work_queue);
+		if(&g_linux_wlan->rx_work_queue != NULL)
+			flush_work(&g_linux_wlan->rx_work_queue);
 		
 	#elif (RX_BH_TYPE == RX_BH_KTHREAD)
 		//if(&nic->rx_sem != NULL)
@@ -1547,36 +1759,33 @@ void nmc1000_wlan_deinit(linux_wlan_t *nic) {
 	wlan_deinitialize_threads(nic);
 	
 	PRINT_D(INIT_DBG,"Deinitializing IRQ\n");
-	deinit_irq(nic);
+	deinit_irq(g_linux_wlan);
 
 
-	if(&nic->oup != NULL){
-		if(nic->oup.wlan_stop != NULL)
-			nic->oup.wlan_stop();		
+	if(&g_linux_wlan->oup != NULL){
+		if(g_linux_wlan->oup.wlan_stop != NULL)
+			g_linux_wlan->oup.wlan_stop();		
 	}
 
 	PRINT_D(INIT_DBG,"Deinitializing NMI Wlan\n");
 	nmi_wlan_deinit(nic);			
-
-
 #if (defined NMI_SDIO) && (!defined NMI_SDIO_IRQ_GPIO)
-  #if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23)
+  #if defined(PLAT_ALLWINNER_A20) || defined(PLAT_ALLWINNER_A23) || defined(PLAT_ALLWINNER_A31)
     PRINT_D(INIT_DBG,"Disabling IRQ 2\n");
 
-    linux_wlan_lock_mutex((void*)&nic->hif_cs);
+    linux_wlan_lock_mutex((void*)&g_linux_wlan->hif_cs);
     disable_sdio_interrupt();
-    linux_wlan_unlock_mutex((void*)&nic->hif_cs);
+    linux_wlan_unlock_mutex((void*)&g_linux_wlan->hif_cs);
   #endif
 #endif
-
 			
 	/*De-Initialize locks*/
 	PRINT_D(INIT_DBG,"Deinitializing Locks\n");
-	wlan_deinit_locks(nic);
+	wlan_deinit_locks(g_linux_wlan);
 
 	/* announce that nmc1000 is not initialized */
-	nic->nmc1000_initialized = 0;
-
+	g_linux_wlan->nmc1000_initialized = 0;
+	
 	PRINT_D(INIT_DBG,"nmc1000 deinitialization Done\n");
 		
 	}else{
@@ -1587,32 +1796,30 @@ void nmc1000_wlan_deinit(linux_wlan_t *nic) {
 
 int wlan_init_locks(linux_wlan_t* p_nic){
 
-	linux_wlan_t* nic = p_nic;
-
 	PRINT_D(INIT_DBG,"Initializing Locks ...\n");
 	
 	/*initialize mutexes*/
-	linux_wlan_init_mutex("hif_lock/hif_cs",&nic->hif_cs,1);
-	linux_wlan_init_mutex("rxq_lock/rxq_cs",&nic->rxq_cs,1);
-	linux_wlan_init_mutex("txq_lock/txq_cs",&nic->txq_cs,1);
+	linux_wlan_init_mutex("hif_lock/hif_cs",&g_linux_wlan->hif_cs,1);
+	linux_wlan_init_mutex("rxq_lock/rxq_cs",&g_linux_wlan->rxq_cs,1);
+	linux_wlan_init_mutex("txq_lock/txq_cs",&g_linux_wlan->txq_cs,1);
 
 	/*Added by Amr - BugID_4720*/
-	linux_wlan_init_spin_lock("txq_spin_lock/txq_cs",&nic->txq_spinlock,1);
+	linux_wlan_init_spin_lock("txq_spin_lock/txq_cs",&g_linux_wlan->txq_spinlock,1);
 
 	/*Added by Amr - BugID_4720*/
-	linux_wlan_init_lock("txq_add_to_head_lock/txq_cs",&nic->txq_add_to_head_cs,1);
+	linux_wlan_init_lock("txq_add_to_head_lock/txq_cs",&g_linux_wlan->txq_add_to_head_cs,1);
 	
-	linux_wlan_init_lock("txq_wait/txq_event",&nic->txq_event,0);
-	linux_wlan_init_lock("rxq_wait/rxq_event",&nic->rxq_event,0);	
+	linux_wlan_init_lock("txq_wait/txq_event",&g_linux_wlan->txq_event,0);
+	linux_wlan_init_lock("rxq_wait/rxq_event",&g_linux_wlan->rxq_event,0);	
 
-	linux_wlan_init_lock("cfg_wait/cfg_event",&nic->cfg_event,0);
-	linux_wlan_init_lock("sync_event",&nic->sync_event,0);
+	linux_wlan_init_lock("cfg_wait/cfg_event",&g_linux_wlan->cfg_event,0);
+	linux_wlan_init_lock("sync_event",&g_linux_wlan->sync_event,0);
 
-	linux_wlan_init_lock("rxq_lock/rxq_started",&nic->rxq_thread_started,0);
-	linux_wlan_init_lock("rxq_lock/txq_started",&nic->txq_thread_started,0);
+	linux_wlan_init_lock("rxq_lock/rxq_started",&g_linux_wlan->rxq_thread_started,0);
+	linux_wlan_init_lock("rxq_lock/txq_started",&g_linux_wlan->txq_thread_started,0);
 
 	#if (RX_BH_TYPE == RX_BH_KTHREAD)
-		linux_wlan_init_lock("BH_SEM", &nic->rx_sem, 0);
+		linux_wlan_init_lock("BH_SEM", &g_linux_wlan->rx_sem, 0);
 	#endif
 
 	return 0;
@@ -1621,40 +1828,40 @@ int wlan_init_locks(linux_wlan_t* p_nic){
 static int wlan_deinit_locks(linux_wlan_t* nic){
 	PRINT_D(INIT_DBG,"De-Initializing Locks\n");
 	
-	if(&nic->hif_cs != NULL)
-		linux_wlan_deinit_mutex(&nic->hif_cs);
+	if(&g_linux_wlan->hif_cs != NULL)
+		linux_wlan_deinit_mutex(&g_linux_wlan->hif_cs);
 
-	if(&nic->rxq_cs != NULL)
-		linux_wlan_deinit_mutex(&nic->rxq_cs);
+	if(&g_linux_wlan->rxq_cs != NULL)
+		linux_wlan_deinit_mutex(&g_linux_wlan->rxq_cs);
 
-	if(&nic->txq_cs != NULL)
-		linux_wlan_deinit_mutex(&nic->txq_cs);
-
-	/*Added by Amr - BugID_4720*/
-	if(&nic->txq_spinlock!= NULL)
-		linux_wlan_deinit_spin_lock(&nic->txq_spinlock);
-	
-	if(&nic->rxq_event != NULL)
-		linux_wlan_deinit_lock(&nic->rxq_event);	
-
-	if(&nic->txq_event != NULL)
-		linux_wlan_deinit_lock(&nic->txq_event);
+	if(&g_linux_wlan->txq_cs != NULL)
+		linux_wlan_deinit_mutex(&g_linux_wlan->txq_cs);
 
 	/*Added by Amr - BugID_4720*/
-	if(&nic->txq_add_to_head_cs!= NULL)
-		linux_wlan_deinit_lock(&nic->txq_add_to_head_cs);
+	if(&g_linux_wlan->txq_spinlock!= NULL)
+		linux_wlan_deinit_spin_lock(&g_linux_wlan->txq_spinlock);
 	
-	if(&nic->rxq_thread_started != NULL)
-		linux_wlan_deinit_lock(&nic->rxq_thread_started);
+	if(&g_linux_wlan->rxq_event != NULL)
+		linux_wlan_deinit_lock(&g_linux_wlan->rxq_event);	
 
-	if(&nic->txq_thread_started != NULL)
-		linux_wlan_deinit_lock(&nic->txq_thread_started);
+	if(&g_linux_wlan->txq_event != NULL)
+		linux_wlan_deinit_lock(&g_linux_wlan->txq_event);
 
-	if(&nic->cfg_event != NULL)
-		linux_wlan_deinit_lock(&nic->cfg_event);
+	/*Added by Amr - BugID_4720*/
+	if(&g_linux_wlan->txq_add_to_head_cs!= NULL)
+		linux_wlan_deinit_lock(&g_linux_wlan->txq_add_to_head_cs);
+	
+	if(&g_linux_wlan->rxq_thread_started != NULL)
+		linux_wlan_deinit_lock(&g_linux_wlan->rxq_thread_started);
 
-	if(&nic->sync_event != NULL)
-		linux_wlan_deinit_lock(&nic->sync_event);
+	if(&g_linux_wlan->txq_thread_started != NULL)
+		linux_wlan_deinit_lock(&g_linux_wlan->txq_thread_started);
+
+	if(&g_linux_wlan->cfg_event != NULL)
+		linux_wlan_deinit_lock(&g_linux_wlan->cfg_event);
+
+	if(&g_linux_wlan->sync_event != NULL)
+		linux_wlan_deinit_lock(&g_linux_wlan->sync_event);
 
 	return 0;
 }
@@ -1662,24 +1869,25 @@ void linux_to_wlan(nmi_wlan_inp_t* nwi,linux_wlan_t* nic){
 
 	PRINT_D(INIT_DBG,"Linux to Wlan services ...\n");
 	
-	nwi->os_context.hif_critical_section = (void *)&nic->hif_cs;
+	nwi->os_context.hif_critical_section = (void *)&g_linux_wlan->hif_cs;
 	nwi->os_context.os_private = (void *)nic;
 	nwi->os_context.tx_buffer_size = LINUX_TX_SIZE;
-	nwi->os_context.txq_critical_section = (void *)&nic->txq_cs;
+	nwi->os_context.txq_critical_section = (void *)&g_linux_wlan->txq_cs;
 
 	/*Added by Amr - BugID_4720*/
-	nwi->os_context.txq_add_to_head_critical_section=(void *)&nic->txq_add_to_head_cs;
+	nwi->os_context.txq_add_to_head_critical_section=(void *)&g_linux_wlan->txq_add_to_head_cs;
 
 	/*Added by Amr - BugID_4720*/
-	nwi->os_context.txq_spin_lock = (void *)&nic->txq_spinlock;
+	nwi->os_context.txq_spin_lock = (void *)&g_linux_wlan->txq_spinlock;
 	
-	nwi->os_context.txq_wait_event = (void *)&nic->txq_event;
+	nwi->os_context.txq_wait_event = (void *)&g_linux_wlan->txq_event;
+
 #if defined (MEMORY_STATIC)
 	nwi->os_context.rx_buffer_size = LINUX_RX_SIZE;
 #endif
-	nwi->os_context.rxq_critical_section = (void *)&nic->rxq_cs;
-	nwi->os_context.rxq_wait_event = (void *)&nic->rxq_event;
-	nwi->os_context.cfg_wait_event = (void *)&nic->cfg_event;
+	nwi->os_context.rxq_critical_section = (void *)&g_linux_wlan->rxq_cs;
+	nwi->os_context.rxq_wait_event = (void *)&g_linux_wlan->rxq_event;
+	nwi->os_context.cfg_wait_event = (void *)&g_linux_wlan->cfg_event;
 
 	nwi->os_func.os_sleep = linux_wlan_msleep;
 	nwi->os_func.os_atomic_sleep = linux_wlan_atomic_msleep;
@@ -1727,18 +1935,18 @@ void linux_to_wlan(nmi_wlan_inp_t* nwi,linux_wlan_t* nic){
 	nwi->indicate_func.mac_indicate = linux_wlan_mac_indicate;
 }
 
-int wlan_initialize_threads(linux_wlan_t* nic){
+int wlan_initialize_threads(perInterface_wlan_t* nic){
 
 	int ret = 0;
 	PRINT_D(INIT_DBG,"Initializing Threads ...\n");
 
 #if (RX_BH_TYPE == RX_BH_WORK_QUEUE)
 	/*Initialize rx work queue task*/
-	INIT_WORK(&nic->rx_work_queue, isr_bh_routine);
+	INIT_WORK(&g_linux_wlan->rx_work_queue, isr_bh_routine);
 #elif (RX_BH_TYPE == RX_BH_KTHREAD)
 	PRINT_D(INIT_DBG,"Creating kthread for Rxq BH\n");
-	nic->rx_bh_thread = kthread_run(isr_bh_routine,(void*)nic,"K_RXQ_BH");
-	if(nic->rx_bh_thread == 0){
+	g_linux_wlan->rx_bh_thread = kthread_run(isr_bh_routine,(void*)g_linux_wlan,"K_RXQ_BH");
+	if(g_linux_wlan->rx_bh_thread == 0){
 		PRINT_ER("couldn't create RX BH thread\n");
 		ret = -ENOBUFS;
 		goto _fail_;
@@ -1747,86 +1955,86 @@ int wlan_initialize_threads(linux_wlan_t* nic){
 
 	/* create rx task */
 	PRINT_D(INIT_DBG,"Creating kthread for reception\n");
-	nic->rxq_thread = kthread_run(linux_wlan_rxq_task,(void*)nic,"K_RXQ_TASK");
-	if(nic->rxq_thread == 0){
+	g_linux_wlan->rxq_thread = kthread_run(linux_wlan_rxq_task,(void*)g_linux_wlan,"K_RXQ_TASK");
+	if(g_linux_wlan->rxq_thread == 0){
 		PRINT_ER("couldn't create RXQ thread\n");
 		ret = -ENOBUFS;
 		goto _fail_1;
 	}
 	
 	/* wait for RXQ task to start. */
-	linux_wlan_lock(&nic->rxq_thread_started);
+	linux_wlan_lock(&g_linux_wlan->rxq_thread_started);
 	
 	/* create tx task */
 	PRINT_D(INIT_DBG,"Creating kthread for transmission\n");	
-	nic->txq_thread = kthread_run(linux_wlan_txq_task,(void*)nic,"K_TXQ_TASK");												
-	if(nic->txq_thread == 0){
+	g_linux_wlan->txq_thread = kthread_run(linux_wlan_txq_task,(void*)g_linux_wlan,"K_TXQ_TASK");												
+	if(g_linux_wlan->txq_thread == 0){
 		PRINT_ER("couldn't create TXQ thread\n");
 		ret = -ENOBUFS;
 		goto _fail_2;
 	}
 #ifdef DEBUG_MODE
 	PRINT_D(INIT_DBG,"Creating kthread for Debugging\n");	
-	nic->txq_thread = kthread_run(DebuggingThreadTask,(void*)nic,"DebugThread");												
-	if(nic->txq_thread == 0){
+	g_linux_wlan->txq_thread = kthread_run(DebuggingThreadTask,(void*)g_linux_wlan,"DebugThread");												
+	if(g_linux_wlan->txq_thread == 0){
 		PRINT_ER("couldn't create TXQ thread\n");
 		ret = -ENOBUFS;
 		goto _fail_2;
 	}
 #endif	
 	/* wait for TXQ task to start. */
-	linux_wlan_lock(&nic->txq_thread_started);
+	linux_wlan_lock(&g_linux_wlan->txq_thread_started);
 	
 	return 0;
 	
 	_fail_2:
 		/*De-Initialize 2nd thread*/
-		nic->close = 1;
-		linux_wlan_unlock(&nic->rxq_event);
-		kthread_stop(nic->rxq_thread);
+		g_linux_wlan->close = 1;
+		linux_wlan_unlock(&g_linux_wlan->rxq_event);
+		kthread_stop(g_linux_wlan->rxq_thread);
 
 	_fail_1:
 	#if(RX_BH_TYPE == RX_BH_KTHREAD)
 		/*De-Initialize 1st thread*/
-		nic->close = 1;
-		linux_wlan_unlock(&nic->rx_sem);
-		kthread_stop(nic->rx_bh_thread);
+		g_linux_wlan->close = 1;
+		linux_wlan_unlock(&g_linux_wlan->rx_sem);
+		kthread_stop(g_linux_wlan->rx_bh_thread);
 	_fail_:
 	#endif
-		nic->close = 0;
+		g_linux_wlan->close = 0;
 		return ret;	
 }
 
 static void wlan_deinitialize_threads(linux_wlan_t* nic){
 	
-	nic->close = 1;
+	g_linux_wlan->close = 1;
 	PRINT_D(INIT_DBG,"Deinitializing Threads\n");
-	if(&nic->rxq_event != NULL)
-		linux_wlan_unlock(&nic->rxq_event);
+	if(&g_linux_wlan->rxq_event != NULL)
+		linux_wlan_unlock(&g_linux_wlan->rxq_event);
 
 	
-	if(nic->rxq_thread != NULL){
-		kthread_stop(nic->rxq_thread);
-		nic->rxq_thread = NULL;
+	if(g_linux_wlan->rxq_thread != NULL){
+		kthread_stop(g_linux_wlan->rxq_thread);
+		g_linux_wlan->rxq_thread = NULL;
 		}
 
 	
-	if(&nic->txq_event != NULL)
-		linux_wlan_unlock(&nic->txq_event);
+	if(&g_linux_wlan->txq_event != NULL)
+		linux_wlan_unlock(&g_linux_wlan->txq_event);
 
 
-	if(nic->txq_thread != NULL){
-		kthread_stop(nic->txq_thread);
-		nic->txq_thread = NULL;
+	if(g_linux_wlan->txq_thread != NULL){
+		kthread_stop(g_linux_wlan->txq_thread);
+		g_linux_wlan->txq_thread = NULL;
 		}
 	
 	#if(RX_BH_TYPE == RX_BH_KTHREAD)
-		if(&nic->rx_sem != NULL)
-			linux_wlan_unlock(&nic->rx_sem);
+		if(&g_linux_wlan->rx_sem != NULL)
+			linux_wlan_unlock(&g_linux_wlan->rx_sem);
 	
-		if(nic->rx_bh_thread != NULL){
-			kthread_stop(nic->rx_bh_thread);		
-			nic->rx_bh_thread= NULL;
+		if(g_linux_wlan->rx_bh_thread != NULL){
+			kthread_stop(g_linux_wlan->rx_bh_thread);		
+			g_linux_wlan->rx_bh_thread= NULL;
 			}
 	#endif
 }
@@ -1890,10 +2098,10 @@ exit:
 #endif
 
 #ifdef COMPLEMENT_BOOT
-extern uint8_t core_11b_ready(void);
-extern volatile int probe;
 
-#define NMC1000_SDIO_CARD_ID	3
+extern volatile int probe;
+extern uint8_t core_11b_ready(void);
+
 #define READY_CHECK_THRESHOLD		10
 
 uint8_t nmc1000_prepare_11b_core(nmi_wlan_inp_t *nwi,	nmi_wlan_oup_t *nwo,linux_wlan_t * nic)
@@ -1931,11 +2139,12 @@ uint8_t nmc1000_prepare_11b_core(nmi_wlan_inp_t *nwi,	nmi_wlan_oup_t *nwo,linux_
 			return 0;
 		
 }
-#endif
 
-int repeat_power_cycle(linux_wlan_t* nic)
+int repeat_power_cycle(perInterface_wlan_t* nic)
 {	
 	int ret = 0; 
+	nmi_wlan_inp_t nwi;
+	nmi_wlan_oup_t nwo;
 	sdio_unregister_driver(&nmc_bus);	
 
     linux_wlan_device_detection(0);
@@ -1955,12 +2164,10 @@ int repeat_power_cycle(linux_wlan_t* nic)
 	}
 	probe = 0;
 	g_linux_wlan->nmc_sdio_func= local_sdio_func;
-	nmi_wlan_inp_t nwi;
-	nmi_wlan_oup_t nwo;
-	linux_to_wlan(&nwi,nic);
+	linux_to_wlan(&nwi,g_linux_wlan);
 	ret = nmi_wlan_init(&nwi, &nwo);
 	
-	nic->mac_status = NMI_MAC_STATUS_INIT;
+	g_linux_wlan->mac_status = NMI_MAC_STATUS_INIT;
 	#if (defined NMI_SDIO) && (!defined NMI_SDIO_IRQ_GPIO)
 		enable_sdio_interrupt();
 	#endif
@@ -1973,7 +2180,7 @@ int repeat_power_cycle(linux_wlan_t* nic)
 	}
 
 	/*Download firmware*/
-	ret = linux_wlan_firmware_download(nic);
+	ret = linux_wlan_firmware_download(g_linux_wlan);
 	if(ret < 0)
 	{
 		PRINT_ER("Failed to download firmware\n");
@@ -1987,22 +2194,23 @@ int repeat_power_cycle(linux_wlan_t* nic)
 	__fail__:
 	return ret;
 }
+#endif
 
-int nmc1000_wlan_init(linux_wlan_t* p_nic)
+int nmc1000_wlan_init(struct net_device *dev,perInterface_wlan_t* p_nic)
 {
 	nmi_wlan_inp_t nwi;
 	nmi_wlan_oup_t nwo;
-	linux_wlan_t* nic = p_nic;
+	perInterface_wlan_t* nic = p_nic;
 	int ret = 0;
 	
-	if(!nic->nmc1000_initialized){
-		nic->mac_status = NMI_MAC_STATUS_INIT;	
-		nic->close = 0;
-		nic->nmc1000_initialized = 0;
+	if(!g_linux_wlan->nmc1000_initialized){
+		g_linux_wlan->mac_status = NMI_MAC_STATUS_INIT;	
+		g_linux_wlan->close = 0;
+		g_linux_wlan->nmc1000_initialized = 0;
 #if defined(PLAT_AML8726_M3)
 		_available_irq_ready = 0;
 #endif
-		wlan_init_locks(nic);
+		wlan_init_locks(g_linux_wlan);
 
 #ifdef STATIC_MACADDRESS
 		nmi_mac_thread = kthread_run(linux_wlan_read_mac_addr,NULL,"nmi_mac_thread");
@@ -2011,17 +2219,17 @@ int nmc1000_wlan_init(linux_wlan_t* p_nic)
 		}
 #endif
  
-		linux_to_wlan(&nwi,nic);
+		linux_to_wlan(&nwi,g_linux_wlan);
 
 		ret = nmi_wlan_init(&nwi, &nwo);
 		if (ret < 0) {
 			PRINT_ER("Initializing NMI_Wlan FAILED\n");
 			goto _fail_locks_;
 		}	
-		memcpy(&nic->oup, &nwo, sizeof(nmi_wlan_oup_t));
+		memcpy(&g_linux_wlan->oup, &nwo, sizeof(nmi_wlan_oup_t));
 
 		/*Save the oup structre into global pointer*/
-		gpstrWlanOps = &nic->oup;
+		gpstrWlanOps = &g_linux_wlan->oup;
 
 
 		ret = wlan_initialize_threads(nic);
@@ -2031,14 +2239,14 @@ int nmc1000_wlan_init(linux_wlan_t* p_nic)
 		}
 	
 #if (defined NMI_SDIO) && (defined COMPLEMENT_BOOT)
-		if(nmc1000_prepare_11b_core(&nwi,&nwo,nic)){
+		if(nmc1000_prepare_11b_core(&nwi,&nwo,g_linux_wlan)){
 			PRINT_ER("11b Core is not ready\n");
 			goto _fail_irq_;
 		}
 #endif
 
 #if (!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO)
-		if(init_irq(nic)){
+		if(init_irq(g_linux_wlan)){
 			PRINT_ER("couldn't initialize IRQ\n");
 			ret = -EIO;
 			goto _fail_locks_;
@@ -2054,8 +2262,18 @@ int nmc1000_wlan_init(linux_wlan_t* p_nic)
 			goto _fail_threads_;
 		}
 
+//[[ johnny
+#ifdef FW_VERSION_VERIFICATION
+        if ( check_firmware_version( nic->iftype,
+            __DRIVER_VERSION__,
+            g_linux_wlan->nmc_firmware? g_linux_wlan->nmc_firmware->size:0 )
+            != 0 )
+            goto _fail_threads_;
+#endif
+//]]
+
 		/*Download firmware*/
-		ret = linux_wlan_firmware_download(nic);
+		ret = linux_wlan_firmware_download(g_linux_wlan);
 		if(ret < 0){
 			PRINT_ER("Failed to download firmware\n");
 			goto _fail_threads_;
@@ -2070,26 +2288,36 @@ int nmc1000_wlan_init(linux_wlan_t* p_nic)
 
 		nmi_bus_set_max_speed();
 
+		if (g_linux_wlan->oup.wlan_cfg_get(1, WID_FIRMWARE_VERSION, 1,0))
+		{
+			int size; 
+			char Firmware_ver[20];
+			size = g_linux_wlan->oup.wlan_cfg_get_value(
+					WID_FIRMWARE_VERSION,
+					Firmware_ver,sizeof(Firmware_ver));
+			Firmware_ver[size] = '\0';
+			printk("***** Firmware Ver = %s  *******\n",Firmware_ver);
+		}
 		/* Initialize firmware with default configuration */
-		ret = linux_wlan_init_test_config(nic);
+		ret = linux_wlan_init_test_config(dev, g_linux_wlan);
 
 		if(ret < 0){
 			PRINT_ER("Failed to configure firmware\n");
 			goto _fail_threads_;
 		}
 
-		nic->nmc1000_initialized = 1;
+		g_linux_wlan->nmc1000_initialized = 1;
 		return 0; /*success*/
 
 _fail_threads_:
-	wlan_deinitialize_threads(nic);
+	wlan_deinitialize_threads(g_linux_wlan);
 _fail_irq_:
 #if (!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO)
-		deinit_irq(nic);
+		deinit_irq(g_linux_wlan);
 
 #endif
 _fail_locks_:
-		wlan_deinit_locks(nic);
+		wlan_deinit_locks(g_linux_wlan);
 		PRINT_ER("WLAN Iinitialization FAILED\n");
 	}else{
 		PRINT_D(INIT_DBG,"nmc1000 already initialized\n");
@@ -2127,61 +2355,95 @@ int mac_init_fn(struct net_device *ndev){
 }
 #endif
 
+
+void    NMI_WFI_frame_register(struct wiphy *wiphy,struct net_device *dev,
+           u16 frame_type, bool reg);
+
 /* This fn is called, when this device is setup using ifconfig */
 #if !defined (NM73131_0_BOARD)
 int mac_open(struct net_device *ndev){    
-	
-	linux_wlan_t* nic;
-	unsigned char mac_add[] = {0x00, 0x80, 0xC2, 0x5E, 0xa2, 0xb2};
+	perInterface_wlan_t* nic;
+	/*BugID_5213*/
+	/*No need for setting mac address here anymore,*/
+	/*Just set it in init_test_config()*/
+	unsigned char mac_add[ETH_ALEN] ={0};
 	int status;
 	int ret = 0;
+	int i = 0;	
 	struct NMI_WFI_priv* priv;
+	
+	printk("MAC OPEN[%p]\n",ndev);
 
-	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-	gbIPaddrObtained = NMI_FALSE;
-	#endif
 	
+		
 	nic = netdev_priv(ndev);
-	
-	linux_wlan_lock(&close_exit_sync);
-	
-	/*initialize platform*/
-	ret = nmc1000_wlan_init(nic);
-	if(ret < 0)
-	{
-		PRINT_ER("Failed to initialize nmc1000\n");
-		linux_wlan_unlock(&close_exit_sync);
-		return  ret;
-	}
-	
-#ifdef USE_WIRELESS
+	priv = wiphy_priv(nic->nmc_netdev->ieee80211_ptr->wiphy);
+	//if (once == 1) return 0;
+	//linux_wlan_lock(&close_exit_sync);
+
+	#ifdef USE_WIRELESS
 	ret = NMI_WFI_InitHostInt(ndev);
 	if(ret < 0)
 	{
 		PRINT_ER("Failed to initialize host interface\n");
-		nmc1000_wlan_deinit(nic);
-		linux_wlan_unlock(&close_exit_sync);
+
 		return  ret;
 	}
-#endif
+	#endif
+	
+	/*initialize platform*/
+	//if(once)
+	{
+		
+		//once++;
+		printk("*** re-init ***\n");
+		ret = nmc1000_wlan_init(ndev, nic);
+		if(ret < 0)
+		{
+			PRINT_ER("Failed to initialize nmc1000\n");
+			NMI_WFI_DeInitHostInt(ndev);
+			//linux_wlan_unlock(&close_exit_sync);
+			return  ret;
+		}
+	}
+	Set_machw_change_vir_if(NMI_FALSE);
+
+	//else
+	//{
+		/*BugID_5077*/
+		/*host_int_set_wfi_drv_handler((NMI_Uint32)priv->hNMIWFIDrv);
+		host_int_set_MacAddress(priv->hNMIWFIDrv, mac_add);
+		
+		g_linux_wlan->nmc1000_initialized = 1;
+		once++;
+	}*/
 
 	
-	get_random_bytes(&mac_add[5], 1);
-
-	
-#ifdef USE_WIRELESS
-	priv = wiphy_priv(nic->nmc_netdev->ieee80211_ptr->wiphy);
+		
 	status = host_int_get_MacAddress(priv->hNMIWFIDrv, mac_add);
-#else
-	host_int_set_MacAddress(NULL, mac_add);
-	status = host_int_get_MacAddress(NULL, mac_add);
-#endif
+	PRINT_D(GENERIC_DBG, "Mac address: %x:%x:%x:%x:%x:%x\n", mac_add[0], mac_add[1], mac_add[2],
+															mac_add[3], mac_add[4], mac_add[5]);
+
+	//loop through the NUM of supported devices and set the MAC address
+	for(i=0;i<g_linux_wlan->u8NoIfcs;i++)
+	{
+		if(ndev == g_linux_wlan->strInterfaceInfo[i].nmc_netdev)
+		{
+			memcpy(g_linux_wlan->strInterfaceInfo[i].aSrcAddress, mac_add, ETH_ALEN);
+			//linux_wlan_set_bssid(ndev,g_linux_wlan->strInterfaceInfo[i].aSrcAddress);
+			g_linux_wlan->strInterfaceInfo[i].drvHandler = (NMI_Uint32)priv->hNMIWFIDrv;
+			//change the MSB
+			//nic->strInterfaceInfo[i].aSrcAddress[0] = nic->strInterfaceInfo[i].aSrcAddress[0] + i*2;
+			break;
+		}		
+	}
+
 	/* TODO: get MAC address whenever the source is EPROM - hardcoded and copy it to ndev*/
-	memcpy(ndev->dev_addr, mac_add, ETH_ALEN);
+	memcpy(ndev->dev_addr, g_linux_wlan->strInterfaceInfo[i].aSrcAddress, ETH_ALEN);
 
 	if(!is_valid_ether_addr(ndev->dev_addr)){
 	     PRINT_ER("Error: Wrong MAC address\n");
-		linux_wlan_unlock(&close_exit_sync);
+		//linux_wlan_unlock(&close_exit_sync);
 	     return -EINVAL;
 	 }
     /* Start the network interface queue for this device */
@@ -2189,11 +2451,20 @@ int mac_open(struct net_device *ndev){
     //netif_start_queue(ndev); ma
     //enable interrupts
     //enable_irq(g_linux_wlan->dev_irq_num);
+	//if(!once)
+     //host_int_set_wfi_drv_handler((NMI_Uint32)priv->hNMIWFIDrv);
+   //host_int_set_wfi_drv_handler((NMI_Uint32)priv->hNMIWFIDrv_2);
 
+   NMI_WFI_frame_register(nic->nmc_netdev->ieee80211_ptr->wiphy,nic->nmc_netdev,
+           nic->g_struct_frame_reg[0].frame_type,nic->g_struct_frame_reg[0].reg);
+
+      NMI_WFI_frame_register(nic->nmc_netdev->ieee80211_ptr->wiphy,nic->nmc_netdev,
+           nic->g_struct_frame_reg[1].frame_type,nic->g_struct_frame_reg[1].reg);
     netif_wake_queue(ndev); 
 
 	//linux_wlan_lock(&close_exit_sync);
-	
+ 	g_linux_wlan->open_ifcs++;
+	nic->mac_opened=1;
     return 0;
 }
 #else
@@ -2211,18 +2482,131 @@ int mac_open(struct net_device *ndev)
     	/* Start the network interface queue for this device */
 	PRINT_D(INIT_DBG,"Starting netifQ\n");
     netif_start_queue(ndev);
-	linux_wlan_lock(&close_exit_sync);	
+//	linux_wlan_lock(&close_exit_sync);	
     return 0;
 }
 #endif
 
 struct net_device_stats *mac_stats(struct net_device *dev)
 {
-         linux_wlan_t* nic= netdev_priv(dev);
+        perInterface_wlan_t* nic= netdev_priv(dev);
 	 
 
 	 return &nic->netstats;      
 }
+
+// Setup the multicast filter
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34)
+static void nmi_set_multicast_list(struct net_device *dev)
+{
+
+	struct netdev_hw_addr *ha;
+	struct NMI_WFI_priv* priv;
+    	tstrNMI_WFIDrv * pstrWFIDrv;
+	int i=0;
+	priv= wiphy_priv(dev->ieee80211_ptr->wiphy);
+	pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
+
+
+	if (!dev)
+ 		return;
+	
+	PRINT_D(INIT_DBG,"Setting Multicast List with count = %d. \n",dev->mc.count);
+
+    if (dev->flags & IFF_PROMISC) 
+    {
+        /* Normally, we should configure the chip to retrive all packets
+          * but we don't wanna support this right now */
+        // TODO: add promiscuous mode support
+        PRINT_D(INIT_DBG,"Set promiscuous mode ON, retrive all packets \n");
+        return;
+    }
+	
+    /* If there's more addresses than we handle, get all multicast
+    packets and sort them out in software. */
+     if ( (dev->flags & IFF_ALLMULTI) ||(dev->mc.count) > NMI_MULTICAST_TABLE_SIZE) 
+    {
+    	PRINT_D(INIT_DBG,"Disable multicast filter, retrive all multicast packets\n");
+        // get all multicast packets
+	 host_int_setup_multicast_filter((NMI_WFIDrvHandle)pstrWFIDrv, NMI_FALSE, 0);
+        return;
+    }
+	
+    /* No multicast?  Just get our own stuff */
+    if ((dev->mc.count) == 0) 
+    {
+    	 PRINT_D(INIT_DBG,"Enable multicast filter, retrive directed packets only.\n");
+        host_int_setup_multicast_filter((NMI_WFIDrvHandle)pstrWFIDrv, NMI_TRUE, 0);
+        return;
+    }
+	
+    /* Store all of the multicast addresses in the hardware filter */
+    netdev_for_each_mc_addr(ha, dev) 
+    {
+        NMI_memcpy(gau8MulticastMacAddrList[i], ha->addr, ETH_ALEN);
+	PRINT_D(INIT_DBG,"Entry[%d]: %x:%x:%x:%x:%x:%x\n",i,
+			gau8MulticastMacAddrList[i][0], gau8MulticastMacAddrList[i][1], gau8MulticastMacAddrList[i][2], gau8MulticastMacAddrList[i][3], gau8MulticastMacAddrList[i][4], gau8MulticastMacAddrList[i][5]);
+	 i++;
+    }
+	
+	host_int_setup_multicast_filter((NMI_WFIDrvHandle)pstrWFIDrv, NMI_TRUE, (dev->mc.count));
+
+	return;
+	
+}
+
+#else
+
+static void nmi_set_multicast_list(struct net_device *dev)
+{
+	// BIG Warning, Beware : Uncompiled, untested...
+    	struct dev_mc_list *mc_ptr;
+	int i=0;
+	
+	if (!dev)
+ 		return;
+	
+	PRINT_D(INIT_DBG,"Setting Multicast List. \n");
+	printk("dev->mc_count = %d\n",dev->mc_count);
+	
+    if (dev->flags & IFF_PROMISC) 
+    {
+        /* Normally, we should configure the chip to retrive all packets
+          * but we don't wanna support this right now */
+        // TODO: add promiscuous mode support
+        PRINT_D(INIT_DBG,"Set promiscuous mode ON, retrive all packets \n");
+        return;
+    }
+	
+    /* If there's more addresses than we handle, get all multicast
+    packets and sort them out in software. */
+    if ( (dev->flags & IFF_ALLMULTI) ||( dev->mc_count > NMI_MULTICAST_TABLE_SIZE) )
+    {
+    	 PRINT_D(INIT_DBG,"Disable multicast filter, retrive all multicast packets\n");
+        host_int_setup_multicast_filter((NMI_WFIDrvHandle)gWFiDrvHandle, NMI_FALSE, 0);
+        return;
+    }
+	
+    /* No multicast?  Just get our own stuff */
+    if (dev->mc_count == 0) 
+    {
+    	 PRINT_D(INIT_DBG,"Enable multicast filter, retrive directed packets only.\n");
+        host_int_setup_multicast_filter((NMI_WFIDrvHandle)gWFiDrvHandle, NMI_TRUE, 0);
+        return;
+    }
+	
+    /* Store all of the multicast addresses in the hardware filter */
+
+    for (mc_ptr = dev->mc_list; mc_ptr; mc_ptr = mc_ptr->next , i++)
+    {
+        NMI_memcpy(gau8MulticastMacAddrList[i], mc_ptr->dmi_addr, ETH_ALEN)
+	 i++;
+    }
+        
+    host_int_setup_multicast_filter((NMI_WFIDrvHandle)gWFiDrvHandle, NMI_TRUE, (dev->mc_count));
+	
+}
+#endif
 
 static void linux_wlan_tx_complete(void* priv, int status){
 
@@ -2239,17 +2623,18 @@ static void linux_wlan_tx_complete(void* priv, int status){
 
 int mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
-	linux_wlan_t* nic;
+	perInterface_wlan_t* nic;
 	struct tx_complete_data* tx_data = NULL;
 	int QueueCount;
 	//char* saddr,*daddr,*pu8UdpBuffer;
 	char *pu8UdpBuffer;
 	struct iphdr *ih;
+	struct ethhdr * eth_h;
 //	struct ethhdr *eth;
 //	char* ethsaddr,*ethdaddr;
 //	int i;
 	//char* TestBuff;	
-
+	//printk("mac xmit on [%x]\n",ndev);
 	PRINT_D(INT_DBG,"\n========\n IntUH: %d - IntBH: %d - IntCld: %d \n========\n",int_rcvdU,int_rcvdB,int_clrd);
 	nic = netdev_priv(ndev);
 
@@ -2285,6 +2670,13 @@ int mac_xmit(struct sk_buff *skb, struct net_device *ndev)
     tx_data->buff = skb->data;
 	tx_data->size = skb->len;
 	tx_data->skb  = skb;
+
+	eth_h = (struct ethhdr *)(skb->data);
+	if(eth_h->h_proto == 0x8e88)
+	{
+		printk("EAPOL transmitted\n");
+	}
+
 	/*get source and dest ip addresses*/
 	ih = (struct iphdr *)(skb->data+sizeof(struct ethhdr));
 	//saddr = &ih->saddr;
@@ -2295,9 +2687,10 @@ int mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 	//			daddr[2],daddr[3]);
 	
 	pu8UdpBuffer = (char*)ih + sizeof(struct iphdr);
-	if(pu8UdpBuffer[1] == 68 && pu8UdpBuffer[3] == 67)
+	if((pu8UdpBuffer[1] == 68 && pu8UdpBuffer[3] == 67)||(pu8UdpBuffer[1] == 67 && pu8UdpBuffer[3] == 68))
 	{
-		PRINT_D(TX_DBG,"DHCP Message transmitted\n");
+		PRINT_D(GENERIC_DBG,"DHCP Message transmitted, type:%x %x %x\n",pu8UdpBuffer[248],pu8UdpBuffer[249],pu8UdpBuffer[250] );
+		
 	}
 	PRINT_D(TX_DBG,"Sending packet - Size = %d - Address = %p - SKB = %p\n",tx_data->size,tx_data->buff,tx_data->skb);
 
@@ -2332,8 +2725,9 @@ int mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 	PRINT_D(TX_DBG,"Adding tx packet to TX Queue\n");
 	nic->netstats.tx_packets++;
 	nic->netstats.tx_bytes+=tx_data->size;
+	tx_data->pBssid = g_linux_wlan->strInterfaceInfo[nic->u8IfIdx].aBSSID;
 	#ifndef NMI_FULLY_HOSTING_AP
-	QueueCount = nic->oup.wlan_add_to_tx_que((void*)tx_data,
+	QueueCount = g_linux_wlan->oup.wlan_add_to_tx_que((void*)tx_data,
 									tx_data->buff,
 									tx_data->size,
 									linux_wlan_tx_complete);
@@ -2345,7 +2739,9 @@ int mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 	if(QueueCount > FLOW_CONTROL_UPPER_THRESHOLD)
 	{
 	//	printk("Stopping queue\n");
-		netif_stop_queue(ndev);
+		//netif_stop_queue(ndev);
+		netif_stop_queue(g_linux_wlan->strInterfaceInfo[0].nmc_netdev);
+		netif_stop_queue(g_linux_wlan->strInterfaceInfo[1].nmc_netdev);
 
 	}
 		
@@ -2360,33 +2756,70 @@ int mac_xmit(struct sk_buff *skb, struct net_device *ndev)
 
 int mac_close(struct net_device *ndev)
 {
-
-	linux_wlan_t* nic;
-
-	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-	gbIPaddrObtained = NMI_FALSE;
-	#endif
+	struct NMI_WFI_priv* priv;
+	perInterface_wlan_t* nic;
+	tstrNMI_WFIDrv * pstrWFIDrv;
 	
 	nic = netdev_priv(ndev);
+
+	priv = wiphy_priv(nic->nmc_netdev->ieee80211_ptr->wiphy);
+	pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
+	 
+	
   
 	PRINT_D(GENERIC_DBG,"Mac close\n");
+	if((g_linux_wlan->open_ifcs)>0)
+	{
+ 		g_linux_wlan->open_ifcs--;
+	}
+	else
+	{
+		printk("ERROR: MAC close called while number of opened interfaces is zero\n");
+		return 0;
+	}
 	
-	/* Stop the network interface queue */
-	netif_stop_queue(ndev);
 
+
+	
+	//int i = 0;
+/*	for(i=0;i<g_linux_wlan->u8NoIfcs;i++)
+	{
+		if(g_linux_wlan->strInterfaceInfo[i].nmc_netdev != NULL)
+		{
+				// Stop the network interface queue 
+			netif_stop_queue(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+			
 #ifdef USE_WIRELESS
-	NMI_WFI_DeInitHostInt(ndev);
+			NMI_WFI_DeInitHostInt(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
 #endif
+		}
+						
+	}*/	
+	if(nic->nmc_netdev != NULL)
+	{
+		// Stop the network interface queue 
+		netif_stop_queue(nic->nmc_netdev);
+			
+#ifdef USE_WIRELESS
+		NMI_WFI_DeInitHostInt(nic->nmc_netdev);
+#endif
+	}
 
-	PRINT_D(GENERIC_DBG,"Deinitializing nmc1000\n");
-	nmc1000_wlan_deinit(nic);
 
+
+	if(g_linux_wlan->open_ifcs==0)
+	{	
+		PRINT_D(GENERIC_DBG,"Deinitializing nmc1000\n");
+		g_linux_wlan->close = 1;
+		nmc1000_wlan_deinit(g_linux_wlan);
+	}
 #ifdef USE_WIRELESS
 #ifdef NMI_AP_EXTERNAL_MLME
  	NMI_WFI_deinit_mon_interface();
 #endif
 #endif
-	linux_wlan_unlock(&close_exit_sync);
+	linux_wlan_unlock(&close_exit_sync);	
+	nic->mac_opened=0;
 
 	return 0;
 }
@@ -2397,7 +2830,7 @@ int mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd){
 	NMI_Uint8 *buff= NULL;
 	NMI_Sint8 rssi;
 	NMI_Uint32 size=0,length=0;
-	linux_wlan_t* nic;
+	perInterface_wlan_t* nic;
 	struct NMI_WFI_priv* priv;
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 
@@ -2407,7 +2840,7 @@ int mac_ioctl(struct net_device *ndev, struct ifreq *req, int cmd){
 	#ifdef USE_WIRELESS
 	nic = netdev_priv(ndev);
 
-	if(!nic->nmc1000_initialized)
+	if(!g_linux_wlan->nmc1000_initialized)
 		return 0;
 
 	#endif
@@ -2538,7 +2971,7 @@ done:
 	return s32Error;
 }
 
-void frmw_to_linux(uint8_t *buff, uint32_t size){
+void frmw_to_linux(uint8_t *buff, uint32_t size,uint32_t pkt_offset){
 
     unsigned int frame_len = 0;	
 	int stats;
@@ -2547,9 +2980,17 @@ void frmw_to_linux(uint8_t *buff, uint32_t size){
     //char *saddr,*daddr;
 	char*pu8UdpBuffer;
     struct iphdr *ih;
+	struct net_device* nmc_netdev;
+	perInterface_wlan_t *nic;
 //    static int once = 1;
 //    int i;
-    linux_wlan_t *nic;
+	nmc_netdev = GetIfHandler(buff);
+	if(nmc_netdev == NULL)
+		return;
+	buff += pkt_offset;
+	//AdjustDstAddr(nmc_netdev,buff);
+
+   	nic = netdev_priv(nmc_netdev);
 
 		if(size > 0){
 
@@ -2566,10 +3007,10 @@ void frmw_to_linux(uint8_t *buff, uint32_t size){
 
 			skb_reserve(skb, (unsigned int)skb->data & 0x3);
 
-			if(g_linux_wlan == NULL || g_linux_wlan->nmc_netdev == NULL){
+			if(g_linux_wlan == NULL || nmc_netdev == NULL){
 			    PRINT_ER("nmc_netdev in g_linux_wlan is NULL");
 			}
-			skb->dev = g_linux_wlan->nmc_netdev;
+			skb->dev = nmc_netdev;
 	
 			if(skb->dev == NULL){
 				PRINT_ER("skb->dev is NULL\n");
@@ -2588,15 +3029,16 @@ void frmw_to_linux(uint8_t *buff, uint32_t size){
 
 			//NMI_PRINTF("After MEM_CPY\n");
 
-			nic = netdev_priv(g_linux_wlan->nmc_netdev);
+			//nic = netdev_priv(nmc_netdev);
+			
 #ifdef USE_WIRELESS
 		/*	if(nic->monitor_flag)
 			{
-				NMI_WFI_monitor_rx(g_linux_wlan->nmc_netdev,skb);
+				NMI_WFI_monitor_rx(nic->nmc_netdev,skb);
 				return;
 			}*/
 #endif
-		    skb->protocol = eth_type_trans(skb, g_linux_wlan->nmc_netdev);
+		    skb->protocol = eth_type_trans(skb, nmc_netdev);
 		    /*get source and dest ip addresses*/
 			ih = (struct iphdr *)(skb->data+sizeof(struct ethhdr));
 			//saddr = &ih->saddr;
@@ -2626,104 +3068,126 @@ void frmw_to_linux(uint8_t *buff, uint32_t size){
 
 void NMI_WFI_mgmt_rx(uint8_t *buff, uint32_t size)
 {
-	
-	if(g_linux_wlan->monitor_flag)
-		NMI_WFI_monitor_rx(buff,size);
+	int i = 0;
+	perInterface_wlan_t* nic;
+	//struct net_device* nmc_netdev = GetIfHandler(buff);
+	for(i = 0;i< g_linux_wlan->u8NoIfcs;i++)
+	{
+		nic = netdev_priv(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+		if(nic->monitor_flag)
+			NMI_WFI_monitor_rx(buff,size);
 
-	#ifdef NMI_P2P
-	if( (buff[0]== g_linux_wlan->g_struct_frame_reg[0].frame_type && g_linux_wlan->g_struct_frame_reg[0].reg) ||
-   	     (buff[0]== g_linux_wlan->g_struct_frame_reg[1].frame_type && g_linux_wlan->g_struct_frame_reg[1].reg) )
+		#ifdef NMI_P2P
+		if( (buff[0]== nic->g_struct_frame_reg[0].frame_type && nic->g_struct_frame_reg[0].reg) ||
+	   	     (buff[0]== nic->g_struct_frame_reg[1].frame_type && nic->g_struct_frame_reg[1].reg) )
 		{
-		NMI_WFI_p2p_rx(g_linux_wlan->nmc_netdev,buff,size);
+			NMI_WFI_p2p_rx(g_linux_wlan->strInterfaceInfo[i].nmc_netdev,buff,size);
 		}
-	#endif	
-}
+		#endif
+	}
 
+}
 int nmc_netdev_init(void){
 
-	linux_wlan_t* nic;
+	int i;
+	perInterface_wlan_t* nic;
 	struct net_device* ndev;
 
-	linux_wlan_init_lock("close_exit_sync",&close_exit_sync,1);
+	linux_wlan_init_lock("close_exit_sync",&close_exit_sync,0);
+
+	/*create the common structure*/
+	g_linux_wlan=(linux_wlan_t*)NMI_MALLOC(sizeof(linux_wlan_t));
+	memset(g_linux_wlan,0,sizeof(linux_wlan_t));
 	
-	/*allocate ethernet device with linux_wlan_t as its private data*/
-	if(! (ndev = alloc_etherdev(sizeof(linux_wlan_t)))){
-			PRINT_ER("Failed to allocate ethernet dev\n");
-			return -1;
-		}
-
-	nic = netdev_priv(ndev);
-	memset(nic,sizeof(linux_wlan_t),0);
-	
-	nic->nmc_netdev = ndev;
-
-
 	/*Reset interrupt count debug*/
 	int_rcvdU= 0;
 	int_rcvdB= 0;
 	int_clrd = 0;
-	
-	g_linux_wlan = nic;
-	
-	ether_setup(ndev);
-
-#if defined(NM73131)	// tony, 2012-09-20
-	strcpy(ndev->name,"nmc_eth%d");
-#elif defined(PLAT_CLM9722)			// rachel
-	strcpy(ndev->name,"eth%d");
-#else //PANDA_BOARD, PLAT_ALLWINNER_A10, PLAT_ALLWINNER_A20, PLAT_AML8726_M3 or PLAT_WMS8304
-	strcpy(ndev->name,"wlan%d");	
-#endif
-	nmc_set_netdev_ops(ndev);	
-#ifdef USE_WIRELESS
-{
-	struct wireless_dev *wdev;
-	/*Register WiFi*/
-	wdev = NMI_WFI_WiphyRegister(ndev);
-	if(wdev == NULL){
-		PRINT_ER("Can't register NMI Wiphy\n");
-		return -1;
-		}
-	
-	/*Pointing the priv structure the netdev*/
-
-	/*linking the wireless_dev structure with the netdevice*/
-	nic->nmc_netdev->ieee80211_ptr = wdev;
-	nic->nmc_netdev->ml_priv = nic;
-	wdev->netdev = nic->nmc_netdev;
-	nic->netstats.rx_packets=0;
-	nic->netstats.tx_packets=0;
-	nic->netstats.rx_bytes=0;
-	nic->netstats.tx_bytes=0;
-
-}
-#endif
-
-    /* set netdev, tony */
-    SET_NETDEV_DEV(ndev, &local_sdio_func->dev);
-
-    if(register_netdev(ndev)){
-        PRINT_ER("Device couldn't be registered - %s\n", ndev->name);
-        return -1; /* ERROR */
-    }
-
-
-#ifndef NMI_SDIO
-	if(!linux_spi_init(&nic->nmc_spidev)){
-		PRINT_ER("Can't initialize SPI \n");
-        return -1; /* ERROR */
-	}
-	nic->nmc_spidev = nmc_spi_dev;
-#else
-	nic->nmc_sdio_func= local_sdio_func;
-#endif
-
-	nic->iftype = STATION_MODE;
-
 	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
 	register_inetaddr_notifier(&g_dev_notifier);
 	#endif
 
+	for(i=0;i<NUM_CONCURRENT_IFC;i++)	
+	{
+		/*allocate first ethernet device with perinterface_wlan_t as its private data*/
+		if(! (ndev = alloc_etherdev(sizeof(perInterface_wlan_t)))){
+			PRINT_ER("Failed to allocate ethernet dev\n");
+			return -1;
+			}
+
+		nic = netdev_priv(ndev);
+		memset(nic,sizeof(perInterface_wlan_t),0);
+	
+	
+	
+		/*Name the Devices*/
+	
+		if(i==0)
+		{
+		#if defined(NM73131)	// tony, 2012-09-20
+			strcpy(ndev->name,"nmc_eth%d");
+		#elif defined(PLAT_CLM9722)			// rachel
+			strcpy(ndev->name,"eth%d");
+		#else //PANDA_BOARD, PLAT_ALLWINNER_A10, PLAT_ALLWINNER_A20, PLAT_ALLWINNER_A31, PLAT_AML8726_M3 or PLAT_WMS8304
+			strcpy(ndev->name,"wlan%d");	
+		#endif
+		}
+		else
+			strcpy(ndev->name,"p2p%d");
+
+		nic->u8IfIdx = g_linux_wlan->u8NoIfcs;
+		nic->nmc_netdev = ndev;
+		g_linux_wlan->strInterfaceInfo[g_linux_wlan->u8NoIfcs].nmc_netdev = ndev;
+		g_linux_wlan->u8NoIfcs++;
+		nmc_set_netdev_ops(ndev);	
+	
+		#ifdef USE_WIRELESS
+		{
+			struct wireless_dev *wdev;
+			/*Register WiFi*/
+			wdev = NMI_WFI_WiphyRegister(ndev);
+			
+		    /* set netdev, tony */
+		    SET_NETDEV_DEV(ndev, &local_sdio_func->dev);
+			
+			if(wdev == NULL){
+			PRINT_ER("Can't register NMI Wiphy\n");
+			return -1;
+			}
+	
+			/*linking the wireless_dev structure with the netdevice*/
+			nic->nmc_netdev->ieee80211_ptr = wdev;
+			nic->nmc_netdev->ml_priv = nic;
+			wdev->netdev = nic->nmc_netdev;
+			nic->netstats.rx_packets=0;
+			nic->netstats.tx_packets=0;
+			nic->netstats.rx_bytes=0;
+			nic->netstats.tx_bytes=0;
+
+		}
+		#endif
+
+	
+   	 	if(register_netdev(ndev)){
+        		PRINT_ER("Device couldn't be registered - %s\n", ndev->name);
+        		return -1; /* ERROR */
+    			}
+
+		nic->iftype = STATION_MODE;
+		nic->mac_opened=0;
+	
+		}	
+
+	#ifndef NMI_SDIO
+	if(!linux_spi_init(&g_linux_wlan->nmc_spidev)){
+		PRINT_ER("Can't initialize SPI \n");
+        return -1; /* ERROR */
+	}
+	g_linux_wlan->nmc_spidev = nmc_spi_dev;
+	#else
+	g_linux_wlan->nmc_sdio_func= local_sdio_func;
+	#endif
+	
 	return 0;
 }
 
@@ -2755,7 +3219,6 @@ static int __init init_nmc_driver(void){
 			printk("init_nmc_driver: Failed register sdio driver\n");
 		}
 	
-	return ret;
 	}
 #else	
 	PRINT_D(INIT_DBG,"Initializing netdev\n");
@@ -2768,41 +3231,69 @@ static int __init init_nmc_driver(void){
 }
 module_init(init_nmc_driver);
 
-static void __exit exit_nmc_driver(void){
-
+static void __exit exit_nmc_driver(void)
+{
+	int i = 0;
+	perInterface_wlan_t* nic[NUM_CONCURRENT_IFC];
 	#define CLOSE_TIMEOUT 12*1000
 
 	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
 	unregister_inetaddr_notifier(&g_dev_notifier);
 	#endif
-	
-	if((g_linux_wlan != NULL) &&g_linux_wlan->nmc_firmware != NULL) {
-		release_firmware(g_linux_wlan->nmc_firmware);
-		g_linux_wlan->nmc_firmware = NULL;
-	}
-	
-	if( (g_linux_wlan != NULL)  && ((g_linux_wlan->nmc_netdev) != NULL) )
-	{
-		PRINT_D(INIT_DBG,"Waiting for mac_close ....\n");
 
-		if(linux_wlan_lock_timeout(&close_exit_sync, CLOSE_TIMEOUT) < 0)
-			PRINT_D(INIT_DBG,"Closed TimedOUT\n");
+	for(i=0;i<NUM_CONCURRENT_IFC;i++)
+		{
+		nic[i]=netdev_priv(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+		}
+	
+	
+	
+	if((g_linux_wlan != NULL) &&g_linux_wlan->nmc_firmware != NULL)
+		{
+			release_firmware(g_linux_wlan->nmc_firmware);
+			g_linux_wlan->nmc_firmware = NULL;
+		}
+	
+	
+	if( (g_linux_wlan != NULL)  &&( ((g_linux_wlan->strInterfaceInfo[0].nmc_netdev) != NULL)
+		|| ((g_linux_wlan->strInterfaceInfo[1].nmc_netdev) != NULL)))
+	
+		{
+			PRINT_D(INIT_DBG,"Waiting for mac_close ....\n");
+
+			if(linux_wlan_lock_timeout(&close_exit_sync, CLOSE_TIMEOUT) < 0)
+				PRINT_D(INIT_DBG,"Closed TimedOUT\n");
 		else
 			PRINT_D(INIT_DBG,"mac_closed\n");
+
 	
-		PRINT_D(INIT_DBG,"Unregistering netdev...\n");
-    		unregister_netdev(g_linux_wlan->nmc_netdev);
 
-
-		#ifdef USE_WIRELESS
-			PRINT_D(INIT_DBG,"Freeing Wiphy...\n");
-    			NMI_WFI_WiphyFree(g_linux_wlan->nmc_netdev);
-		#endif
-
-		PRINT_D(INIT_DBG,"Freeing netdev...\n");
-		free_netdev(g_linux_wlan->nmc_netdev);
 		
-	
+		for(i=0;i<NUM_CONCURRENT_IFC;i++)
+		{	
+
+			if(g_linux_wlan->strInterfaceInfo[i].nmc_netdev != NULL)
+			{	
+				if(nic[i]->mac_opened)
+
+				{	
+					mac_close(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+				}
+					
+					PRINT_D(INIT_DBG,"Unregistering netdev %p \n",g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+		    			unregister_netdev(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+
+
+					#ifdef USE_WIRELESS
+					PRINT_D(INIT_DBG,"Freeing Wiphy...\n");
+		    			NMI_WFI_WiphyFree(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+					#endif
+
+					PRINT_D(INIT_DBG,"Freeing netdev...\n");
+					free_netdev(g_linux_wlan->strInterfaceInfo[i].nmc_netdev);
+			}
+				
+		}
 	}
 
 #ifdef USE_WIRELESS
@@ -2811,27 +3302,30 @@ static void __exit exit_nmc_driver(void){
 	//NMI_WFI_deinit_mon_interface();
 #endif
 #endif
-	if((&nmc_bus) != NULL)
-	{
+
+if(g_linux_wlan->open_ifcs==0)
+{
 	#ifndef NMI_SDIO
-		PRINT_D(INIT_DBG,"SPI unregsiter...\n");
+		PRINT_D(INIT_DBG,"SPI unregsiter...\n");	
 		spi_unregister_driver(&nmc_bus);
 	#else
 		PRINT_D(INIT_DBG,"SDIO unregsiter...\n");	
 		sdio_unregister_driver(&nmc_bus);	
 	#endif
-	}
 
 	linux_wlan_deinit_lock(&close_exit_sync);
+	NMI_FREE(g_linux_wlan);
 	g_linux_wlan = NULL;
+	
 	PRINT_D(INIT_DBG,"Module_exit Done.\n");	
+	
 #if defined (NMC_DEBUGFS)
 	nmc_debugfs_remove();
 #endif
 
     linux_wlan_device_detection(0);
     linux_wlan_device_power(0);
-
+}
 }
 module_exit(exit_nmc_driver);
 

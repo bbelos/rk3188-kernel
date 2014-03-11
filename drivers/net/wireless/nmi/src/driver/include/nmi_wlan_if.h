@@ -13,7 +13,7 @@
 
 /*bug 3887: [AP] Allow Management frames to be passed to the host*/
 #define NMI_AP_EXTERNAL_MLME 
-//#define NMI_P2P
+#define NMI_P2P
 //#define NMI_FULLY_HOSTING_AP
 //#define USE_OLD_SPI_SW
 
@@ -123,7 +123,7 @@ typedef struct {
 } nmi_wlan_io_func_t;
 
 typedef struct {
-	void (*rx_indicate)(uint8_t *, uint32_t);
+	void (*rx_indicate)(uint8_t *, uint32_t,uint32_t);
 	void (*rx_complete)(void);
 } nmi_wlan_net_func_t;
 
@@ -190,6 +190,17 @@ typedef struct {
 } nmi_wlan_cfg_val_t;
 #endif
 
+struct tx_complete_data{
+	#ifdef NMI_FULLY_HOSTING_AP
+	struct tx_complete_data* next;
+	#endif
+	int size;
+	void* buff;
+	uint8_t* pBssid;
+	struct sk_buff *skb;
+};
+
+
 typedef void (*nmi_tx_complete_func_t)(void *, int);
 
 #define NMI_TX_ERR_NO_BUF (-2)
@@ -203,8 +214,8 @@ typedef struct {
 	void (*wlan_handle_rx_que)(void);
 	void (*wlan_handle_rx_isr)(void);
 	void (*wlan_cleanup)(void);
-	int (*wlan_cfg_set)(int, uint32_t, uint8_t *, uint32_t, int);
-	int (*wlan_cfg_get)(int, uint32_t, int);
+	int (*wlan_cfg_set)(int, uint32_t, uint8_t *, uint32_t, int,uint32_t);
+	int (*wlan_cfg_get)(int, uint32_t, int,uint32_t);
 	int (*wlan_cfg_get_value)(uint32_t, uint8_t *, uint32_t);
 	/*Bug3959: transmitting mgmt frames received from host*/
 	#if defined(NMI_AP_EXTERNAL_MLME) || defined(NMI_P2P)
@@ -236,6 +247,9 @@ typedef enum{
 	RSN_IE = 48,
 	WPA_IE = 221,
 	WMM_IE=221,
+	#ifdef NMI_P2P
+	P2P_IE=221,
+	#endif
 }BEACON_IE;
 #endif
 typedef enum{
@@ -296,6 +310,16 @@ typedef enum {
 	CHIP_SLEEPING_AUTO      = 1,
 	CHIP_SLEEPING_MANUAL  = 2
 } CHIP_PS_STATE_T;
+
+typedef enum {
+	ACQUIRE_ONLY				 = 0,
+	ACQUIRE_AND_WAKEUP     	= 1,
+} BUS_ACQUIRE_T;
+
+typedef enum {
+	RELEASE_ONLY				= 0,
+	RELEASE_ALLOW_SLEEP		= 1,
+} BUS_RELEASE_T;
 
 typedef enum {
 	NO_SECURITY = 0,
@@ -658,6 +682,10 @@ typedef enum {
 	#ifdef NMI_P2P
 	WID_REMAIN_ON_CHAN  = 0x003D,
 	#endif
+	
+	/*BugID_4978*/
+	WID_ABORT_RUNNING_SCAN = 0x003E,
+	
 	/* NMAC Character WID list */
 	WID_WPS_START                      = 0x0043,
 
@@ -857,12 +885,15 @@ typedef enum {
 	WID_MEMORY_ADDRESS                 = 0x201E,
 	WID_MEMORY_ACCESS_32BIT            = 0x201F,
 	WID_RF_REG_VAL                     = 0x2021,
+	
 
 	/* NMAC Integer WID list */
 	WID_11N_PHY_ACTIVE_REG_VAL         = 0x2080,
 
 	/* Custom Integer WID list */
 	WID_GET_INACTIVE_TIME     = 0x2084,
+	WID_SET_DRV_HANDLER=		0X2085,
+	WID_SET_OPERATION_MODE=		0X2086,
 	/* EMAC String WID list */
 	WID_SSID                           = 0x3000,
 	WID_FIRMWARE_VERSION               = 0x3001,
@@ -906,7 +937,9 @@ typedef enum {
 	WID_SSID_PROBE_REQ = 0x3997,
 	/*BugID_4124 WID to trigger modified Join Request using SSID and BSSID instead of bssListIdx (used by WID_JOIN_REQ)*/
        WID_JOIN_REQ_EXTENDED	 	= 0x3998,
-       
+
+	/* BugID 4951: WID toset IP address in firmware */
+	WID_IP_ADDRESS					= 0x3999,
 
 	
 
@@ -936,6 +969,9 @@ typedef enum {
        WID_REMOVE_STA				= 0X4088,
        WID_EDIT_STA					= 0X4089,
 	WID_ADD_BEACON				= 0x408a,
+
+	/* BugID 5108 */
+	WID_SETUP_MULTICAST_FILTER	= 0x408b,
 	
 	/* Miscellaneous WIDs */
 	WID_ALL                            = 0x7FFE,

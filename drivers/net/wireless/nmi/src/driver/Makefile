@@ -68,7 +68,11 @@ else ifeq ($(TARGET),PANDA)
 #ccflags-y += -DSIMULATION
 EXTRA_CFLAGS += -DPANDA_BOARD -DUSE_WIRELESS
 KERNELDIR ?= $(DEV_TREE)/kernel/omap
+ifeq ($(ANDR_VER),4.3)
+MAKE_FLAGS := CROSS_COMPILE=$(DEV_TREE)/prebuilts/gcc/linux-x86/arm/arm-eabi-4.7/bin/arm-eabi- ARCH=arm
+else
 MAKE_FLAGS := CROSS_COMPILE=$(DEV_TREE)/prebuilt/linux-x86/toolchain/arm-eabi-4.4.3/bin/arm-eabi- ARCH=arm
+endif
 OUT_ARCH = ARM-3.0
 else ifeq ($(TARGET),BEAGLE)
 KERNELDIR ?= $(DEV_TREE)
@@ -90,6 +94,11 @@ KERNELDIR ?= $(DEV_TREE)/linux-3.3
 MAKE_FLAGS := CROSS_COMPILE=$(DEV_TREE)/out/android/common/buildroot/external-toolchain/bin/arm-linux-gnueabi- ARCH=arm
 EXTRA_CFLAGS += -DPLAT_ALLWINNER_A20 -DUSE_WIRELESS
 OUT_ARCH = ARM-3.3
+else ifeq ($(TARGET),ALLWINNER_A23)
+KERNELDIR ?= $(DEV_TREE)/linux-3.4
+MAKE_FLAGS := CROSS_COMPILE=$(DEV_TREE)/out/android/common/buildroot/external-toolchain/bin/arm-linux-gnueabi- ARCH=arm
+EXTRA_CFLAGS += -DPLAT_ALLWINNER_A23 -DUSE_WIRELESS
+OUT_ARCH = ARM-3.4
 else
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 lib-y += core_simulator/CoreConfigSimulator.o transport/Packet_Tx_Rx.o

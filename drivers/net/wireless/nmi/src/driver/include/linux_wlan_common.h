@@ -78,7 +78,7 @@ extern atomic_t DEBUG_LEVEL;
 
 #else
 
-#define REGION	 INIT_DBG | GENERIC_DBG | CFG80211_DBG | FIRM_DBG
+#define REGION	 INIT_DBG|GENERIC_DBG|CFG80211_DBG | FIRM_DBG | HOSTAPD_DBG
 
 #define DEBUG	    1
 #define INFO        0
@@ -106,6 +106,8 @@ extern atomic_t DEBUG_LEVEL;
 #endif
 #define LINUX_TX_SIZE	(64*1024)
 
+#define NMI_MULTICAST_TABLE_SIZE	8
+
 #if defined (NM73131_0_BOARD)
 
 #define MODALIAS "nmc_spi"
@@ -130,8 +132,9 @@ extern atomic_t DEBUG_LEVEL;
 #elif defined (PLAT_RKXXXX)
 #define MODALIAS	"NMI_IRQ"
 #define GPIO_NUM	RK30_PIN3_PD2 //RK30_PIN3_PA1
-//RK30_PIN3_PD2
-//RK2928_PIN1_PA7
+	//RK30_PIN3_PD2
+	//RK2928_PIN1_PA7
+
 #else
 	#define MODALIAS 	"NMI_SPI"
 	#define GPIO_NUM	139

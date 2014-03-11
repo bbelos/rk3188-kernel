@@ -11,12 +11,9 @@
 */
 
 #include "linux/include/NMI_WFI_CfgOperations.h"
+#include "nmi_wlan.c"
+#include "linux_wlan_sdio.h"    //tony : for set_wiphy_dev()
 
-#include "linux_wlan_sdio.h"    //tony
-
-NMI_SemaphoreHandle SemHandleUpdateStats;
-static NMI_SemaphoreHandle hSemScanReq;
-static NMI_Bool gbAutoRateAdjusted = NMI_FALSE;
 
 #define IS_MANAGMEMENT 				0x100
 #define IS_MANAGMEMENT_CALLBACK 		0x080
@@ -24,14 +21,28 @@ static NMI_Bool gbAutoRateAdjusted = NMI_FALSE;
 #define GET_PKT_OFFSET(a) (((a) >> 22) & 0x1ff)
 
 extern void linux_wlan_free(void* vp);
-extern int linux_wlan_get_firmware(linux_wlan_t* p_nic);
-#ifdef NMI_P2P
-extern tstrNMI_WFIDrv* gWFiDrvHandle;
-#endif
+extern int linux_wlan_get_firmware(perInterface_wlan_t* p_nic);
+extern void linux_wlan_unlock(void* vp);
+extern NMI_Uint16 Set_machw_change_vir_if(NMI_Bool bValue);
 
 extern int mac_open(struct net_device *ndev);
 extern int mac_close(struct net_device *ndev);
 
+tstrNetworkInfo astrLastScannedNtwrksShadow[MAX_NUM_SCANNED_NETWORKS_SHADOW];
+NMI_Uint32 u32LastScannedNtwrksCountShadow;
+#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+NMI_TimerHandle hDuringIpTimer;
+#endif
+NMI_TimerHandle hAgingTimer;
+static NMI_Uint8 op_ifcs=0;
+
+
+/*BugID_5137*/
+NMI_Uint8 g_nmc_initialized = 1;
+extern linux_wlan_t* g_linux_wlan;
+#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+extern NMI_Bool g_obtainingIP;
+#endif
 
 #define CHAN2G(_channel, _freq, _flags) {        \
 	.band             = IEEE80211_BAND_2GHZ, \
@@ -86,8 +97,17 @@ static struct ieee80211_rate NMI_WFI_rates[] = {
 #ifdef NMI_P2P
 struct p2p_mgmt_data{
 	int size;
-	void* buff;
+	u8* buff;
 };
+
+/*Global variable used to state the current  connected STA channel*/
+NMI_Uint8 u8WLANChannel = DEFAULT_CHANNEL ;
+
+NMI_Uint8  u8P2P_oui[] ={0x50,0x6f,0x9A,0x09};
+NMI_Uint8 u8P2Plocalrandom=0x01;
+NMI_Uint8 u8P2Precvrandom=0x00;
+NMI_Uint8 u8P2P_vendorspec[]={0xdd,0x05,0x00,0x08,0x40,0x03};
+NMI_Bool bNmi_ie=NMI_FALSE;
 #endif
 
 static struct ieee80211_supported_band NMI_WFI_band_2ghz = {
@@ -98,37 +118,79 @@ static struct ieee80211_supported_band NMI_WFI_band_2ghz = {
 };
 
 
-static NMI_TimerHandle hAgingTimer;
+/*BugID_5137*/
+struct add_key_params
+{
+	u8 key_idx;
+	#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+	bool pairwise;
+	#endif
+	u8* mac_addr;
+};
+struct add_key_params g_add_gtk_key_params;
+struct nmi_wfi_key g_key_gtk_params;
+struct add_key_params g_add_ptk_key_params;
+struct nmi_wfi_key g_key_ptk_params;
+struct nmi_wfi_wep_key g_key_wep_params;
+NMI_Uint8 g_flushing_in_progress = 0;
+NMI_Bool g_ptk_keys_saved = NMI_FALSE;
+NMI_Bool g_gtk_keys_saved = NMI_FALSE;
+NMI_Bool g_wep_keys_saved = NMI_FALSE;
+
+
 #define AGING_TIME	9*1000
+#define duringIP_TIME 5300
 
 void clear_shadow_scan(void* pUserVoid){
  	struct NMI_WFI_priv* priv;
 	int i;
  	priv = (struct NMI_WFI_priv*)pUserVoid;
 
-	for(i = 0; i < priv->u32LastScannedNtwrksCountShadow; i++){
-		if(priv->astrLastScannedNtwrksShadow[priv->u32LastScannedNtwrksCountShadow].pu8IEs != NULL)
-			NMI_FREE(priv->astrLastScannedNtwrksShadow[i].pu8IEs);
-	}
-	priv->u32LastScannedNtwrksCountShadow = 0;
+	for(i = 0; i < u32LastScannedNtwrksCountShadow; i++){
+		if(astrLastScannedNtwrksShadow[u32LastScannedNtwrksCountShadow].pu8IEs != NULL)
+			NMI_FREE(astrLastScannedNtwrksShadow[i].pu8IEs);
 
-	NMI_TimerDestroy(&hAgingTimer,NMI_NULL);
+		host_int_freeJoinParams(astrLastScannedNtwrksShadow[i].pJoinParams);
+	}
+	u32LastScannedNtwrksCountShadow = 0;
+
+	if(op_ifcs==0)
+	{
+		NMI_TimerDestroy(&hAgingTimer,NMI_NULL);
+		printk("destroy aging timer\n");
+	}
+	
+}
+
+uint32_t get_rssi_avg(tstrNetworkInfo* pstrNetworkInfo)
+{
+	uint8_t i;
+	int rssi_v = 0;
+	uint8_t num_rssi = (pstrNetworkInfo->strRssi.u8Full)?NUM_RSSI:(pstrNetworkInfo->strRssi.u8Index);
+
+	for(i=0;i<num_rssi;i++)
+		rssi_v+=pstrNetworkInfo->strRssi.as8RSSI[i];
+
+	rssi_v /= num_rssi;		
+	return rssi_v;
 }
 void refresh_scan(void* pUserVoid,uint8_t all){
  	struct NMI_WFI_priv* priv;	
 	struct wiphy* wiphy;
 	struct cfg80211_bss* bss = NULL;
 	int i;
+	int rssi = 0;
 	
  	priv = (struct NMI_WFI_priv*)pUserVoid;
 	wiphy = priv->dev->ieee80211_ptr->wiphy;
 
-	for(i = 0; i < priv->u32LastScannedNtwrksCountShadow; i++)
+	for(i = 0; i < u32LastScannedNtwrksCountShadow; i++)
 	{
 		tstrNetworkInfo* pstrNetworkInfo;
-		pstrNetworkInfo = &(priv->astrLastScannedNtwrksShadow[i]);
-		
-		if(!pstrNetworkInfo->u8Found || all){
+		pstrNetworkInfo = &(astrLastScannedNtwrksShadow[i]);
+
+	
+		if((!pstrNetworkInfo->u8Found) || all){
 			NMI_Sint32 s32Freq;
 			struct ieee80211_channel *channel;
 
@@ -143,23 +205,28 @@ void refresh_scan(void* pUserVoid,uint8_t all){
 
 				channel = ieee80211_get_channel(wiphy, s32Freq);
 
-
-				bss = cfg80211_inform_bss(wiphy, channel, pstrNetworkInfo->au8bssid, 0, pstrNetworkInfo->u16CapInfo,
+				rssi = get_rssi_avg(pstrNetworkInfo);
+				if(NMI_memcmp("DIRECT-", pstrNetworkInfo->au8ssid, 7))
+				{
+					bss = cfg80211_inform_bss(wiphy, channel, pstrNetworkInfo->au8bssid, 0, pstrNetworkInfo->u16CapInfo,
 									pstrNetworkInfo->u16BeaconPeriod, (const u8*)pstrNetworkInfo->pu8IEs,
-									(size_t)pstrNetworkInfo->u16IEsLen, (((NMI_Sint32)pstrNetworkInfo->s8rssi) * 100), GFP_KERNEL);
-				cfg80211_put_bss(bss);
+									(size_t)pstrNetworkInfo->u16IEsLen, (((NMI_Sint32)rssi) * 100), GFP_KERNEL);
+					cfg80211_put_bss(bss);
+				}
 			}
 			
 		}				
 	}
+		
 }
 
 void reset_shadow_found(void* pUserVoid){
  	struct NMI_WFI_priv* priv;	
 	int i;
  	priv = (struct NMI_WFI_priv*)pUserVoid;
-	for(i=0;i<priv->u32LastScannedNtwrksCountShadow;i++){
-		priv->astrLastScannedNtwrksShadow[i].u8Found = 0;
+	for(i=0;i<u32LastScannedNtwrksCountShadow;i++){
+		astrLastScannedNtwrksShadow[i].u8Found = 0;
+
 		}
 }
 
@@ -167,8 +234,8 @@ void update_scan_time(void* pUserVoid){
 	struct NMI_WFI_priv* priv;	
 	int i;
  	priv = (struct NMI_WFI_priv*)pUserVoid;
-	for(i=0;i<priv->u32LastScannedNtwrksCountShadow;i++){
-		priv->astrLastScannedNtwrksShadow[i].u32TimeRcvdInScan = jiffies;
+	for(i=0;i<u32LastScannedNtwrksCountShadow;i++){
+		astrLastScannedNtwrksShadow[i].u32TimeRcvdInScan = jiffies;
 		}
 }
 
@@ -179,28 +246,36 @@ void remove_network_from_shadow(void* pUserVoid){
 
  	priv = (struct NMI_WFI_priv*)pUserVoid;
 	
-	for(i=0;i<priv->u32LastScannedNtwrksCountShadow;i++){
-		if(time_after(now, priv->astrLastScannedNtwrksShadow[i].u32TimeRcvdInScan + (unsigned long)(SCAN_RESULT_EXPIRE))){
-			PRINT_D(CFG80211_DBG,"Network expired in ScanShadow: %s \n",priv->astrLastScannedNtwrksShadow[i].au8ssid);
+	for(i=0;i<u32LastScannedNtwrksCountShadow;i++){
+		if(time_after(now, astrLastScannedNtwrksShadow[i].u32TimeRcvdInScan + (unsigned long)(SCAN_RESULT_EXPIRE))){
+			PRINT_D(CFG80211_DBG,"Network expired in ScanShadow: %s \n",astrLastScannedNtwrksShadow[i].au8ssid);
 
-			if(priv->astrLastScannedNtwrksShadow[i].pu8IEs != NULL)
-				NMI_FREE(priv->astrLastScannedNtwrksShadow[i].pu8IEs);
+			if(astrLastScannedNtwrksShadow[i].pu8IEs != NULL)
+				NMI_FREE(astrLastScannedNtwrksShadow[i].pu8IEs);
 			
-			host_int_freeJoinParams(priv->astrLastScannedNtwrksShadow[i].pJoinParams);
+			host_int_freeJoinParams(astrLastScannedNtwrksShadow[i].pJoinParams);
 			
-			for(j=i;(j<priv->u32LastScannedNtwrksCountShadow-1);j++){
-				priv->astrLastScannedNtwrksShadow[j] = priv->astrLastScannedNtwrksShadow[j+1];
+			for(j=i;(j<u32LastScannedNtwrksCountShadow-1);j++){
+				astrLastScannedNtwrksShadow[j] = astrLastScannedNtwrksShadow[j+1];
 			}
-			priv->u32LastScannedNtwrksCountShadow--;
+			u32LastScannedNtwrksCountShadow--;
 		}
 	}
 
-	PRINT_D(CFG80211_DBG,"Number of cached networks: %d\n",priv->u32LastScannedNtwrksCountShadow);
-	if(priv->u32LastScannedNtwrksCountShadow != 0)
-		NMI_TimerStart(&hAgingTimer, AGING_TIME, pUserVoid, NMI_NULL);
+	PRINT_D(CFG80211_DBG,"Number of cached networks: %d\n",u32LastScannedNtwrksCountShadow);
+	if(u32LastScannedNtwrksCountShadow != 0)
+		NMI_TimerStart(&(hAgingTimer), AGING_TIME, pUserVoid, NMI_NULL);
 	else
 		PRINT_D(CFG80211_DBG,"No need to restart Aging timer\n");
 }
+
+#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+void clear_duringIP(void* pUserVoid)
+{
+	PRINT_D(GENERIC_DBG,"GO:IP Obtained , enable scan\n");
+	g_obtainingIP=NMI_FALSE;
+}
+#endif
 
 int8_t is_network_in_shadow(tstrNetworkInfo* pstrNetworkInfo,void* pUserVoid){
  	struct NMI_WFI_priv* priv;	
@@ -208,14 +283,14 @@ int8_t is_network_in_shadow(tstrNetworkInfo* pstrNetworkInfo,void* pUserVoid){
 	int i;
 
  	priv = (struct NMI_WFI_priv*)pUserVoid;
-	if(priv->u32LastScannedNtwrksCountShadow== 0){
+	if(u32LastScannedNtwrksCountShadow== 0){
 		PRINT_D(CFG80211_DBG,"Starting Aging timer\n");
-		NMI_TimerStart(&hAgingTimer, AGING_TIME, pUserVoid, NMI_NULL);
+		NMI_TimerStart(&(hAgingTimer), AGING_TIME, pUserVoid, NMI_NULL);
 		state = -1;
 	}else{
 		/* Linear search for now */
-		for(i=0;i<priv->u32LastScannedNtwrksCountShadow;i++){
-			if(NMI_memcmp(priv->astrLastScannedNtwrksShadow[i].au8bssid,
+		for(i=0;i<u32LastScannedNtwrksCountShadow;i++){
+			if(NMI_memcmp(astrLastScannedNtwrksShadow[i].au8bssid,
 				  pstrNetworkInfo->au8bssid, 6) == 0){
 								  state = i;
 								  break;
@@ -229,45 +304,58 @@ void add_network_to_shadow(tstrNetworkInfo* pstrNetworkInfo,void* pUserVoid, voi
  	struct NMI_WFI_priv* priv;	
 	int8_t ap_found = is_network_in_shadow(pstrNetworkInfo,pUserVoid);
 	uint32_t ap_index = 0;
+	uint8_t rssi_index = 0;
  	priv = (struct NMI_WFI_priv*)pUserVoid;
 
-	if(priv->u32LastScannedNtwrksCountShadow >= MAX_NUM_SCANNED_NETWORKS_SHADOW){
+	if(u32LastScannedNtwrksCountShadow >= MAX_NUM_SCANNED_NETWORKS_SHADOW){
 		PRINT_D(CFG80211_DBG,"Shadow network reached its maximum limit\n");
 		return;
 	}
-
 	if(ap_found == -1){
-			ap_index = priv->u32LastScannedNtwrksCountShadow;
-			priv->u32LastScannedNtwrksCountShadow++;
+			ap_index = u32LastScannedNtwrksCountShadow;
+			u32LastScannedNtwrksCountShadow++;
+			
 		}else{
 			ap_index = ap_found;
 			}
-
-		priv->astrLastScannedNtwrksShadow[ap_index].s8rssi = pstrNetworkInfo->s8rssi;
-		priv->astrLastScannedNtwrksShadow[ap_index].u16CapInfo = pstrNetworkInfo->u16CapInfo;
+		rssi_index = astrLastScannedNtwrksShadow[ap_index].strRssi.u8Index;
+		astrLastScannedNtwrksShadow[ap_index].strRssi.as8RSSI[rssi_index++] = pstrNetworkInfo->s8rssi;
+		if(rssi_index == NUM_RSSI)
+		{
+			rssi_index = 0;
+			astrLastScannedNtwrksShadow[ap_index].strRssi.u8Full = 1;
+		}
+		astrLastScannedNtwrksShadow[ap_index].strRssi.u8Index = rssi_index;
 		
-		priv->astrLastScannedNtwrksShadow[ap_index].u8SsidLen = pstrNetworkInfo->u8SsidLen;
-		NMI_memcpy(priv->astrLastScannedNtwrksShadow[ap_index].au8ssid,
+		astrLastScannedNtwrksShadow[ap_index].s8rssi = pstrNetworkInfo->s8rssi;
+		astrLastScannedNtwrksShadow[ap_index].u16CapInfo = pstrNetworkInfo->u16CapInfo;
+		
+		astrLastScannedNtwrksShadow[ap_index].u8SsidLen = pstrNetworkInfo->u8SsidLen;
+		NMI_memcpy(astrLastScannedNtwrksShadow[ap_index].au8ssid,
 				  	  pstrNetworkInfo->au8ssid, pstrNetworkInfo->u8SsidLen);
 
-		NMI_memcpy(priv->astrLastScannedNtwrksShadow[ap_index].au8bssid,
+		NMI_memcpy(astrLastScannedNtwrksShadow[ap_index].au8bssid,
 				  	  pstrNetworkInfo->au8bssid, ETH_ALEN);
 
-		priv->astrLastScannedNtwrksShadow[ap_index].u16BeaconPeriod = pstrNetworkInfo->u16BeaconPeriod;
-		priv->astrLastScannedNtwrksShadow[ap_index].u8DtimPeriod = pstrNetworkInfo->u8DtimPeriod;
-		priv->astrLastScannedNtwrksShadow[ap_index].u8channel = pstrNetworkInfo->u8channel;
+		astrLastScannedNtwrksShadow[ap_index].u16BeaconPeriod = pstrNetworkInfo->u16BeaconPeriod;
+		astrLastScannedNtwrksShadow[ap_index].u8DtimPeriod = pstrNetworkInfo->u8DtimPeriod;
+		astrLastScannedNtwrksShadow[ap_index].u8channel = pstrNetworkInfo->u8channel;
 		
-		priv->astrLastScannedNtwrksShadow[ap_index].u16IEsLen = pstrNetworkInfo->u16IEsLen;
-		priv->astrLastScannedNtwrksShadow[ap_index].pu8IEs = 
+		astrLastScannedNtwrksShadow[ap_index].u16IEsLen = pstrNetworkInfo->u16IEsLen;
+	if(ap_found != -1)
+		NMI_FREE(astrLastScannedNtwrksShadow[ap_index].pu8IEs);
+		astrLastScannedNtwrksShadow[ap_index].pu8IEs = 
 			(NMI_Uint8*)NMI_MALLOC(pstrNetworkInfo->u16IEsLen); /* will be deallocated 
 																   by the NMI_WFI_CfgScan() function */
-		NMI_memcpy(priv->astrLastScannedNtwrksShadow[ap_index].pu8IEs,
+		NMI_memcpy(astrLastScannedNtwrksShadow[ap_index].pu8IEs,
 				  	  pstrNetworkInfo->pu8IEs, pstrNetworkInfo->u16IEsLen);
 						
-		priv->astrLastScannedNtwrksShadow[ap_index].u32TimeRcvdInScan = jiffies;
-		priv->astrLastScannedNtwrksShadow[ap_index].u32TimeRcvdInScanCached = jiffies;
-		priv->astrLastScannedNtwrksShadow[ap_index].u8Found = 1;
-		priv->astrLastScannedNtwrksShadow[ap_index].pJoinParams = pJoinParams;
+		astrLastScannedNtwrksShadow[ap_index].u32TimeRcvdInScan = jiffies;
+		astrLastScannedNtwrksShadow[ap_index].u32TimeRcvdInScanCached = jiffies;
+		astrLastScannedNtwrksShadow[ap_index].u8Found = 1;
+	if(ap_found != -1)
+		host_int_freeJoinParams(astrLastScannedNtwrksShadow[ap_index].pJoinParams);
+		astrLastScannedNtwrksShadow[ap_index].pJoinParams = pJoinParams;
 
 }
 
@@ -353,12 +441,16 @@ static void CfgScanResult(tenuScanEvent enuScanEvent, tstrNetworkInfo* pstrNetwo
 							}
 							add_network_to_shadow(pstrNetworkInfo,priv,pJoinParams);
 
+							/*P2P peers are sent to WPA supplicant and added to shadow table*/
 							
+							if(!(NMI_memcmp("DIRECT-", pstrNetworkInfo->au8ssid, 7) ))
+							{
 
 							bss = cfg80211_inform_bss(wiphy, channel, pstrNetworkInfo->au8bssid, 0, pstrNetworkInfo->u16CapInfo,
 											pstrNetworkInfo->u16BeaconPeriod, (const u8*)pstrNetworkInfo->pu8IEs,
 											(size_t)pstrNetworkInfo->u16IEsLen, (((NMI_Sint32)pstrNetworkInfo->s8rssi) * 100), GFP_KERNEL);
 							cfg80211_put_bss(bss);
+							}
 							
 						
 						}
@@ -373,11 +465,12 @@ static void CfgScanResult(tenuScanEvent enuScanEvent, tstrNetworkInfo* pstrNetwo
 					/* So this network is discovered before, we'll just update its RSSI */
 					for(i = 0; i < priv->u32RcvdChCount; i++)
 					{
-						if(NMI_memcmp(priv->astrLastScannedNtwrksShadow[i].au8bssid, pstrNetworkInfo->au8bssid, 6) == 0)
+						if(NMI_memcmp(astrLastScannedNtwrksShadow[i].au8bssid, pstrNetworkInfo->au8bssid, 6) == 0)
 						{					
-							PRINT_D(CFG80211_DBG,"Update RSSI of %s \n",priv->astrLastScannedNtwrksShadow[i].au8ssid);
-							priv->astrLastScannedNtwrksShadow[i].s8rssi = pstrNetworkInfo->s8rssi;
-							priv->astrLastScannedNtwrksShadow[i].u32TimeRcvdInScan = jiffies;
+							PRINT_D(CFG80211_DBG,"Update RSSI of %s \n",astrLastScannedNtwrksShadow[i].au8ssid);
+
+							astrLastScannedNtwrksShadow[i].s8rssi = pstrNetworkInfo->s8rssi;
+							astrLastScannedNtwrksShadow[i].u32TimeRcvdInScan = jiffies;
 							break;							
 						}
 					}
@@ -386,10 +479,11 @@ static void CfgScanResult(tenuScanEvent enuScanEvent, tstrNetworkInfo* pstrNetwo
  		}
  		else if(enuScanEvent == SCAN_EVENT_DONE)
  		{
- 			PRINT_D(CFG80211_DBG,"Scan Done \n");
+ 			PRINT_D(CFG80211_DBG,"Scan Done[%p] \n",priv->dev);
 
  			PRINT_D(CFG80211_DBG,"Refreshing Scan ... \n");
-			refresh_scan(priv,0);
+			//refresh_scan(priv,0);
+			refresh_scan(priv,1);
 
  			if(priv->u32RcvdChCount > 0)
  			{
@@ -400,7 +494,7 @@ static void CfgScanResult(tenuScanEvent enuScanEvent, tstrNetworkInfo* pstrNetwo
  				PRINT_D(CFG80211_DBG,"No networks found \n");
  			}
 
-			NMI_SemaphoreAcquire(&hSemScanReq, NULL);
+			NMI_SemaphoreAcquire(&(priv->hSemScanReq), NULL);
 
 			if(priv->pstrScanReq != NMI_NULL)
    			{
@@ -409,15 +503,15 @@ static void CfgScanResult(tenuScanEvent enuScanEvent, tstrNetworkInfo* pstrNetwo
 				priv->bCfgScanning = NMI_FALSE;
 				priv->pstrScanReq = NMI_NULL;
 			}
-			NMI_SemaphoreRelease(&hSemScanReq, NULL);
+			NMI_SemaphoreRelease(&(priv->hSemScanReq), NULL);
 
  		}
 		/*Aborting any scan operation during mac close*/
 		else if(enuScanEvent == SCAN_EVENT_ABORTED)
  		{
-			NMI_SemaphoreAcquire(&hSemScanReq, NULL);
+			NMI_SemaphoreAcquire(&(priv->hSemScanReq), NULL);
 			
-	 		PRINT_D(CFG80211_DBG,"Aborting scan \n");	
+	 		PRINT_D(CFG80211_DBG,"Scan Aborted \n");	
 			if(priv->pstrScanReq != NMI_NULL)
    			{
 
@@ -425,9 +519,10 @@ static void CfgScanResult(tenuScanEvent enuScanEvent, tstrNetworkInfo* pstrNetwo
 				refresh_scan(priv,1);
 
 				cfg80211_scan_done(priv->pstrScanReq,NMI_FALSE);
+				priv->bCfgScanning = NMI_FALSE;
 				priv->pstrScanReq = NMI_NULL;
   			}
-			NMI_SemaphoreRelease(&hSemScanReq, NULL);
+			NMI_SemaphoreRelease(&(priv->hSemScanReq), NULL);
 		}
  	}
 
@@ -475,6 +570,7 @@ int NMI_WFI_Set_PMKSA(NMI_Uint8 * bssid,struct NMI_WFI_priv* priv)
 
 
 }
+int linux_wlan_set_bssid(struct net_device * nmc_netdev,uint8_t * pBSSID);
 
 
 /**
@@ -491,6 +587,8 @@ int NMI_WFI_Set_PMKSA(NMI_Uint8 * bssid,struct NMI_WFI_priv* priv)
 *  @date	01 MAR 2012
 *  @version	1.0
 */
+	int connecting = 0;
+
 static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent, 
 							   tstrConnectInfo* pstrConnectInfo, 
 							   NMI_Uint8 u8MacStatus,
@@ -499,7 +597,7 @@ static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent,
 {
 	struct NMI_WFI_priv* priv;
 	struct net_device* dev;
-
+	connecting = 0;
 	if(enuConnDisconnEvent == CONN_DISCONN_EVENT_CONN_RESP)
 	{
 		/*Initialization*/
@@ -531,21 +629,22 @@ static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent,
 				pstrConnectInfo->au8bssid[1],pstrConnectInfo->au8bssid[2],pstrConnectInfo->au8bssid[3],pstrConnectInfo->au8bssid[4],pstrConnectInfo->au8bssid[5]);
 			NMI_memcpy(priv->au8AssociatedBss, pstrConnectInfo->au8bssid, ETH_ALEN);
 
-			
+			//set bssid in frame filter
+			linux_wlan_set_bssid(dev,pstrConnectInfo->au8bssid);
 
 			/* BugID_4209: if this network has expired in the scan results in the above nl80211 layer, refresh them here by calling 
 			    cfg80211_inform_bss() with the last Scan results before calling cfg80211_connect_result() to avoid 
 			    Linux kernel warning generated at the nl80211 layer */
 
-			for(i = 0; i < priv->u32LastScannedNtwrksCountShadow; i++)
+			for(i = 0; i < u32LastScannedNtwrksCountShadow; i++)
 			{	
-				if(NMI_memcmp(priv->astrLastScannedNtwrksShadow[i].au8bssid,
+				if(NMI_memcmp(astrLastScannedNtwrksShadow[i].au8bssid,
 								  pstrConnectInfo->au8bssid, ETH_ALEN) == 0)
 				{
 					unsigned long now = jiffies;
 					
 					if(time_after(now, 
-						priv->astrLastScannedNtwrksShadow[i].u32TimeRcvdInScanCached + (unsigned long)(nl80211_SCAN_RESULT_EXPIRE - (1 * HZ))))
+						astrLastScannedNtwrksShadow[i].u32TimeRcvdInScanCached + (unsigned long)(nl80211_SCAN_RESULT_EXPIRE - (1 * HZ))))
 					{
 						bNeedScanRefresh = NMI_TRUE;
 					}
@@ -578,10 +677,14 @@ static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent,
 	{
 		priv = (struct NMI_WFI_priv*)pUserVoid;
 		dev = priv->dev;
-
-		PRINT_ER("Received MAC_DISCONNECTED from firmware with reason %d\n",
-		pstrDisconnectNotifInfo->u16reason);
-
+		#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+		g_obtainingIP=NMI_FALSE;
+		#endif
+		PRINT_ER("Received MAC_DISCONNECTED from firmware with reason %d on dev [%p]\n",
+		pstrDisconnectNotifInfo->u16reason, priv->dev);
+		u8P2Plocalrandom=0x01;
+		u8P2Precvrandom=0x00;
+		bNmi_ie = NMI_FALSE;
 		NMI_memset(priv->au8AssociatedBss, 0, ETH_ALEN);
 
 		cfg80211_disconnected(dev, pstrDisconnectNotifInfo->u16reason, pstrDisconnectNotifInfo->ie, 
@@ -681,12 +784,19 @@ static int NMI_WFI_CfgScan(struct wiphy *wiphy,struct net_device *dev, struct cf
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	NMI_Uint8 au8ScanChanList[MAX_NUM_SCANNED_NETWORKS];
 	tstrHiddenNetwork strHiddenNetwork;
-
+	
 	priv = wiphy_priv(wiphy);
+
+	printk("Scan on netdev [%p] host if [%x]\n",dev, (NMI_Uint32)priv->hNMIWFIDrv);
+
+	/*if(connecting)
+			return -EBUSY; */
+
 	/*BugID_4800: if in AP mode, return.*/
 	/*This check is to handle the situation when user*/
 	/*requests "create group" during a running scan*/
-
+	//host_int_set_wfi_drv_handler(priv->hNMIWFIDrv);
+#if 0
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)	/* tony for v3.8.0 support */
 	if(priv->dev->ieee80211_ptr->iftype == NL80211_IFTYPE_AP)
 	{
@@ -697,13 +807,16 @@ static int NMI_WFI_CfgScan(struct wiphy *wiphy,struct net_device *dev, struct cf
 	if(dev->ieee80211_ptr->iftype == NL80211_IFTYPE_AP)
 	{
 		PRINT_D(GENERIC_DBG,"Required scan while in AP mode");
+		s32Error = NMI_BUSY;
 		return s32Error;
 	}
 #endif
+#endif // end of if 0
 	priv->pstrScanReq = request;
 
 	priv->u32RcvdChCount = 0;
 
+	host_int_set_wfi_drv_handler((NMI_Uint32)priv->hNMIWFIDrv);
 
 
 	reset_shadow_found(priv);
@@ -804,26 +917,33 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 	NMI_Char * pcwpa_version;
 	
 	struct NMI_WFI_priv* priv;
+	tstrNMI_WFIDrv * pstrWFIDrv;
 	tstrNetworkInfo* pstrNetworkInfo = NULL;
-	
-	priv = wiphy_priv(wiphy);
 
-	PRINT_D(CFG80211_DBG,"Connecting to SSID [%s]\n",sme->ssid);
+
+	connecting = 1;
+	priv = wiphy_priv(wiphy);
+    pstrWFIDrv = (tstrNMI_WFIDrv *)(priv->hNMIWFIDrv);
+
+	host_int_set_wfi_drv_handler((NMI_Uint32)priv->hNMIWFIDrv);
+	
+	//host_int_set_wfi_drv_handler((NMI_Uint32)priv->hNMIWFIDrv);
+	PRINT_D(CFG80211_DBG,"Connecting to SSID [%s] on netdev [%p] host if [%x]\n",sme->ssid,dev, (NMI_Uint32)priv->hNMIWFIDrv);
 	#ifdef NMI_P2P
 	if(!(NMI_strncmp(sme->ssid,"DIRECT-", 7)))
 	{
 			PRINT_D(CFG80211_DBG,"Connected to Direct network,OBSS disabled\n");
-			gWFiDrvHandle->u8P2PConnect =1;
+			pstrWFIDrv->u8P2PConnect =1;
 	}
 	else
-		gWFiDrvHandle->u8P2PConnect= 0;
+		pstrWFIDrv->u8P2PConnect= 0;
 	#endif
 	PRINT_INFO(CFG80211_DBG,"Required SSID = %s\n , AuthType = %d \n", sme->ssid,sme->auth_type);
 	
-	for(i = 0; i < priv->u32LastScannedNtwrksCountShadow; i++)
+	for(i = 0; i < u32LastScannedNtwrksCountShadow; i++)
 	{		
-		if((sme->ssid_len == priv->astrLastScannedNtwrksShadow[i].u8SsidLen) && 
-			NMI_memcmp(priv->astrLastScannedNtwrksShadow[i].au8ssid, 
+		if((sme->ssid_len == astrLastScannedNtwrksShadow[i].u8SsidLen) && 
+			NMI_memcmp(astrLastScannedNtwrksShadow[i].au8ssid, 
 						sme->ssid, 
 						sme->ssid_len) == 0)
 		{
@@ -839,7 +959,7 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 			{
 				/* BSSID is also passed from the user, so decision of matching
 				 * should consider also this passed BSSID */
-				if(NMI_memcmp(priv->astrLastScannedNtwrksShadow[i].au8bssid, 
+				if(NMI_memcmp(astrLastScannedNtwrksShadow[i].au8bssid, 
 							       sme->bssid, 
 							       ETH_ALEN) == 0)
 				{
@@ -850,11 +970,11 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 		}
 	}			
 
-	if(i < priv->u32LastScannedNtwrksCountShadow)
+	if(i < u32LastScannedNtwrksCountShadow)
 	{
 		PRINT_D(CFG80211_DBG, "Required bss is in scan results\n");
 
-		pstrNetworkInfo = &(priv->astrLastScannedNtwrksShadow[i]);
+		pstrNetworkInfo = &(astrLastScannedNtwrksShadow[i]);
 		
 		PRINT_INFO(CFG80211_DBG,"network BSSID to be associated: %x%x%x%x%x%x\n",
 						pstrNetworkInfo->au8bssid[0], pstrNetworkInfo->au8bssid[1], 
@@ -864,7 +984,7 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 	else
 	{
 		s32Error = -ENOENT;
-		if(priv->u32LastScannedNtwrksCountShadow == 0)
+		if(u32LastScannedNtwrksCountShadow == 0)
 			PRINT_D(CFG80211_DBG,"No Scan results yet\n");
 		else
 			PRINT_D(CFG80211_DBG,"Required bss not in scan results: Error(%d)\n",s32Error);
@@ -891,34 +1011,83 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 	{
 		/* To determine the u8security value, first we check the group cipher suite then {in case of WPA or WPA2}
 		    we will add to it the pairwise cipher suite(s) */
-		//switch(sme->crypto.wpa_versions)
-		//{
-			//printk(">> sme->crypto.wpa_versions: %x\n",sme->crypto.wpa_versions);
+			pcwpa_version = "Default";
+			printk(">> sme->crypto.wpa_versions: %x\n",sme->crypto.wpa_versions);
 			//case NL80211_WPA_VERSION_1:
-			if( sme->crypto.wpa_versions & NL80211_WPA_VERSION_2)
+			if (sme->crypto.cipher_group == WLAN_CIPHER_SUITE_WEP40)
+			{
+				//printk("> WEP\n");
+				//tenuSecurity_t = WEP_40;
+				u8security = ENCRYPT_ENABLED | WEP;
+				pcgroup_encrypt_val = "WEP40";
+				pccipher_group = "WLAN_CIPHER_SUITE_WEP40";
+				PRINT_INFO(CFG80211_DBG, "WEP Default Key Idx = %d\n",sme->key_idx);
+
+				if(INFO)
 				{
-						//printk("> wpa_version: NL80211_WPA_VERSION_2\n");
-						//case NL80211_WPA_VERSION_2:
-						if (sme->crypto.cipher_group == WLAN_CIPHER_SUITE_TKIP)
-						{
-							//printk("> WPA2-TKIP\n");
-							//tenuSecurity_t = WPA2_TKIP;
-							u8security = ENCRYPT_ENABLED | WPA2 | TKIP;
-							pcgroup_encrypt_val = "WPA2_TKIP";
-							pccipher_group = "TKIP";
-						}
-						else //TODO: mostafa: here we assume that any other encryption type is AES
-						{
-							//printk("> WPA2-AES\n");
-							//tenuSecurity_t = WPA2_AES;
-							u8security = ENCRYPT_ENABLED | WPA2 | AES;
-							pcgroup_encrypt_val = "WPA2_AES";
-							pccipher_group = "AES";
-						}				
-						pcwpa_version = "WPA_VERSION_2";
-					}
+					for(i=0;i<sme->key_len;i++)
+						NMI_PRINTF("WEP Key Value[%d] = %d\n", i, sme->key[i]);
+				}				
+				priv->NMI_WFI_wep_default = sme->key_idx;
+				priv->NMI_WFI_wep_key_len[sme->key_idx] = sme->key_len;
+				NMI_memcpy(priv->NMI_WFI_wep_key[sme->key_idx], sme->key, sme->key_len);
+
+				/*BugID_5137*/
+				g_key_wep_params.key_len = sme->key_len;
+				g_key_wep_params.key = NMI_MALLOC(sme->key_len);
+				memcpy(g_key_wep_params.key, sme->key, sme->key_len);
+				g_key_wep_params.key_idx = sme->key_idx;
+				g_wep_keys_saved = NMI_TRUE;
+				
+				host_int_set_WEPDefaultKeyID(priv->hNMIWFIDrv,sme->key_idx);
+				host_int_add_wep_key_bss_sta(priv->hNMIWFIDrv, sme->key,sme->key_len,sme->key_idx);
+			}
+			else if (sme->crypto.cipher_group == WLAN_CIPHER_SUITE_WEP104)
+			{
+				//printk("> WEP-WEP_EXTENDED\n");
+				//tenuSecurity_t = WEP_104;
+				u8security = ENCRYPT_ENABLED | WEP | WEP_EXTENDED;
+				pcgroup_encrypt_val = "WEP104";
+				pccipher_group = "WLAN_CIPHER_SUITE_WEP104";
+				
+				priv->NMI_WFI_wep_default = sme->key_idx;
+				priv->NMI_WFI_wep_key_len[sme->key_idx] = sme->key_len;
+				NMI_memcpy(priv->NMI_WFI_wep_key[sme->key_idx], sme->key, sme->key_len);
+
+				/*BugID_5137*/
+				g_key_wep_params.key_len = sme->key_len;
+				g_key_wep_params.key = NMI_MALLOC(sme->key_len);
+				memcpy(g_key_wep_params.key, sme->key, sme->key_len);
+				g_key_wep_params.key_idx = sme->key_idx;
+				g_wep_keys_saved = NMI_TRUE;
+				
+				host_int_set_WEPDefaultKeyID(priv->hNMIWFIDrv,sme->key_idx);
+				host_int_add_wep_key_bss_sta(priv->hNMIWFIDrv, sme->key,sme->key_len,sme->key_idx);
+			}
+			else if( sme->crypto.wpa_versions & NL80211_WPA_VERSION_2)
+			{
+				//printk("> wpa_version: NL80211_WPA_VERSION_2\n");
+				//case NL80211_WPA_VERSION_2:
+				if (sme->crypto.cipher_group == WLAN_CIPHER_SUITE_TKIP)
+				{
+					//printk("> WPA2-TKIP\n");
+					//tenuSecurity_t = WPA2_TKIP;
+					u8security = ENCRYPT_ENABLED | WPA2 | TKIP;
+					pcgroup_encrypt_val = "WPA2_TKIP";
+					pccipher_group = "TKIP";
+				}
+				else //TODO: mostafa: here we assume that any other encryption type is AES
+				{
+					//printk("> WPA2-AES\n");
+					//tenuSecurity_t = WPA2_AES;
+					u8security = ENCRYPT_ENABLED | WPA2 | AES;
+					pcgroup_encrypt_val = "WPA2_AES";
+					pccipher_group = "AES";
+				}				
+				pcwpa_version = "WPA_VERSION_2";
+			}
 			else if( sme->crypto.wpa_versions & NL80211_WPA_VERSION_1)
-				{
+			{
 				//printk("> wpa_version: NL80211_WPA_VERSION_1\n");
 				if (sme->crypto.cipher_group == WLAN_CIPHER_SUITE_TKIP)
 				{
@@ -941,51 +1110,15 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 
 				//break;
 			}
-					else{
-						//break;
-					//default:
-						
-						pcwpa_version = "Default";
-						PRINT_D(CFG80211_DBG,"Adding key with cipher group = %x\n",sme->crypto.cipher_group);
-						if (sme->crypto.cipher_group == WLAN_CIPHER_SUITE_WEP40)
-						{
-							//printk("> WEP\n");
-							//tenuSecurity_t = WEP_40;
-							u8security = ENCRYPT_ENABLED | WEP;
-							pcgroup_encrypt_val = "WEP40";
-							pccipher_group = "WLAN_CIPHER_SUITE_WEP40";
-						}
-						else if (sme->crypto.cipher_group == WLAN_CIPHER_SUITE_WEP104)
-						{
-							//printk("> WEP-WEP_EXTENDED\n");
-							//tenuSecurity_t = WEP_104;
-							u8security = ENCRYPT_ENABLED | WEP | WEP_EXTENDED;
-							pcgroup_encrypt_val = "WEP104";
-							pccipher_group = "WLAN_CIPHER_SUITE_WEP104";
-						}
-						else
-						{
-							s32Error = -ENOTSUPP;
-							PRINT_ER("Not supported cipher: Error(%d)\n",s32Error);
-							//PRINT_ER("Cipher-Group: %x\n",sme->crypto.cipher_group);
+			else
+			{
+				s32Error = -ENOTSUPP;
+				PRINT_ER("Not supported cipher: Error(%d)\n",s32Error);
+				//PRINT_ER("Cipher-Group: %x\n",sme->crypto.cipher_group);
 
-					goto done;
-				}
+				goto done;
+			}				
 				
-				PRINT_INFO(CFG80211_DBG, "WEP Default Key Idx = %d\n",sme->key_idx);
-
-				if(INFO)
-				{
-					for(i=0;i<sme->key_len;i++)
-						NMI_PRINTF("WEP Key Value[%d] = %d\n", i, sme->key[i]);
-				}
-				
-				priv->NMI_WFI_wep_default = sme->key_idx;
-				priv->NMI_WFI_wep_key_len[sme->key_idx] = sme->key_len;
-				NMI_memcpy(priv->NMI_WFI_wep_key[sme->key_idx], sme->key, sme->key_len);
-				host_int_set_WEPDefaultKeyID(priv->hNMIWFIDrv,sme->key_idx);
-				host_int_add_wep_key_bss_sta(priv->hNMIWFIDrv, sme->key,sme->key_len,sme->key_idx);
-						//break;
 		}
 
 		/* After we set the u8security value from checking the group cipher suite, {in case of WPA or WPA2} we will 
@@ -996,7 +1129,7 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 			for(i=0 ; i < sme->crypto.n_ciphers_pairwise ; i++)
 			{
 				if (sme->crypto.ciphers_pairwise[i] == WLAN_CIPHER_SUITE_TKIP)
-				{					
+				{				
 					u8security = u8security | TKIP;					
 				}
 				else //TODO: mostafa: here we assume that any other encryption type is AES 
@@ -1006,7 +1139,8 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 			}
 		}
 		
-	}
+	PRINT_D(CFG80211_DBG,"Adding key with cipher group = %x\n",sme->crypto.cipher_group);
+	
 	PRINT_D(CFG80211_DBG, "Authentication Type = %d\n",sme->auth_type);
 	switch(sme->auth_type)
 	{
@@ -1047,6 +1181,12 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 	if(priv->u8CurrChannel != pstrNetworkInfo->u8channel)
 		priv->u8CurrChannel = pstrNetworkInfo->u8channel;
 		
+	if(!pstrWFIDrv->u8P2PConnect)
+	{
+		//NMI_PRINTF("STA CONNECTED CHANNEL %02x %02x\n",u8WLANChannel ,pstrNetworkInfo->u8channel);
+		u8WLANChannel = pstrNetworkInfo->u8channel;
+		//NMI_PRINTF("STA CONNECTED CHANNEL %02x %02x\n",u8WLANChannel,pstrNetworkInfo->u8channel);
+	}
 	s32Error = host_int_set_join_req(priv->hNMIWFIDrv, pstrNetworkInfo->au8bssid, sme->ssid,
 							  	    sme->ssid_len, sme->ie, sme->ie_len,
 							  	    CfgConnectResult, (void*)priv, u8security, 
@@ -1078,15 +1218,26 @@ static int NMI_WFI_disconnect(struct wiphy *wiphy, struct net_device *dev,u16 re
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
-	
+	#ifdef NMI_P2P
+	tstrNMI_WFIDrv * pstrWFIDrv;
+	#endif
+	uint8_t NullBssid[ETH_ALEN] = {0};
+	connecting = 0;
 
 
 	priv = wiphy_priv(wiphy);
-
+	#ifdef NMI_P2P
+	pstrWFIDrv=(tstrNMI_WFIDrv * )priv->hNMIWFIDrv;
+	#endif
+	linux_wlan_set_bssid(priv->dev,NullBssid);
+	
 	PRINT_D(CFG80211_DBG,"Disconnecting with reason code(%d)\n", reason_code);
 
+	u8P2Plocalrandom=0x01;
+	u8P2Precvrandom=0x00;
+	bNmi_ie = NMI_FALSE;
 	#ifdef NMI_P2P
-	gWFiDrvHandle->u64P2p_MgmtTimeout = 0;
+	pstrWFIDrv->u64P2p_MgmtTimeout = 0;
 	#endif
 
 	s32Error = host_int_disconnect(priv->hNMIWFIDrv, reason_code);
@@ -1130,7 +1281,15 @@ static int NMI_WFI_add_key(struct wiphy *wiphy, struct net_device *netdev,u8 key
 	
 	priv = wiphy_priv(wiphy);
 
-	PRINT_D(CFG80211_DBG,"Adding key with cipher suite = %x\n",params->cipher);		
+	PRINT_D(CFG80211_DBG,"Adding key with cipher suite = %x\n",params->cipher);	
+
+	/*BugID_5137*/
+	PRINT_D(CFG80211_DBG,"%x %x %d\n",(NMI_Uint32)wiphy, (NMI_Uint32)netdev, key_index);
+
+	PRINT_D(CFG80211_DBG,"key %x %x %x\n",params->key[0],
+										params->key[1],
+										params->key[2]);
+	
 	
 	switch(params->cipher)
 		{
@@ -1181,13 +1340,24 @@ static int NMI_WFI_add_key(struct wiphy *wiphy, struct net_device *netdev,u8 key
 			case WLAN_CIPHER_SUITE_TKIP:
 			case WLAN_CIPHER_SUITE_CCMP:
 				#ifdef NMI_AP_EXTERNAL_MLME				
-				if(priv->wdev->iftype == NL80211_IFTYPE_AP)
+				if(priv->wdev->iftype == NL80211_IFTYPE_AP || priv->wdev->iftype == NL80211_IFTYPE_P2P_GO)
 				{
 
 					if(priv->nmi_gtk[key_index] == NULL)
-						priv->nmi_gtk[key_index] = (struct nmi_wfi_key *)NMI_MALLOC(sizeof(struct nmi_wfi_key));
+						{
+							priv->nmi_gtk[key_index] = (struct nmi_wfi_key *)NMI_MALLOC(sizeof(struct nmi_wfi_key));
+							priv->nmi_gtk[key_index]->key=NMI_NULL;
+							priv->nmi_gtk[key_index]->seq=NMI_NULL;
+
+						}
 					if(priv->nmi_ptk[key_index] == NULL)	
-						priv->nmi_ptk[key_index] = (struct nmi_wfi_key *)NMI_MALLOC(sizeof(struct nmi_wfi_key));
+						{
+							priv->nmi_ptk[key_index] = (struct nmi_wfi_key *)NMI_MALLOC(sizeof(struct nmi_wfi_key));
+							priv->nmi_ptk[key_index]->key=NMI_NULL;
+							priv->nmi_ptk[key_index]->seq=NMI_NULL;
+						}
+				
+
 					
 					#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
 					if (!pairwise)
@@ -1209,14 +1379,22 @@ static int NMI_WFI_add_key(struct wiphy *wiphy, struct net_device *netdev,u8 key
 						pu8RxMic = params->key+16;
 						KeyLen = params->key_len - 16;
 				 	}
+					/* if there has been previous allocation for the same index through its key, free that memory and allocate again*/
+					if(priv->nmi_gtk[key_index]->key)
+						NMI_FREE(priv->nmi_gtk[key_index]->key);
 
 					priv->nmi_gtk[key_index]->key = (NMI_Uint8 *)NMI_MALLOC(params->key_len);
 					NMI_memcpy(priv->nmi_gtk[key_index]->key,params->key,params->key_len);
 					
-					if(priv->nmi_gtk[key_index]->seq == NULL)
+					/* if there has been previous allocation for the same index through its seq, free that memory and allocate again*/
+					if(priv->nmi_gtk[key_index]->seq)
+						NMI_FREE(priv->nmi_gtk[key_index]->seq);
+
+					if((params->seq_len)>0)
+					{
 						priv->nmi_gtk[key_index]->seq = (NMI_Uint8 *)NMI_MALLOC(params->seq_len);
-					
-					NMI_memcpy(priv->nmi_gtk[key_index]->seq,params->seq,params->seq_len);
+						NMI_memcpy(priv->nmi_gtk[key_index]->seq,params->seq,params->seq_len);
+					}
 
 					priv->nmi_gtk[key_index]->cipher= params->cipher;
 					priv->nmi_gtk[key_index]->key_len=params->key_len;
@@ -1253,9 +1431,18 @@ static int NMI_WFI_add_key(struct wiphy *wiphy, struct net_device *netdev,u8 key
 						KeyLen = params->key_len - 16;
 					 }
 
-					
+					if(priv->nmi_ptk[key_index]->key)
+						NMI_FREE(priv->nmi_ptk[key_index]->key);
+
 					priv->nmi_ptk[key_index]->key = (NMI_Uint8 *)NMI_MALLOC(params->key_len);
-					priv->nmi_ptk[key_index]->seq = (NMI_Uint8 *)NMI_MALLOC(params->seq_len);
+
+					if(priv->nmi_ptk[key_index]->seq)
+						NMI_FREE(priv->nmi_ptk[key_index]->seq);
+
+					if((params->seq_len)>0)
+						priv->nmi_ptk[key_index]->seq = (NMI_Uint8 *)NMI_MALLOC(params->seq_len);
+
+				
 
 					if(INFO)
 					{
@@ -1267,7 +1454,10 @@ static int NMI_WFI_add_key(struct wiphy *wiphy, struct net_device *netdev,u8 key
 					}
 						
 					NMI_memcpy(priv->nmi_ptk[key_index]->key,params->key,params->key_len);
+					
+					if((params->seq_len)>0)
 					NMI_memcpy(priv->nmi_ptk[key_index]->seq,params->seq,params->seq_len);
+				
 					priv->nmi_ptk[key_index]->cipher= params->cipher;
 					priv->nmi_ptk[key_index]->key_len=params->key_len;
 					priv->nmi_ptk[key_index]->seq_len=params->seq_len;
@@ -1294,6 +1484,41 @@ static int NMI_WFI_add_key(struct wiphy *wiphy, struct net_device *netdev,u8 key
 						pu8TxMic = params->key+16;
 						KeyLen = params->key_len - 16;
 				 	}
+
+					/*BugID_5137*/
+					/*save keys only on interface 0 (wifi interface)*/
+					if(!g_gtk_keys_saved && netdev == g_linux_wlan->strInterfaceInfo[0].nmc_netdev)
+					{
+						g_add_gtk_key_params.key_idx = key_index;
+						#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+						g_add_gtk_key_params.pairwise = pairwise;
+						#endif
+						if(!mac_addr)
+						{
+							g_add_gtk_key_params.mac_addr = NULL;
+						}
+						else
+						{
+							g_add_gtk_key_params.mac_addr = NMI_MALLOC(ETH_ALEN);
+							memcpy(g_add_gtk_key_params.mac_addr, mac_addr, ETH_ALEN);
+						}
+						g_key_gtk_params.key_len = params->key_len;
+						g_key_gtk_params.seq_len = params->seq_len;
+						g_key_gtk_params.key =  NMI_MALLOC(params->key_len);
+						memcpy(g_key_gtk_params.key, params->key, params->key_len);
+						if(params->seq_len > 0)
+						{
+							g_key_gtk_params.seq=  NMI_MALLOC(params->seq_len);
+							memcpy(g_key_gtk_params.seq, params->seq, params->seq_len);
+						}
+						g_key_gtk_params.cipher = params->cipher;
+
+						PRINT_D(CFG80211_DBG,"key %x %x %x\n",g_key_gtk_params.key[0],
+															g_key_gtk_params.key[1],
+															g_key_gtk_params.key[2]);
+						g_gtk_keys_saved = NMI_TRUE;
+					}
+					
 					host_int_add_rx_gtk(priv->hNMIWFIDrv,params->key,KeyLen,
 						key_index,params->seq_len,params->seq,pu8RxMic,pu8TxMic,STATION_MODE,u8mode);
 					//host_int_add_tx_gtk(priv->hNMIWFIDrv,params->key_len,params->key,key_index);
@@ -1306,7 +1531,42 @@ static int NMI_WFI_add_key(struct wiphy *wiphy, struct net_device *netdev,u8 key
 					 		pu8RxMic = params->key+24;
 							pu8TxMic = params->key+16;
 							KeyLen = params->key_len - 16;
-					 	}					  	
+					 	}
+
+					/*BugID_5137*/
+					/*save keys only on interface 0 (wifi interface)*/
+					if(!g_ptk_keys_saved && netdev == g_linux_wlan->strInterfaceInfo[0].nmc_netdev)
+					{
+						g_add_ptk_key_params.key_idx = key_index;
+						#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+						g_add_ptk_key_params.pairwise = pairwise;
+						#endif
+						if(!mac_addr)
+						{
+							g_add_ptk_key_params.mac_addr = NULL;
+						}
+						else
+						{
+							g_add_ptk_key_params.mac_addr = NMI_MALLOC(ETH_ALEN);
+							memcpy(g_add_ptk_key_params.mac_addr, mac_addr, ETH_ALEN);
+						}
+						g_key_ptk_params.key_len = params->key_len;
+						g_key_ptk_params.seq_len = params->seq_len;
+						g_key_ptk_params.key =  NMI_MALLOC(params->key_len);
+						memcpy(g_key_ptk_params.key, params->key, params->key_len);
+						if(params->seq_len > 0)
+						{
+							g_key_ptk_params.seq=  NMI_MALLOC(params->seq_len);
+							memcpy(g_key_ptk_params.seq, params->seq, params->seq_len);
+						}
+						g_key_ptk_params.cipher = params->cipher;
+
+						PRINT_D(CFG80211_DBG,"key %x %x %x\n",g_key_ptk_params.key[0],
+															g_key_ptk_params.key[1],
+															g_key_ptk_params.key[2]);
+						g_ptk_keys_saved = NMI_TRUE;
+					}
+					
 				 	host_int_add_ptk(priv->hNMIWFIDrv,params->key,KeyLen,mac_addr,
 					pu8RxMic,pu8TxMic,STATION_MODE,u8mode,key_index);
 					 PRINT_D(CFG80211_DBG,"Adding pairwise key\n");
@@ -1349,6 +1609,92 @@ static int NMI_WFI_del_key(struct wiphy *wiphy, struct net_device *netdev,
 
 	priv = wiphy_priv(wiphy);
 
+		/*BugID_5137*/
+		/*delete saved keys, if any*/
+		if(netdev == g_linux_wlan->strInterfaceInfo[0].nmc_netdev)
+		{
+			g_ptk_keys_saved = NMI_FALSE;
+			g_gtk_keys_saved = NMI_FALSE;
+			g_wep_keys_saved = NMI_FALSE;
+
+			/*Delete saved WEP keys params, if any*/
+			if(g_key_wep_params.key != NULL)
+			{
+				NMI_FREE(g_key_wep_params.key);
+				g_key_wep_params.key = NULL;
+			}
+
+	/*freeing memory allocated by "nmi_gtk" and "nmi_ptk" in "NMI_WIFI_ADD_KEY"*/
+
+	#ifdef NMI_AP_EXTERNAL_MLME
+	if((priv->nmi_gtk[key_index])!=NULL)
+	{	
+		
+		if(priv->nmi_gtk[key_index]->key!=NULL)
+		{	
+			
+			NMI_FREE(priv->nmi_gtk[key_index]->key);
+			priv->nmi_gtk[key_index]->key=NULL;
+		}
+		if(priv->nmi_gtk[key_index]->seq)
+		{
+			
+			NMI_FREE(priv->nmi_gtk[key_index]->seq);
+			priv->nmi_gtk[key_index]->seq=NULL;
+		}
+	
+		NMI_FREE(priv->nmi_gtk[key_index]);
+		priv->nmi_gtk[key_index]=NULL;
+	
+	}
+
+	if((priv->nmi_ptk[key_index])!=NULL)
+	{
+		
+		if(priv->nmi_ptk[key_index]->key)
+		{	
+
+			NMI_FREE(priv->nmi_ptk[key_index]->key);
+			priv->nmi_ptk[key_index]->key=NULL;
+		}
+		if(priv->nmi_ptk[key_index]->seq)
+		{		
+
+			NMI_FREE(priv->nmi_ptk[key_index]->seq);
+			priv->nmi_ptk[key_index]->seq=NULL;
+		}
+		NMI_FREE(priv->nmi_ptk[key_index]);
+		priv->nmi_ptk[key_index]=NULL;
+	}
+	#endif
+			
+			/*Delete saved PTK and GTK keys params, if any*/
+			if(g_key_ptk_params.key != NULL)
+			{
+				NMI_FREE(g_key_ptk_params.key);
+				g_key_ptk_params.key = NULL;
+			}
+			if(g_key_ptk_params.seq != NULL)
+			{
+				NMI_FREE(g_key_ptk_params.seq);
+				g_key_ptk_params.seq = NULL;
+			}
+
+			if(g_key_gtk_params.key != NULL)
+			{
+				NMI_FREE(g_key_gtk_params.key);
+				g_key_gtk_params.key = NULL;
+			}
+			if(g_key_gtk_params.seq != NULL)
+			{
+				NMI_FREE(g_key_gtk_params.seq);
+				g_key_gtk_params.seq = NULL;
+			}
+
+			/*Reset NMI_CHANGING_VIR_IF register to allow adding futrue keys to CE H/W*/
+			Set_machw_change_vir_if(NMI_FALSE);
+		}
+	
 		if(key_index >= 0 && key_index <=3)
 		{
 			NMI_memset(priv->NMI_WFI_wep_key[key_index], 0, priv->NMI_WFI_wep_key_len[key_index]);
@@ -1503,7 +1849,7 @@ static int NMI_WFI_get_station(struct wiphy *wiphy, struct net_device *dev,
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
-	linux_wlan_t* nic;
+	perInterface_wlan_t* nic;
 	#ifdef NMI_AP_EXTERNAL_MLME
 	NMI_Uint32 i =0;
 	NMI_Uint32 associatedsta = 0;
@@ -1571,10 +1917,10 @@ static int NMI_WFI_get_station(struct wiphy *wiphy, struct net_device *dev,
 		
 		if(u32FirstLnkSpdCnt > 10)
 		{
-			gbAutoRateAdjusted = NMI_TRUE;
+			priv->gbAutoRateAdjusted = NMI_TRUE;
 		}
 
-		if(gbAutoRateAdjusted == NMI_FALSE)
+		if(priv->gbAutoRateAdjusted == NMI_FALSE)
 		{
 			sinfo->txrate.legacy = 54 * 10;
 		}
@@ -1801,11 +2147,11 @@ static int NMI_WFI_set_bitrate_mask(struct wiphy *wiphy,
 	const struct cfg80211_bitrate_mask *mask)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
-	tstrCfgParamVal pstrCfgParamVal;
-	struct NMI_WFI_priv* priv;
+	//strCfgParamVal pstrCfgParamVal;
+	//struct NMI_WFI_priv* priv;
 
 	PRINT_D(CFG80211_DBG, "Setting Bitrate mask function\n");
-
+#if 0
 	priv = wiphy_priv(wiphy);
 	//priv = netdev_priv(priv->wdev->netdev);
 
@@ -1816,7 +2162,7 @@ static int NMI_WFI_set_bitrate_mask(struct wiphy *wiphy,
 
 	if(s32Error)
 		PRINT_ER("Error in setting bitrate\n");
-
+#endif
 	return s32Error;
 	
 }
@@ -1958,7 +2304,164 @@ static int  NMI_WFI_flush_pmksa(struct wiphy *wiphy, struct net_device *netdev)
 #ifdef NMI_P2P
 
 /**
-*  @brief 			 NMI_WFI_p2p_rx
+*  @brief 	NMI_WFI_CfgParseRxNegRsp
+*  @details Function parses the received Negotiation responses frames and modifies the following attributes:
+*                -GO Intent
+*		    -Channel list
+*		    -Operating Channel
+*     	
+*  @param[in] u8* Buffer, u32 length
+*  @return 	NONE.
+*  @author	mdaftedar
+*  @date	12 DEC 2012
+*  @version
+*/
+void NMI_WFI_CfgParseRxNegRsp(NMI_Uint8 * buf,NMI_Uint32 len)
+{
+	NMI_Uint32 index=0;
+	NMI_Uint32 i=0,j=0;
+	while(index < len)
+	{
+		if(buf[index] == GO_INTENT_ATTR_ID)
+		{
+			buf[index+3] =(buf[index+3]  & 0x01) | (0x00 << 1);
+		}
+		
+		else if(buf[index] ==  CHANLIST_ATTR_ID)
+		{
+			
+			for(i=index+3;i<((index+3)+buf[index+1]);i++)
+			{
+				if(buf[i] == 0x51)
+				{
+					for(j=i+2;j<((i+2)+buf[i+1]);j++)
+					{		
+						buf[j] = u8WLANChannel;		
+					}
+					break;
+				}
+
+			}
+		}
+		else if(buf[index] ==  OPERCHAN_ATTR_ID)
+		{
+			buf[index+6]=0x51;
+			buf[index+7]=u8WLANChannel;
+		}
+		
+		index+=buf[index+1]+3; //ID,Length byte
+		
+	}
+
+}
+/**
+*  @brief 	NMI_WFI_CfgParseTxNegRsp
+*  @details Function parses the transmitted Negotiation response frame and trasmitted modifes the  
+*               GO Intent attribute
+*  @param[in] u8* Buffer, u32 length
+*  @return 	NONE.
+*  @author	mdaftedar
+*  @date	12 DEC 2012
+*  @version
+*/
+void NMI_WFI_CfgParseTxNegRsp(NMI_Uint8 * buf,NMI_Uint32 len)
+{
+	NMI_Uint32 index=0;
+	
+	while(index < len)
+	{
+		 if(buf[index] == GO_INTENT_ATTR_ID)
+		{
+			buf[index+3] =(buf[index+3]  & 0x01) | (0x0f << 1);
+			break;
+		}
+		 
+		index+=buf[index+1]+3; //ID,Length byte
+	}
+
+}
+
+/**
+*  @brief 	NMI_WFI_CfgParseRxNegReq
+*  @details Function parses the received Negotiation requests frames and modifies the following attributes:
+*                -GO Intent
+*		    -Channel list
+*		    -Operating Channel
+*     	
+*  @param[in] u8* Buffer, u32 length
+*  @return 	NONE.
+*  @author	mdaftedar
+*  @date	12 DEC 2012
+*  @version
+*/
+void NMI_WFI_CfgParseRxNegReq(NMI_Uint8 * buf,NMI_Uint32 len)
+{
+	NMI_Uint32 index=0;
+	NMI_Uint32 i=0,j=0;
+	
+	while(index < len)
+	{
+		
+		 if(buf[index] == GO_INTENT_ATTR_ID)
+		{
+			buf[index+3] =(buf[index+3]  & 0x01) | (0x00 << 1);
+		}
+
+		
+		else if(buf[index] ==  CHANLIST_ATTR_ID)
+		{
+			
+			for(i=index+3;i<((index+3)+buf[index+1]);i++)
+			{
+				if(buf[i] == 0x51)
+				{
+					
+					for(j=i+2;j<((i+2)+buf[i+1]);j++)
+					{
+						buf[j] = u8WLANChannel;
+					}
+					break;
+				}
+
+			}
+		}
+		else if(buf[index] ==  OPERCHAN_ATTR_ID)
+		{
+			
+			buf[index+6]=0x51;
+			buf[index+7]=u8WLANChannel;
+		}
+		index+=buf[index+1]+3; //ID,Length byte
+	}
+
+}
+/**
+*  @brief 	NMI_WFI_CfgParseTxNegReq
+*  @details Function parses the transmitted Negotiation request frames and modifies the  
+*               GO Intent attribute
+*  @param[in] u8* Buffer, u32 length
+*  @return 	NONE.
+*  @author	mdaftedar
+*  @date	12 DEC 2012
+*  @version
+*/
+void NMI_WFI_CfgParseTxNegReq(NMI_Uint8 * buf,NMI_Uint32 len)
+{
+	NMI_Uint32 index=0;
+	
+	while(index < len)
+	{
+		 if(buf[index] == GO_INTENT_ATTR_ID)
+		{
+			buf[index+3] =(buf[index+3]  & 0x01) | (0x0f << 1);
+			break;
+		}
+		 
+		index+=buf[index+1]+3; //ID,Length byte
+		
+	}
+}
+/*  @brief 			 NMI_WFI_p2p_rx
 *  @details 		
 *  @param[in]   	
 				
@@ -1973,9 +2476,10 @@ void NMI_WFI_p2p_rx (struct net_device *dev,uint8_t *buff, uint32_t size)
 
 	struct NMI_WFI_priv* priv;
 	NMI_Uint32 header,pkt_offset;
-
+	tstrNMI_WFIDrv * pstrWFIDrv;
+	NMI_Uint32 i=0,j=0;
 	priv= wiphy_priv(dev->ieee80211_ptr->wiphy);
-
+	pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
 	//Get NMI header
 	memcpy(&header, (buff-HOST_HDR_OFFSET), HOST_HDR_OFFSET);
 
@@ -1987,7 +2491,7 @@ void NMI_WFI_p2p_rx (struct net_device *dev,uint8_t *buff, uint32_t size)
 	{
 		if(buff[0]==IEEE80211_STYPE_PROBE_RESP)
 		{
-			PRINT_INFO(GENERIC_DBG,"Probe response ACK\n");
+			PRINT_D(GENERIC_DBG,"Probe response ACK\n");
 			cfg80211_mgmt_tx_status(dev,priv->u64tx_cookie,buff,size,true,GFP_KERNEL);
 			return;
 		}
@@ -1995,12 +2499,12 @@ void NMI_WFI_p2p_rx (struct net_device *dev,uint8_t *buff, uint32_t size)
 		{
         	if(pkt_offset & IS_MGMT_STATUS_SUCCES)
         	{		
-				PRINT_INFO(GENERIC_DBG,"Success Ack\n");
+				PRINT_D(GENERIC_DBG,"Success Ack - Action frame subtype: %x Dialog token: %d FS: %x %x\n",buff[30], buff[31], buff[21], buff[22]);
         		cfg80211_mgmt_tx_status(dev,priv->u64tx_cookie,buff,size,true,GFP_KERNEL);
         	}
 			else
 			{
-				PRINT_INFO(GENERIC_DBG,"Fail Ack\n");
+				PRINT_D(GENERIC_DBG,"Fail Ack - Action frame subtype: %x Dialog token: %d FS: %x %x\n",buff[30], buff[31], buff[21], buff[22]);
 				cfg80211_mgmt_tx_status(dev,priv->u64tx_cookie,buff,size,false,GFP_KERNEL);
 			}
 	  }
@@ -2008,17 +2512,93 @@ void NMI_WFI_p2p_rx (struct net_device *dev,uint8_t *buff, uint32_t size)
 		
 	}
 	else
-	{		
-		if(priv->bCfgScanning == NMI_TRUE && jiffies >= gWFiDrvHandle->u64P2p_MgmtTimeout)
+	{	
+		if(buff[0] == ACTION_FRAME)
+			PRINT_D(GENERIC_DBG,"Rx Action Frmae Type: %x\n", buff[30]);
+		
+			
+			if((buff[0] == ACTION_FRAME) && ( buff[30] == GO_NEG_REQ_ATTR_ID ||  buff[30] == GO_NEG_RSP_ATTR_ID))
+			{
+				if(!bNmi_ie)
+				{
+					for(i=0;i<size;i++)
+					{
+					 if ((buff[i]==0xdd) &&  (buff[i+1] == 0x05) && 
+						 (buff[i+2] == 0x00) && (buff[i+3] == 0x08) &&
+				         (buff[i+4] == 0x40) && (buff[i+5] == 0x03))
+						{
+							u8P2Precvrandom = buff[i+6];	
+							bNmi_ie=NMI_TRUE;
+							PRINT_D(GENERIC_DBG,"NMI Vendor specific IE:%02x\n",u8P2Precvrandom);
+							break;
+						}
+					}		
+				}
+				
+				if(u8P2Plocalrandom > u8P2Precvrandom)
+				{
+					/*Search for the P2P public action frames*/
+					for(i=1;i<size;i++)
+					{
+						if(buff[i]==PUBLICACTION_CAT && buff[i+1]==PUBLICACTION_FRAME && !(memcmp(u8P2P_oui,&buff[i+2],4)))
+						{
+							if(buff[i+6] == GO_NEG_REQ_ATTR_ID)
+							{
+								for(j=i+8;j<size;j++)
+								{
+									if(buff[j]== P2PELEM_ID && !(memcmp(u8P2P_oui,&buff[j+2],4)) )
+									{
+										NMI_WFI_CfgParseRxNegReq(&buff[j+6],size-(j+6));
+										break;
+									}
+								}
+							}		
+						
+							if(buff[i+6] == GO_NEG_RSP_ATTR_ID)
+							{
+								for(j=i+8;j<size;j++)
+								{
+									if(buff[j]== P2PELEM_ID && !(memcmp(u8P2P_oui,&buff[j+2],4)) )
+									{
+										NMI_WFI_CfgParseRxNegRsp(&buff[j+6],size-(j+6));
+										break;
+									}
+								}
+							}
+					}
+				}
+			}
+			else
+				PRINT_D(GENERIC_DBG,"PEER WILL BE GO LocaRand=%02x RecvRand %02x\n",u8P2Plocalrandom,u8P2Precvrandom);
+
+		}
+
+		if(priv->bCfgScanning == NMI_TRUE && jiffies >= pstrWFIDrv->u64P2p_MgmtTimeout)
 		{
 			PRINT_D(GENERIC_DBG,"Receiving action frames from wrong channels\n");
 			return;
 		}
 		
-		PRINT_INFO(GENERIC_DBG,"Sending P2P to host\n");
-		cfg80211_rx_mgmt(dev,priv->u32listen_freq,buff,size,GFP_ATOMIC);
-	}
+		PRINT_D(GENERIC_DBG,"Sending P2P to host\n");
 
+		if((buff[0] == ACTION_FRAME) && ( buff[30] == GO_NEG_REQ_ATTR_ID ||  buff[30] == GO_NEG_RSP_ATTR_ID) && ( bNmi_ie))
+		{
+			//extra attribute for sig_dbm: signal strength in mBm, or 0 if unknown
+			#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)
+			cfg80211_rx_mgmt(dev,priv->u32listen_freq, 0, buff,size-7,GFP_ATOMIC);	// rachel
+			#else
+			cfg80211_rx_mgmt(dev,priv->u32listen_freq,buff,size-7,GFP_ATOMIC);
+			#endif
+		}
+		else
+		{
+			#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,0)
+			cfg80211_rx_mgmt(dev,priv->u32listen_freq, 0, buff,size,GFP_ATOMIC);	// rachel
+			#else
+			cfg80211_rx_mgmt(dev,priv->u32listen_freq,buff,size,GFP_ATOMIC);
+			#endif
+		}
+	}
 }
 /**
 *  @brief 			NMI_WFI_mgmt_tx_complete
@@ -2170,8 +2750,20 @@ static int   NMI_WFI_cancel_remain_on_channel(struct wiphy *wiphy, struct net_de
 	s32Error = host_int_ListenStateExpired(priv->hNMIWFIDrv);
 	return 0;
 }
-
-
+/**
+*  @brief 	 NMI_WFI_add_nmivendorspec
+*  @details 	Adding NMI information elemet to allow two NMI devices to
+				identify each other and connect
+*  @param[in]   NMI_Uint8 * buf 
+*  @return 	void
+*  @author	mdaftedar
+*  @date	01 JAN 2014	
+*  @version	1.0
+*/
+void NMI_WFI_add_nmivendorspec(NMI_Uint8 * buff)
+{
+	memcpy(buff,u8P2P_vendorspec,sizeof(u8P2P_vendorspec));
+}
 /**
 *  @brief 	NMI_WFI_mgmt_tx_frame
 *  @details 
@@ -2182,19 +2774,35 @@ static int   NMI_WFI_cancel_remain_on_channel(struct wiphy *wiphy, struct net_de
 *  @date	01 JUL 2012
 *  @version
 */
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,37)
-int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
-                                                  struct ieee80211_channel *chan, bool offchan,
-                                                  enum nl80211_channel_type channel_type,
-                                                  bool channel_type_valid, unsigned int wait,
-                                                  const u8 *buf, size_t len, u64 *cookie)
+extern linux_wlan_t* g_linux_wlan;
+extern NMI_Bool bEnablePS;
+#if KERNEL_VERSION(3,1,0) > LINUX_VERSION_CODE 
+	
+	int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,	
+													  struct ieee80211_channel *chan, bool offchan,
+	
+													  enum nl80211_channel_type channel_type,
+	
+													  bool channel_type_valid, unsigned int wait,
+	
+													  const u8 *buf, size_t len, u64 *cookie)
+	
+	  
+	
 #else
-int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
-                     struct ieee80211_channel *chan,
-                     enum nl80211_channel_type channel_type,
-                     bool channel_type_valid,
-                     const u8 *buf, size_t len, u64 *cookie)
+	
+	int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
+	
+							  struct ieee80211_channel *chan, bool offchan,
+	
+							   enum nl80211_channel_type channel_type,
+	
+							   bool channel_type_valid, unsigned int wait,
+	
+							   const u8 *buf, size_t len, bool no_cck,
+	
+							   bool dont_wait_for_ack, u64 *cookie)
+	
 #endif
 {
 	const struct ieee80211_mgmt *mgmt;
@@ -2203,11 +2811,16 @@ int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
 	struct NMI_WFI_priv* priv;
 	NMI_Uint16 fc;
 	NMI_Sint32 s32Error = NMI_SUCCESS;
-	
+	tstrNMI_WFIDrv * pstrWFIDrv;
+	NMI_Uint32 i,j;
+
+	/*BugID_5213*/
+	/*Net length of mgmt_tx->buff (Frame passed from WPAS + Added attributes)*/
+	NMI_Uint32 buf_len = len + sizeof(u8P2P_vendorspec) + sizeof(u8P2Plocalrandom);
 	
 	priv = wiphy_priv(wiphy);	
 	nic =netdev_priv(dev);
-
+	pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
 	*cookie = (unsigned long)buf;
 	priv->u64tx_cookie = *cookie;
 	mgmt = (const struct ieee80211_mgmt *) buf;
@@ -2218,7 +2831,7 @@ int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
 		PRINT_ER("Failed to allocate memory for mgmt_tx structure\n");
 	     	return NMI_FAIL;
 	}	
-	mgmt_tx->buff= (char*)NMI_MALLOC(len);
+	mgmt_tx->buff= (char*)NMI_MALLOC(buf_len);
 	if(mgmt_tx->buff == NULL)
 	{
 		PRINT_ER("Failed to allocate memory for mgmt_tx buff\n");
@@ -2230,23 +2843,79 @@ int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
 	/*send mgmt frame to firmware*/
 
 	//if(priv->u8CurrChannel != chan->hw_value)
+	
+	priv->u8CurrChannel = chan->hw_value;
+
+	/*BugID_4847*/
+	/*Only set the channel, if not a negotiation confirmation frame
+	(If Negotiation confirmation frame, force it
+	to be transmitted on the same negotiation channel)*/
+	if(buf[0] != 0xd0 || buf[30] != 0x02)
 	{
-		priv->u8CurrChannel = chan->hw_value;
-	       host_int_set_mac_chnl_num(priv->hNMIWFIDrv, chan->hw_value);
+		PRINT_D(GENERIC_DBG,"Setting channel: %d\n",chan->hw_value);
+		host_int_set_mac_chnl_num(priv->hNMIWFIDrv, chan->hw_value);		
+	}
+			
+	if ( (buf[0] == ACTION_FRAME) && ( buf[30] == GO_NEG_REQ_ATTR_ID ||  buf[30] == GO_NEG_RSP_ATTR_ID))
+	{
+		if(u8P2Plocalrandom == 1 && u8P2Precvrandom<u8P2Plocalrandom)
+		{
+			get_random_bytes(&u8P2Plocalrandom, 1);
+			/*TODO:If zero?*/
+		}
+		if(u8P2Plocalrandom > u8P2Precvrandom)
+		{
+			PRINT_D(GENERIC_DBG,"LOCAL WILL BE GO LocaRand=%02x RecvRand %02x\n",u8P2Plocalrandom,u8P2Precvrandom);
+			for(i=1;i<len;i++)
+			{
+				/*Search for the P2P public action frames*/
+				if(buf[i]==PUBLICACTION_CAT && buf[i+1]==PUBLICACTION_FRAME && !(memcmp(u8P2P_oui,&buf[i+2],4)))
+				{
+					if(buf[i+6] == GO_NEG_REQ_ATTR_ID)
+					{
+						for(j=i+8;j<len;j++)
+						{
+							if(buf[j]== P2PELEM_ID && !(memcmp(u8P2P_oui,&buf[j+2],4)) )
+							{
+								NMI_WFI_CfgParseTxNegReq(&mgmt_tx->buff[j+6],len-(j+6)); 
+								break;
+							}
+						}
+					}
+					
+					if(buf[i+6] == GO_NEG_RSP_ATTR_ID)
+					{
+						for(j=i+8;j<len;j++)
+						{
+							if(buf[j]== P2PELEM_ID && !(memcmp(u8P2P_oui,&buf[j+2],4)) )
+							{
+								NMI_WFI_CfgParseTxNegRsp(&mgmt_tx->buff[j+6],len-(j+6));
+								break;
+							}
+						}
+					}
+				}
+			}
+			NMI_WFI_add_nmivendorspec(&mgmt_tx->buff[len]);
+					mgmt_tx->buff[len + sizeof(u8P2P_vendorspec)] = u8P2Plocalrandom;
+					mgmt_tx->size=buf_len;
+		}
+		else
+			PRINT_D(GENERIC_DBG,"PEER WILL BE GO LocaRand=%02x RecvRand %02x\n",u8P2Plocalrandom,u8P2Precvrandom);
 	}
 	if(fc == IEEE80211_STYPE_ACTION)
 	{
-		PRINT_D(GENERIC_DBG,"TX: ACTION FRAME : Chan:%d\n",chan->hw_value);
-		gWFiDrvHandle->u64P2p_MgmtTimeout = (jiffies + msecs_to_jiffies(wait));
+		PRINT_D(GENERIC_DBG,"TX: ACTION FRAME Type:%x : Chan:%d\n",buf[30], chan->hw_value);
+		pstrWFIDrv->u64P2p_MgmtTimeout = (jiffies + msecs_to_jiffies(wait));
 		
-		PRINT_D(GENERIC_DBG,"Current Jiffies: %lu Timeout:%lu\n",jiffies,gWFiDrvHandle->u64P2p_MgmtTimeout);
+		PRINT_D(GENERIC_DBG,"Current Jiffies: %lu Timeout:%llu\n",jiffies,pstrWFIDrv->u64P2p_MgmtTimeout);
 	}	
 	else if(fc == IEEE80211_STYPE_PROBE_RESP)
 	{
 		PRINT_D(GENERIC_DBG,"TX: Probe Response\n");
 	}
        
-	nic->oup.wlan_add_mgmt_to_tx_que(mgmt_tx,mgmt_tx->buff,mgmt_tx->size,NMI_WFI_mgmt_tx_complete);
+	g_linux_wlan->oup.wlan_add_mgmt_to_tx_que(mgmt_tx,mgmt_tx->buff,mgmt_tx->size,NMI_WFI_mgmt_tx_complete);
 	
 	return s32Error;	
 }
@@ -2254,9 +2923,15 @@ int  NMI_WFI_mgmt_tx(struct wiphy *wiphy, struct net_device *dev,
 int   NMI_WFI_mgmt_tx_cancel_wait(struct wiphy *wiphy,
                                struct net_device *dev,
                                u64 cookie)
-{
+{	
+	struct NMI_WFI_priv* priv;
+	tstrNMI_WFIDrv * pstrWFIDrv;
+	priv = wiphy_priv(wiphy);
+	pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
+
+
 	PRINT_D(GENERIC_DBG,"Tx Cancel wait :%lu\n",jiffies);
-	gWFiDrvHandle->u64P2p_MgmtTimeout = jiffies;
+	pstrWFIDrv->u64P2p_MgmtTimeout = jiffies;
 	
 	return 0;
 }
@@ -2298,21 +2973,24 @@ void    NMI_WFI_frame_register(struct wiphy *wiphy,struct net_device *dev,
 {
 
 	struct NMI_WFI_priv* priv;
-	linux_wlan_t *nic;
+	perInterface_wlan_t* nic;
 	
 	
 	priv = wiphy_priv(wiphy);
 	nic = netdev_priv(priv->wdev->netdev);
 
 	/*If mac is closed, then return*/
-	if(!nic->nmc1000_initialized)
+	/*if(!nic->nmc1000_initialized)
 	{
 		PRINT_D(GENERIC_DBG,"Return since mac is closed\n");
 		return;
-	}
+	}*/
 
+	/*BugID_5137*/
+	if(!frame_type)
+		return;
 	
-	PRINT_INFO(GENERIC_DBG,"Frame registering Frame Type: %x: Boolean: %d\n",frame_type,reg);
+	PRINT_D(GENERIC_DBG,"Frame registering Frame Type: %x: Boolean: %d\n",frame_type,reg);
 	host_int_frame_register(priv->hNMIWFIDrv,frame_type,reg);
 	switch(frame_type)
 	{
@@ -2433,7 +3111,8 @@ int NMI_WFI_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 		 return -EIO; 
  	}
 
-	host_int_set_power_mgmt(priv->hNMIWFIDrv, enabled, timeout);
+	if(bEnablePS	== NMI_TRUE)
+		host_int_set_power_mgmt(priv->hNMIWFIDrv, enabled, timeout);
 
 
 	return NMI_SUCCESS;
@@ -2450,69 +3129,345 @@ int NMI_WFI_set_power_mgmt(struct wiphy *wiphy, struct net_device *dev,
 *  @date	01 MAR 2012	
 *  @version	1.0
 */
+void nmc1000_wlan_deinit(linux_wlan_t *nic);
+int nmc1000_wlan_init(struct net_device *dev, perInterface_wlan_t* p_nic);	
+
 static int NMI_WFI_change_virt_intf(struct wiphy *wiphy,struct net_device *dev,
 	enum nl80211_iftype type, u32 *flags,struct vif_params *params)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
 	//struct NMI_WFI_mon_priv* mon_priv;
-	linux_wlan_t* nic;
+	perInterface_wlan_t* nic;
+	NMI_Uint8 interface_type;
+	NMI_Uint16 TID=0;
+	#ifdef NMI_P2P
+	NMI_Uint8 i;
+	#endif
 
 	nic = netdev_priv(dev);
+	priv = wiphy_priv(wiphy);
 	
 	PRINT_D(HOSTAPD_DBG,"In Change virtual interface function\n");
-
-	priv = wiphy_priv(wiphy);
-
 	PRINT_D(HOSTAPD_DBG,"Wireless interface name =%s\n", dev->name);
+	u8P2Plocalrandom=0x01;
+	u8P2Precvrandom=0x00;
+	
+	bNmi_ie= NMI_FALSE;
+
+	/*BugID_5137*/	
+	/*Set NMI_CHANGING_VIR_IF register to disallow adding futrue keys to CE H/W*/
+	if(g_ptk_keys_saved && g_gtk_keys_saved)
+	{
+		Set_machw_change_vir_if(NMI_TRUE);
+	}
 
 	switch(type)
 	{
 	case NL80211_IFTYPE_STATION:
-
+		connecting = 0;
 		PRINT_D(HOSTAPD_DBG,"Interface type = NL80211_IFTYPE_STATION\n");
-
-		dev->ieee80211_ptr->iftype = NL80211_IFTYPE_STATION;
+		//linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+		
+		dev->ieee80211_ptr->iftype = type;
+		priv->wdev->iftype = type;
+		nic->monitor_flag = 0;
 		nic->iftype = STATION_MODE;
 
 		#ifndef SIMULATION
-		PRINT_D(HOSTAPD_DBG,"Downloading STATION firmware\n");
-		linux_wlan_get_firmware(nic);
 		#ifdef NMI_P2P
-		/*If nmc is running, then close-open to actually get new firmware running (serves P2P)*/
-		if(nic->nmc1000_initialized)
+		interface_type = nic->iftype;
+		nic->iftype = STATION_MODE;
+		g_nmc_initialized = 0;
+
+		/*BugID_5213*/
+		/*Eliminate host interface blocking state*/
+		linux_wlan_unlock((void *)&g_linux_wlan->cfg_event);
+		
+		nmc1000_wlan_deinit(g_linux_wlan);
+		nmc1000_wlan_init(dev, nic);
+		g_nmc_initialized = 1;
+		nic->iftype = interface_type;
+
+		/*Setting interface 1 drv handler and mac address in newly downloaded FW*/
+		host_int_set_wfi_drv_handler(g_linux_wlan->strInterfaceInfo[0].drvHandler);
+		host_int_set_MacAddress((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+								g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+		host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
+
+		/*Add saved WEP keys, if any*/
+		if(g_wep_keys_saved)
 		{
-			mac_close(dev);
-			mac_open(dev);
+			host_int_set_WEPDefaultKeyID((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+										g_key_wep_params.key_idx);
+			host_int_add_wep_key_bss_sta((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+										g_key_wep_params.key,
+										g_key_wep_params.key_len,
+										g_key_wep_params.key_idx);
+		}
+
+		/*No matter the driver handler passed here, it will be overwriiten*/
+		/*in Handle_FlushConnect() with gu8FlushedJoinReqDrvHandler*/
+		host_int_flush_join_req(priv->hNMIWFIDrv);
+
+		/*Add saved PTK and GTK keys, if any*/
+		if(g_ptk_keys_saved && g_gtk_keys_saved)
+		{
+			PRINT_D(CFG80211_DBG,"ptk %x %x %x\n",g_key_ptk_params.key[0],
+										g_key_ptk_params.key[1],
+										g_key_ptk_params.key[2]);
+			PRINT_D(CFG80211_DBG,"gtk %x %x %x\n",g_key_gtk_params.key[0],
+										g_key_gtk_params.key[1],
+										g_key_gtk_params.key[2]);
+			NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+								g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+								g_add_ptk_key_params.key_idx,
+								#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+								g_add_ptk_key_params.pairwise,
+								#endif
+								g_add_ptk_key_params.mac_addr,
+								(struct key_params *)(&g_key_ptk_params));
+
+			NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+								g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+								g_add_gtk_key_params.key_idx,
+								#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+								g_add_gtk_key_params.pairwise,
+								#endif
+								g_add_gtk_key_params.mac_addr,
+								(struct key_params *)(&g_key_gtk_params));
+		}
+		
+		/*BugID_4847: registered frames in firmware are now*/
+		/*lost due to mac close. So re-register those frames*/
+		if(g_linux_wlan->nmc1000_initialized)
+		{
+			for(i=0; i<num_reg_frame; i++)
+			{
+				PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
+																		nic->g_struct_frame_reg[i].reg);
+				host_int_frame_register(priv->hNMIWFIDrv,
+										nic->g_struct_frame_reg[i].frame_type,
+										nic->g_struct_frame_reg[i].reg);
+			}
+		}
+
+		bEnablePS = NMI_TRUE;
+		host_int_set_power_mgmt( priv->hNMIWFIDrv, 1, 0);
+		#endif
+		#endif
+		break;
+		
+	case NL80211_IFTYPE_P2P_CLIENT:
+		bEnablePS = NMI_FALSE;
+		host_int_set_power_mgmt(priv->hNMIWFIDrv, 0, 0);
+		connecting = 0;
+		PRINT_D(HOSTAPD_DBG,"Interface type = NL80211_IFTYPE_P2P_CLIENT\n");
+		//linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+
+		dev->ieee80211_ptr->iftype = type;
+		priv->wdev->iftype = type;
+		nic->monitor_flag = 0;
+		nic->iftype = STATION_MODE;
+		host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
+
+		#ifndef SIMULATION
+		//PRINT_D(HOSTAPD_DBG,"Downloading STATION firmware\n");
+
+		#ifdef NMI_P2P
+		
+		PRINT_D(HOSTAPD_DBG,"Downloading P2P_CONCURRENCY_FIRMWARE\n");
+		nic->iftype = CLIENT_MODE;
+
+		nic->iftype = CLIENT_MODE;
+		nmc1000_wlan_deinit(g_linux_wlan);
+		nmc1000_wlan_init(dev, nic);
+		nic->iftype = STATION_MODE;
+
+		
+		/*If nmc is running, then close-open to actually get new firmware running (serves P2P)*/
+		if(g_linux_wlan->nmc1000_initialized)
+		{
+			//nmc1000_wlan_deinit(g_linux_wlan);
+			//nmc1000_wlan_init(dev, g_linux_wlan);
+			//mac_close(nic->nmc_netdev);
+			//mac_open(nic->nmc_netdev);
+			//repeat_power_cycle(nic);			
+			/*BugID_4847: registered frames in firmware are now lost
+			   due to mac close. So re-register those frames */
+			for(i=0; i<num_reg_frame; i++)
+			{
+				PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
+																		nic->g_struct_frame_reg[i].reg);
+				host_int_frame_register(priv->hNMIWFIDrv,
+										nic->g_struct_frame_reg[i].frame_type,
+										nic->g_struct_frame_reg[i].reg);
+			}
 		}
 		#endif
 		#endif
 		break;
 
 	case NL80211_IFTYPE_AP:
-
-		PRINT_D(HOSTAPD_DBG,"Interface type = NL80211_IFTYPE_AP\n");
-
+		//connecting = 1;
+		bEnablePS = NMI_FALSE;
+		PRINT_D(HOSTAPD_DBG,"Interface type = NL80211_IFTYPE_AP %d\n", type);
+		//linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
 		//mon_priv = netdev_priv(dev);
 		//mon_priv->real_ndev = dev;
-		dev->ieee80211_ptr->iftype = NL80211_IFTYPE_AP;
+		dev->ieee80211_ptr->iftype = type;
 		priv->wdev->iftype = type;
 		nic->iftype = AP_MODE;
-
+		printk("(NMI_Uint32)priv->hNMIWFIDrv[%x]\n",(NMI_Uint32)priv->hNMIWFIDrv);
+		
 		#ifndef SIMULATION
 		PRINT_D(HOSTAPD_DBG,"Downloading AP firmware\n");
 		linux_wlan_get_firmware(nic);
 		#ifdef NMI_P2P
 		/*If nmc is running, then close-open to actually get new firmware running (serves P2P)*/
-		if(nic->nmc1000_initialized)
+		if(g_linux_wlan->nmc1000_initialized)
 		{
+			nic->iftype = AP_MODE;
+			g_linux_wlan->nmc1000_initialized = 1;
 			mac_close(dev);
 			mac_open(dev);
+			
+			//nmc1000_wlan_deinit(g_linux_wlan);
+			//nmc1000_wlan_init(dev,nic);
+			//repeat_power_cycle(nic);
+			//nic->iftype = STATION_MODE;
+
+			/*BugID_4847: registered frames in firmware are now lost
+			   due to mac close. So re-register those frames */
+			for(i=0; i<num_reg_frame; i++)
+			{
+				PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
+																		nic->g_struct_frame_reg[i].reg);
+				host_int_frame_register(priv->hNMIWFIDrv,
+										nic->g_struct_frame_reg[i].frame_type,
+										nic->g_struct_frame_reg[i].reg);
+			}
 		}
 		#endif
 		#endif
-		
 		break;
+		
+	case NL80211_IFTYPE_P2P_GO:
+		PRINT_D(GENERIC_DBG,"start duringIP timer\n");
+
+		#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+		g_obtainingIP=NMI_TRUE;
+		NMI_TimerStart(&hDuringIpTimer, duringIP_TIME, NMI_NULL, NMI_NULL);
+		#endif
+		host_int_set_power_mgmt(priv->hNMIWFIDrv, 0, 0);
+		/*BugID_5222*/
+		/*Delete block ack has to be the latest config packet*/
+		/*sent before downloading new FW. This is because it blocks on*/
+		/*hWaitResponse semaphore, which allows previous config*/
+		/*packets to actually take action on old FW*/
+		host_int_delBASession(priv->hNMIWFIDrv, g_linux_wlan->strInterfaceInfo[0].aBSSID, TID, (void *)priv->hNMIWFIDrv);
+		bEnablePS = NMI_FALSE;
+		PRINT_D(HOSTAPD_DBG,"Interface type = NL80211_IFTYPE_GO\n");
+		//linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+		//mon_priv = netdev_priv(dev);
+		//mon_priv->real_ndev = dev;
+		dev->ieee80211_ptr->iftype = type;
+		priv->wdev->iftype = type;
+		nic->iftype = AP_MODE;
+		printk("(NMI_Uint32)priv->hNMIWFIDrv[%x]\n",(NMI_Uint32)priv->hNMIWFIDrv);
+		//host_int_set_operation_mode((NMI_Uint32)priv->hNMIWFIDrv,AP_MODE);
+		
+		#ifndef SIMULATION
+		#ifdef NMI_P2P
+		PRINT_D(HOSTAPD_DBG,"Downloading P2P_CONCURRENCY_FIRMWARE\n");
+
+		
+		#if 1
+		interface_type = nic->iftype;
+		nic->iftype = GO_MODE;
+		g_nmc_initialized = 0;
+		/*while(!g_hif_thread_idle)
+		{
+			PRINT_D(GENERIC_DBG, "Wait for host IF idle\n");
+			NMI_Sleep(10);
+		}*/
+		nmc1000_wlan_deinit(g_linux_wlan);
+		//repeat_power_cycle_partially(g_linux_wlan);
+		nmc1000_wlan_init(dev, nic);
+		g_nmc_initialized = 1;
+		nic->iftype = interface_type;
+
+		/*Setting interface 1 drv handler and mac address in newly downloaded FW*/
+		host_int_set_wfi_drv_handler(g_linux_wlan->strInterfaceInfo[0].drvHandler);
+		host_int_set_MacAddress((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+								g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+		host_int_set_operation_mode(priv->hNMIWFIDrv,AP_MODE);
+
+		/*Add saved WEP keys, if any*/
+		if(g_wep_keys_saved)
+		{
+			host_int_set_WEPDefaultKeyID((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+										g_key_wep_params.key_idx);
+			host_int_add_wep_key_bss_sta((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+										g_key_wep_params.key,
+										g_key_wep_params.key_len,
+										g_key_wep_params.key_idx);
+		}
+
+		/*No matter the driver handler passed here, it will be overwriiten*/
+		/*in Handle_FlushConnect() with gu8FlushedJoinReqDrvHandler*/
+		host_int_flush_join_req(priv->hNMIWFIDrv);
+
+		/*Add saved PTK and GTK keys, if any*/
+		if(g_ptk_keys_saved && g_gtk_keys_saved)
+		{
+			PRINT_D(CFG80211_DBG,"ptk %x %x %x cipher %x\n",g_key_ptk_params.key[0],
+											g_key_ptk_params.key[1],
+											g_key_ptk_params.key[2],
+											g_key_ptk_params.cipher);
+			PRINT_D(CFG80211_DBG,"gtk %x %x %x cipher %x\n",g_key_gtk_params.key[0],
+											g_key_gtk_params.key[1],
+											g_key_gtk_params.key[2],
+											g_key_gtk_params.cipher);
+			#if 1
+			NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+								g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+								g_add_ptk_key_params.key_idx,
+								#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+								g_add_ptk_key_params.pairwise,
+								#endif
+								g_add_ptk_key_params.mac_addr,
+								(struct key_params *)(&g_key_ptk_params));
+
+			NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+								g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+								g_add_gtk_key_params.key_idx,
+								#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+								g_add_gtk_key_params.pairwise,
+								#endif
+								g_add_gtk_key_params.mac_addr,
+								(struct key_params *)(&g_key_gtk_params));
+			#endif
+		}
+		#endif
+		
+		/*BugID_4847: registered frames in firmware are now*/
+		/*lost due to mac close. So re-register those frames*/
+		if(g_linux_wlan->nmc1000_initialized)
+		{
+			for(i=0; i<num_reg_frame; i++)
+			{
+				PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
+																		nic->g_struct_frame_reg[i].reg);
+				host_int_frame_register(priv->hNMIWFIDrv,
+										nic->g_struct_frame_reg[i].frame_type,
+										nic->g_struct_frame_reg[i].reg);
+			}
+		}
+		#endif
+		#endif	
+		break;
+		
 	default:
 		PRINT_ER("Unknown interface type= %d\n", type);
 		s32Error = -EINVAL;
@@ -2566,18 +3521,20 @@ static int NMI_WFI_start_ap(struct wiphy *wiphy, struct net_device *dev,
 	PRINT_D(HOSTAPD_DBG,"Interval = %d \n DTIM period = %d\n Head length = %d Tail length = %d\n",
 		settings->beacon_interval , settings->dtim_period, beacon->head_len, beacon->tail_len );
 
+	linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+	
 	#ifndef NMI_FULLY_HOSTING_AP
 	s32Error = host_int_add_beacon(	priv->hNMIWFIDrv,
 									settings->beacon_interval,
 									settings->dtim_period,
-									beacon->head_len, beacon->head,
-									beacon->tail_len, beacon->tail);
+									beacon->head_len, (NMI_Uint8*)beacon->head,
+									beacon->tail_len, (NMI_Uint8*)beacon->tail);
 	#else
 	s32Error = host_add_beacon(	priv->hNMIWFIDrv,
 									settings->beacon_interval,
 									settings->dtim_period,
-									beacon->head_len, beacon->head,
-									beacon->tail_len, beacon->tail);
+									beacon->head_len, (NMI_Uint8*)beacon->head,
+									beacon->tail_len, (NMI_Uint8*)beacon->tail);
 	#endif
 
 	_g_pApSettings = settings;
@@ -2615,14 +3572,14 @@ static int  NMI_WFI_change_beacon(struct wiphy *wiphy, struct net_device *dev,
 	s32Error = host_int_add_beacon(	priv->hNMIWFIDrv,
 									settings->beacon_interval,
 									settings->dtim_period,
-									beacon->head_len, beacon->head,
-									beacon->tail_len, beacon->tail);
+									beacon->head_len, (NMI_Uint8*)beacon->head,
+									beacon->tail_len, (NMI_Uint8*)beacon->tail);
 #else
 	s32Error = host_add_beacon(	priv->hNMIWFIDrv,
 									settings->beacon_interval,
 									settings->dtim_period,
-									beacon->head_len, beacon->head,
-									beacon->tail_len, beacon->tail);
+									beacon->head_len, (NMI_Uint8*)beacon->head,
+									beacon->tail_len, (NMI_Uint8*)beacon->tail);
 #endif
 
 	return s32Error;
@@ -2641,6 +3598,7 @@ static int  NMI_WFI_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
+	NMI_Uint8 NullBssid[ETH_ALEN] = {0};
 	
 	
 	NMI_NULLCHECK(s32Error, wiphy);
@@ -2648,6 +3606,9 @@ static int  NMI_WFI_stop_ap(struct wiphy *wiphy, struct net_device *dev)
 	priv = wiphy_priv(wiphy);
 
 	PRINT_D(HOSTAPD_DBG,"Deleting beacon\n");
+
+	/*BugID_5188*/
+	linux_wlan_set_bssid(dev, NullBssid);
 	
 	#ifndef NMI_FULLY_HOSTING_AP
 	s32Error = host_int_del_beacon(priv->hNMIWFIDrv);
@@ -2691,6 +3652,8 @@ static int NMI_WFI_add_beacon(struct wiphy *wiphy, struct net_device *dev,
 	PRINT_D(HOSTAPD_DBG,"Adding Beacon\n");
 
 	PRINT_D(HOSTAPD_DBG,"Interval = %d \n DTIM period = %d\n Head length = %d Tail length = %d\n",info->interval , info->dtim_period,info->head_len,info->tail_len );
+
+	linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
 
 	#ifndef NMI_FULLY_HOSTING_AP
 	s32Error = host_int_add_beacon(priv->hNMIWFIDrv, info->interval,
@@ -2745,6 +3708,7 @@ static int  NMI_WFI_del_beacon(struct wiphy *wiphy, struct net_device *dev)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
+	NMI_Uint8 NullBssid[ETH_ALEN] = {0};
 	
 	
 	NMI_NULLCHECK(s32Error, wiphy);
@@ -2752,6 +3716,9 @@ static int  NMI_WFI_del_beacon(struct wiphy *wiphy, struct net_device *dev)
 	priv = wiphy_priv(wiphy);
 
 	PRINT_D(HOSTAPD_DBG,"Deleting beacon\n");
+
+	/*BugID_5188*/
+	linux_wlan_set_bssid(dev, NullBssid);
 	
 	#ifndef NMI_FULLY_HOSTING_AP
 	s32Error = host_int_del_beacon(priv->hNMIWFIDrv);
@@ -2784,7 +3751,7 @@ static int  NMI_WFI_add_station(struct wiphy *wiphy, struct net_device *dev,
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
 	tstrNMI_AddStaParam strStaParams={{0}};
-	linux_wlan_t* nic;
+	perInterface_wlan_t* nic;
 
 	
 	NMI_NULLCHECK(s32Error, wiphy);
@@ -2872,7 +3839,7 @@ static int NMI_WFI_del_station(struct wiphy *wiphy, struct net_device *dev,
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
-	linux_wlan_t* nic;
+	perInterface_wlan_t* nic;
 	
 
 	NMI_NULLCHECK(s32Error, wiphy);
@@ -2920,7 +3887,7 @@ static int NMI_WFI_change_station(struct wiphy *wiphy, struct net_device *dev,
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	struct NMI_WFI_priv* priv;
 	tstrNMI_AddStaParam strStaParams={{0}};
-	linux_wlan_t* nic;
+	perInterface_wlan_t* nic;
 
 
 	PRINT_D(HOSTAPD_DBG,"Change station paramters\n");
@@ -3015,15 +3982,18 @@ struct net_device *NMI_WFI_add_virt_intf(struct wiphy *wiphy, char *name,
         	                struct vif_params *params)
 #endif
 {
-	linux_wlan_t *nic;
+	perInterface_wlan_t * nic;
 	struct NMI_WFI_priv* priv;
 	//struct NMI_WFI_mon_priv* mon_priv;
+	#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 	NMI_Sint32 s32Error = NMI_SUCCESS;
+	#endif
+	struct net_device * new_ifc = NULL;
 	priv = wiphy_priv(wiphy);
-
 	
 	
-	PRINT_D(HOSTAPD_DBG,"Adding monitor interface\n");
+	
+	PRINT_D(HOSTAPD_DBG,"Adding monitor interface[%p]\n",priv->wdev->netdev);
 
 	nic = netdev_priv(priv->wdev->netdev);
 	 
@@ -3031,9 +4001,9 @@ struct net_device *NMI_WFI_add_virt_intf(struct wiphy *wiphy, char *name,
 	if(type == NL80211_IFTYPE_MONITOR)
 	{
 		PRINT_D(HOSTAPD_DBG,"Monitor interface mode: Initializing mon interface virtual device driver\n");
-		
-		s32Error = NMI_WFI_init_mon_interface(name,nic->nmc_netdev);
-		if(!s32Error)
+		PRINT_D(HOSTAPD_DBG,"Adding monitor interface[%p]\n",nic->nmc_netdev);	
+		new_ifc = NMI_WFI_init_mon_interface(name,nic->nmc_netdev);
+		if(new_ifc != NULL)
 		{
 			PRINT_D(HOSTAPD_DBG,"Setting monitor flag in private structure\n");
 			#ifdef SIMULATION
@@ -3048,11 +4018,14 @@ struct net_device *NMI_WFI_add_virt_intf(struct wiphy *wiphy, char *name,
 			PRINT_ER("Error in initializing monitor interface\n ");
 	}
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)	/* tony for v3.8 support */
-	return priv->wdev;
+	//return priv->wdev;
+	return new_ifc;		// rachel - have to check
 #elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37)
 	return s32Error;
 #else
-	return priv->wdev->netdev;
+	//return priv->wdev->netdev;
+	PRINT_D(HOSTAPD_DBG,"IFC[%p] created\n",new_ifc);
+	return new_ifc;
 #endif
 	
 }
@@ -3132,7 +4105,7 @@ static struct cfg80211_ops NMI_WFI_cfg80211_ops = {
 	.set_wiphy_params = NMI_WFI_set_wiphy_params,
 	
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,32)
-	.set_bitrate_mask = NMI_WFI_set_bitrate_mask,
+	//.set_bitrate_mask = NMI_WFI_set_bitrate_mask,
 	.set_pmksa = NMI_WFI_set_pmksa,
 	.del_pmksa = NMI_WFI_del_pmksa,
 	.flush_pmksa = NMI_WFI_flush_pmksa,
@@ -3292,7 +4265,6 @@ _fail_:
 *  @date	01 MAR 2012	
 *  @version	1.0
 */  
-
 struct wireless_dev* NMI_WFI_WiphyRegister(struct net_device *net)
 {
 	struct NMI_WFI_priv *priv;
@@ -3307,9 +4279,10 @@ struct wireless_dev* NMI_WFI_WiphyRegister(struct net_device *net)
 		return NULL;
 		}
 
-	NMI_SemaphoreCreate(&SemHandleUpdateStats,NULL);
+	
 	/*Return hardware description structure (wiphy)'s priv*/
 	priv = wdev_priv(wdev);
+	NMI_SemaphoreCreate(&(priv->SemHandleUpdateStats),NULL);
 
 	/*Added by Amr - BugID_4793*/
 	priv->u8CurrChannel = -1;
@@ -3339,10 +4312,14 @@ struct wireless_dev* NMI_WFI_WiphyRegister(struct net_device *net)
 #endif
 
 #ifdef NMI_P2P
-	wdev->wiphy->max_remain_on_channel_duration = 5000;
+	wdev->wiphy->max_remain_on_channel_duration = 500;
 	/*Setting the wiphy interfcae mode and type before registering the wiphy*/
 	wdev->wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION) | BIT(NL80211_IFTYPE_AP) | BIT(NL80211_IFTYPE_MONITOR) | BIT(NL80211_IFTYPE_P2P_GO) |
 		BIT(NL80211_IFTYPE_P2P_CLIENT);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0)
+
+	wdev->wiphy->flags |= WIPHY_FLAG_HAS_REMAIN_ON_CHANNEL;
+#endif
 #else
 	wdev->wiphy->interface_modes = BIT(NL80211_IFTYPE_STATION) | BIT(NL80211_IFTYPE_AP) | BIT(NL80211_IFTYPE_MONITOR);
 #endif
@@ -3409,8 +4386,17 @@ int NMI_WFI_InitHostInt(struct net_device *net)
 	struct NMI_WFI_priv *priv;
 
 	tstrNMI_SemaphoreAttrs strSemaphoreAttrs;
-	s32Error = NMI_TimerCreate(&hAgingTimer, remove_network_from_shadow, NMI_NULL);
 
+	printk("Host[%p][%p]\n",net,net->ieee80211_ptr);
+	priv = wdev_priv(net->ieee80211_ptr);
+	if(op_ifcs==0)
+	{
+		s32Error = NMI_TimerCreate(&(hAgingTimer), remove_network_from_shadow, NMI_NULL);
+		#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+		s32Error = NMI_TimerCreate(&(hDuringIpTimer), clear_duringIP, NMI_NULL);
+		#endif
+	}
+	op_ifcs++;
 	if(s32Error < 0){
 		PRINT_ER("Failed to creat refresh Timer\n");
 		return s32Error;		
@@ -3420,12 +4406,14 @@ int NMI_WFI_InitHostInt(struct net_device *net)
 
 	/////////////////////////////////////////
 	//strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemScanReq, &strSemaphoreAttrs);
-
-	gbAutoRateAdjusted = NMI_FALSE;
 	
-	priv = wdev_priv(net->ieee80211_ptr);
+	
+	priv->gbAutoRateAdjusted = NMI_FALSE;
+	
+	
+	NMI_SemaphoreCreate(&(priv->hSemScanReq), &strSemaphoreAttrs);
 	s32Error = host_int_init(&priv->hNMIWFIDrv);
+	//s32Error = host_int_init(&priv->hNMIWFIDrv_2);
 	if(s32Error)
 	{
 		PRINT_ER("Error while initializing hostinterface\n");
@@ -3451,14 +4439,31 @@ int NMI_WFI_DeInitHostInt(struct net_device *net)
 
 
 
-	/* Clear the Shadow scan */
-	clear_shadow_scan(priv);
 
-	NMI_SemaphoreDestroy(&hSemScanReq,NULL);
+	
 
-	gbAutoRateAdjusted = NMI_FALSE;
+	NMI_SemaphoreDestroy(&(priv->hSemScanReq),NULL);
+	
+	priv->gbAutoRateAdjusted = NMI_FALSE;
+	
+	
+
+	op_ifcs--;
 	
 	s32Error = host_int_deinit(priv->hNMIWFIDrv);
+	//s32Error = host_int_deinit(priv->hNMIWFIDrv_2);
+	
+	/* Clear the Shadow scan */
+	clear_shadow_scan(priv);
+	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+	if(op_ifcs==0)
+	{
+		printk("destroy during ip\n");
+		NMI_TimerDestroy(&hDuringIpTimer,NMI_NULL);
+	}		
+	#endif
+	
+	
 	if(s32Error)
 	{
 		PRINT_ER("Error while deintializing host interface\n");

@@ -954,7 +954,9 @@ static int sdio_init(nmi_wlan_inp_t *inp, nmi_debug_func func)
 		g_sdio.dPrint(N_ERR, "[nmi sdio]: Fail cmd read chip id...\n");
 		goto _fail_;
 	}
+
 	g_sdio.dPrint(N_ERR, "[nmi sdio]: chipid (%08x)\n", chipid);
+
 #if DMA_VER == DMA_VER_2
 	if( (chipid & 0xfff) > 0x0d0) {
 		g_sdio.has_thrpt_enh = 1;

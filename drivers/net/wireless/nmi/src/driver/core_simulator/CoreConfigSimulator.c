@@ -63,13 +63,13 @@
 #define NUM_WID             (NUM_CHAR_WID + NUM_SHORT_WID\
                            + NUM_INT_WID + NUM_STR_WID + NUM_BIN_DATA_WID)
 
-#define MSG_DATA_OFFSET           4
+#define MSG_DATA_OFFSET           8
 #define WID_VALUE_OFFSET          3
 #define WID_LENGTH_OFFSET         2
 #define WRITE_RSP_LEN             4
 #define MAX_QRSP_LEN              1000
 #define MAX_WRSP_LEN              20
-#define MSG_HDR_LEN               4
+#define MSG_HDR_LEN               8
 #define MAX_ADDRESS_LEN           6
 #define WRSP_SUCCESS              1
 #define WRSP_ERR_MSG              (-1)
@@ -81,7 +81,7 @@
 #define MAX_GRPADDR_LEN           38
 #define SITE_SURVEY_ELM_LEN       (MAX_SSID_LEN + 1 + 1 + 1)
 #define WID_BIN_DATA_LEN_MASK     0x3FFF
-#define STATUS_MSG_LEN            8
+#define STATUS_MSG_LEN            12
 #define MAC_CONNECTED			1
 #define MAC_DISCONNECTED   		0
 

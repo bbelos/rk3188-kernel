@@ -31,7 +31,7 @@
 	Mac eth header length 
 
 ********************************************/
-
+#define DRIVER_HANDLER_SIZE 4
 #define MAX_MAC_HDR_LEN         26 //QOS_MAC_HDR_LEN
 #define SUB_MSDU_HEADER_LENGTH  14
 #define SNAP_HDR_LEN            8
@@ -40,7 +40,7 @@
 
 #define ETH_ETHERNET_HDR_OFFSET   (MAX_MAC_HDR_LEN + SUB_MSDU_HEADER_LENGTH + \
                                    SNAP_HDR_LEN - ETHERNET_HDR_LEN + WORD_ALIGNMENT_PAD)
-                           
+     
 /*Bug3959: transmitting mgmt frames received from host*/
 #define HOST_HDR_OFFSET		4
 #define ETHERNET_HDR_LEN          14
@@ -76,6 +76,8 @@
 
 ********************************************/
 #define NMI_PERIPH_REG_BASE 0x1000
+/*BugID_5137*/
+#define NMI_CHANGING_VIR_IF                     (0x108c)
 #define NMI_CHIPID	(NMI_PERIPH_REG_BASE)
 #define NMI_GLB_RESET_0 (NMI_PERIPH_REG_BASE + 0x400)
 #define NMI_PIN_MUX_0 (NMI_PERIPH_REG_BASE + 0x408)
@@ -323,7 +325,7 @@ typedef struct {
 	uint8_t ether_header[14];
 	uint8_t ip_header[20];
 	uint8_t udp_header[8];
-	uint8_t wid_header[4];
+	uint8_t wid_header[8];
 	uint8_t frame[MAX_CFG_FRAME_SIZE];
 } nmi_cfg_frame_t;
 

@@ -21,6 +21,8 @@
 #define NUM_BASIC_SWITCHES      45
 #define NUM_FHSS_SWITCHES        0
 
+#define NUM_RSSI	5
+
 #ifdef MAC_802_11N
 #define NUM_11N_BASIC_SWITCHES  25
 #define NUM_11N_HUT_SWITCHES    47
@@ -54,7 +56,7 @@ extern NMI_Uint16 g_num_total_switches;
 #define SURVEY_RESULT_LENGTH		44
 #define MAX_ASSOC_RESP_FRAME_SIZE MAX_STRING_LEN
 
-#define STATUS_MSG_LEN            	8
+#define STATUS_MSG_LEN            	12
 #define MAC_CONNECTED			1
 #define MAC_DISCONNECTED   		0
 
@@ -399,6 +401,13 @@ typedef struct
     NMI_Sint8      *ps8WidVal;
     
 }tstrWID;
+
+typedef struct
+{
+	NMI_Uint8 u8Full;
+	NMI_Uint8 u8Index;
+	NMI_Sint8 as8RSSI[NUM_RSSI];
+}tstrRSSI;
 /* This structure is used to support parsing of the received 'N' message */
 typedef struct
 {
@@ -416,9 +425,13 @@ typedef struct
 #ifdef AGING_ALG
 	NMI_Uint8 u8Found;
 #endif
+#ifdef NMI_P2P
+	NMI_Uint32 u32Tsf;
+#endif
     	NMI_Uint8 *pu8IEs;
 	NMI_Uint16 u16IEsLen;
 	void* pJoinParams;
+	tstrRSSI strRssi;
 }tstrNetworkInfo;
 
 /* This structure is used to support parsing of the received Association Response frame */
@@ -469,7 +482,7 @@ extern NMI_Sint32 CoreConfiguratorInit(void);
 extern NMI_Sint32 CoreConfiguratorDeInit(void);
 
 extern NMI_Sint32 SendConfigPkt(NMI_Uint8 u8Mode, tstrWID* pstrWIDs,
-		NMI_Uint32 u32WIDsCount,NMI_Bool bRespRequired);
+       NMI_Uint32 u32WIDsCount,NMI_Bool bRespRequired,NMI_Uint32 drvHandler);
 extern NMI_Sint32 ParseNetworkInfo(NMI_Uint8* pu8MsgBuffer, tstrNetworkInfo** ppstrNetworkInfo);
 extern NMI_Sint32 DeallocateNetworkInfo(tstrNetworkInfo* pstrNetworkInfo);
 

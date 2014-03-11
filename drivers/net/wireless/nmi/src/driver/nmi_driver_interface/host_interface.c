@@ -5,10 +5,11 @@
 
 extern NMI_Sint32 TransportInit(void);
 extern NMI_Sint32 TransportDeInit(void);
-#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-extern NMI_Bool gbIPaddrObtained;
-#endif
 
+
+extern NMI_Bool bEnablePS;
+/*BugID_5137*/
+extern NMI_Uint8 g_nmc_initialized;
 /*****************************************************************************/
 /*								Macros										 */
 /*****************************************************************************/ 
@@ -38,8 +39,17 @@ extern NMI_Bool gbIPaddrObtained;
 #define  HOST_IF_MSG_REGISTER_FRAME  			((NMI_Uint16)21)
 #define HOST_IF_MSG_LISTEN_TIMER_FIRED     ((NMI_Uint16)22)
 #define HOST_IF_MSG_GET_LINKSPEED				((NMI_Uint16)23)
-#define HOST_IF_MSG_GET_STATISTICS				((NMI_Uint16)24)
-
+#define HOST_IF_MSG_SET_WFIDRV_HANDLER		((NMI_Uint16)24)
+#define HOST_IF_MSG_SET_MAC_ADDRESS		((NMI_Uint16)25)
+#define HOST_IF_MSG_GET_MAC_ADDRESS		((NMI_Uint16)26)
+#define HOST_IF_MSG_SET_OPERATION_MODE		((NMI_Uint16)27)
+#define HOST_IF_MSG_SET_IPADDRESS			((NMI_Uint16)28)
+#define HOST_IF_MSG_GET_IPADDRESS			((NMI_Uint16)29)
+#define HOST_IF_MSG_FLUSH_CONNECT			((NMI_Uint16)30)
+#define HOST_IF_MSG_GET_STATISTICS				((NMI_Uint16)31)
+#define HOST_IF_MSG_SET_MULTICAST_FILTER		((NMI_Uint16)32)
+#define HOST_IF_MSG_ADD_BA_SESSION		((NMI_Uint16)33)
+#define HOST_IF_MSG_DEL_BA_SESSION		((NMI_Uint16)34)
 
 #define HOST_IF_MSG_EXIT					((NMI_Uint16)100)
 
@@ -48,6 +58,7 @@ extern NMI_Bool gbIPaddrObtained;
 
 #define BA_SESSION_DEFAULT_BUFFER_SIZE	16
 #define BA_SESSION_DEFAULT_TIMEOUT		1000
+#define BLOCK_ACK_REQ_SIZE 0x14
 /*****************************************************************************/
 /*								Type Definitions							 */
 /*****************************************************************************/
@@ -299,6 +310,24 @@ typedef struct _tstrHostIFDelBeacon
 {
 	NMI_Uint8	u8dummy;
  }tstrHostIFDelBeacon;
+
+/*!
+*  @struct 		tstrHostIFSetMulti
+*  @brief		set Multicast filter Address  
+*  @details		
+*  @todo		
+*  @sa			
+*  @author		Abdelrahman Sobhy
+*  @date		30 August 2013
+*  @version		1.0 Description
+*/
+
+typedef struct 
+{
+	NMI_Bool  bIsEnabled;
+	NMI_Uint32 u32count;
+}tstrHostIFSetMulti;
+
 /*!
 *  @struct 		tstrHostIFDelSta
 *  @brief		Delete station message body
@@ -347,6 +376,22 @@ typedef struct
 	NMI_Uint32 u32Timeout;
 }tstrHostIfPowerMgmtParam;
 
+/*!
+*  @struct 		tstrHostIFSetIPAddr
+*  @brief		set IP Address message body
+*  @details		
+*  @todo		
+*  @sa			
+*  @author		Abdelrahman Sobhy
+*  @date		30 August 2013
+*  @version		1.0 Description
+*/
+
+typedef struct 
+{
+	NMI_Uint8* au8IPAddr;
+	NMI_Uint8 idx;
+}tstrHostIFSetIPAddr;
 
 /*!
 *  @struct 	tstrHostIfStaInactiveT
@@ -393,6 +438,13 @@ typedef union _tuniHostIFmsgBody
 	tstrTimerCb			strTimerCb;				/*!< Timer callback message body */
 	tstrHostIfPowerMgmtParam strPowerMgmtparam; 	/*!< Power Management message body */
 	tstrHostIfStaInactiveT  strHostIfStaInactiveT;
+	tstrHostIFSetIPAddr	strHostIfSetIP;
+	tstrHostIfSetDrvHandler	  strHostIfSetDrvHandler;
+	tstrHostIFSetMulti		strHostIfSetMulti;
+	tstrHostIfSetOperationMode strHostIfSetOperationMode;
+	tstrHostIfSetMacAddress strHostIfSetMacAddress;
+	tstrHostIfGetMacAddress strHostIfGetMacAddress;
+	tstrHostIfBASessionInfo strHostIfBASessionInfo;
 	#ifdef NMI_P2P
 	tstrHostIfRemainOnChan strHostIfRemainOnChan;
 	tstrHostIfRegisterFrame strHostIfRegisterFrame;
@@ -415,6 +467,7 @@ typedef struct _tstrHostIFmsg
 {
 	NMI_Uint16 u16MsgId;						/*!< Message ID */
 	tuniHostIFmsgBody uniHostIFmsgBody;		/*!< Message body */
+	void * drvHandler;
 }tstrHostIFmsg;
 
 #ifdef CONNECT_DIRECT
@@ -449,6 +502,17 @@ typedef struct _tstrJoinBssParam
 	NMI_Uint8    rsn_auth_policy[3];
 	NMI_Uint8    rsn_cap[2];
 	struct _tstrJoinParam* nextJoinBss;
+	#ifdef NMI_P2P
+	NMI_Uint32     tsf;
+	NMI_Uint8    u8NoaEnbaled;
+	NMI_Uint8    u8OppEnable;
+	NMI_Uint8    u8CtWindow;
+	NMI_Uint8    u8Count;
+	NMI_Uint8    u8Index;
+	NMI_Uint8    au8Duration[4];
+	NMI_Uint8    au8Interval[4];
+	NMI_Uint8    au8StartTime[4];
+	#endif
 }tstrJoinBssParam;
 /*Bug4218: Parsing Join Param*/
 /*a linked list table containing needed join parameters entries for each AP found in most recent scan*/
@@ -473,34 +537,22 @@ typedef enum
 /*																			 */
 /*****************************************************************************/
 
-NMI_SemaphoreHandle gtOsCfgValuesSem;
 
+tstrNMI_WFIDrv* terminated_handle=NMI_NULL;
 tstrNMI_WFIDrv* gWFiDrvHandle = NMI_NULL;
-
-static NMI_TimerHandle hScanTimer;
-static NMI_TimerHandle hConnectTimer;
-static NMI_TimerHandle hPeriodicRSSI;
-
-#ifdef NMI_P2P
-static NMI_TimerHandle hRemainOnChannel;
+#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+NMI_Bool g_obtainingIP=NMI_FALSE;
 #endif
-//static NMI_SemaphoreHandle timer_synch_sem;
-//static NMI_SemaphoreHandle hSemTimerThrdEnd;
-//static NMI_ThreadHandle TimerThreadHandler;
-//static NMI_Bool bTerminate_TimerThread = NMI_FALSE;
 
 static NMI_ThreadHandle HostIFthreadHandler;
 static NMI_MsgQueueHandle gMsgQHostIF;
 static NMI_SemaphoreHandle hSemHostIFthrdEnd;
 
-static NMI_SemaphoreHandle hSemTestKeyBlock;
-static NMI_SemaphoreHandle hSemTestDisconnectBlock;
-static NMI_SemaphoreHandle hSemGetRSSI;
-static NMI_SemaphoreHandle hSemGetLINKSPEED;
-static NMI_SemaphoreHandle hSemGetCHNL;
-static NMI_SemaphoreHandle hSemInactiveTime;
+NMI_SemaphoreHandle hSemDeinitDrvHandle;
 static NMI_SemaphoreHandle hWaitResponse;
 
+
+NMI_Uint8 gau8MulticastMacAddrList[NMI_MULTICAST_TABLE_SIZE][ETH_ALEN] = {{0}};
 
 #ifndef CONNECT_DIRECT
 static NMI_Uint8 gapu8RcvdSurveyResults[2][MAX_SURVEY_RESULT_FRAG_SIZE];
@@ -513,6 +565,8 @@ NMI_Bool gbScanWhileConnected = NMI_FALSE;
 static NMI_Sint8 gs8Rssi = 0;
 static NMI_Sint8 gs8lnkspd = 0;
 static NMI_Uint8 gu8Chnl = 0;
+static NMI_Uint8 gs8SetIP[2][4] = {{0}};
+static NMI_Uint8 gs8GetIP[2][4] = {{0}};
 #ifdef NMI_AP_EXTERNAL_MLME
 static NMI_Uint32 gu32InactiveTime = 0;
 static NMI_Uint8 gu8DelBcn = 0;
@@ -521,6 +575,18 @@ static NMI_Uint8 gu8DelBcn = 0;
 static NMI_Uint32 gu32WidConnRstHack = 0;
 #endif
 
+/*BugID_5137*/
+NMI_Uint8* gu8FlushedJoinReq = NULL;
+NMI_Uint8* gu8FlushedInfoElemAsoc = NULL;
+NMI_Uint8 gu8Flushed11iMode;
+NMI_Uint8 gu8FlushedAuthType;
+NMI_Uint32 gu32FlushedJoinReqSize;
+NMI_Uint32 gu32FlushedInfoElemAsocSize;
+NMI_Uint32 gu8FlushedJoinReqDrvHandler = 0;
+#define REAL_JOIN_REQ 0
+#define FLUSHED_JOIN_REQ 1
+#define FLUSHED_BYTE_POS 79	//Position the byte indicating flushing in the flushed request
+
 /*Bug4218: Parsing Join Param*/
 #ifdef NMI_PARSE_SCAN_IN_HOST	
 /*Bug4218: Parsing Join Param*/
@@ -528,6 +594,7 @@ static void* host_int_ParseJoinBssParam(tstrNetworkInfo* ptstrNetworkInfo);
 #endif /*NMI_PARSE_SCAN_IN_HOST*/
 
 extern void chip_sleep_manually(NMI_Uint32 u32SleepTime);
+extern int linux_wlan_get_num_conn_ifcs(void);
 
 /**
 *  @brief Handle_SetChannel
@@ -538,12 +605,12 @@ extern void chip_sleep_manually(NMI_Uint32 u32SleepTime);
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_SetChannel(tstrHostIFSetChan* pstrHostIFSetChan)
+static NMI_Sint32 Handle_SetChannel(void * drvHandler,tstrHostIFSetChan* pstrHostIFSetChan)
 {
 
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID	strWID;
-	//tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 
 	/*prepare configuration packet*/
 	strWID.u16WIDid = (NMI_Uint16)WID_CURRENT_CHANNEL;
@@ -553,7 +620,7 @@ static NMI_Sint32 Handle_SetChannel(tstrHostIFSetChan* pstrHostIFSetChan)
 
 	PRINT_D(HOSTINF_DBG,"Setting channel\n");
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Failed to set channel\n");
@@ -566,6 +633,296 @@ static NMI_Sint32 Handle_SetChannel(tstrHostIFSetChan* pstrHostIFSetChan)
 	
 	return s32Error;
 }
+/**
+*  @brief Handle_SetWfiDrvHandler
+*  @details 	Sending config packet to firmware to set driver handler
+*  @param[in]   void * drvHandler,tstrHostIfSetDrvHandler* pstrHostIfSetDrvHandler
+*  @return 	Error code.
+*  @author	
+*  @date	
+*  @version	1.0
+*/
+static NMI_Sint32 Handle_SetWfiDrvHandler(tstrHostIfSetDrvHandler* pstrHostIfSetDrvHandler)
+{
+	
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID	strWID;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)((pstrHostIfSetDrvHandler->u32Address));
+
+	
+	/*prepare configuration packet*/
+	strWID.u16WIDid = (NMI_Uint16)WID_SET_DRV_HANDLER;
+	strWID.enuWIDtype= WID_INT;
+	strWID.ps8WidVal = (NMI_Sint8*)&(pstrHostIfSetDrvHandler->u32Address);
+	strWID.s32ValueSize = sizeof(NMI_Uint32);
+
+	/*Sending Cfg*/
+	
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+					
+
+	if((pstrHostIfSetDrvHandler->u32Address)==(NMI_Uint32)NULL)
+{
+	NMI_SemaphoreRelease(&hSemDeinitDrvHandle, NMI_NULL);
+}
+	
+	
+	if(s32Error)
+	{
+		PRINT_ER("Failed to set driver handler\n");
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_STATE);		
+	}
+	NMI_CATCH(s32Error)
+	{
+
+	}
+	
+	return s32Error;
+}
+
+/**
+*  @brief Handle_SetWfiAPDrvHandler
+*  @details 	Sending config packet to firmware to set driver handler
+*  @param[in]   void * drvHandler,tstrHostIfSetDrvHandler* pstrHostIfSetDrvHandler
+*  @return 	Error code.
+*  @author	
+*  @date	
+*  @version	1.0
+*/
+static NMI_Sint32 Handle_SetOperationMode(void * drvHandler, tstrHostIfSetOperationMode* pstrHostIfSetOperationMode)
+{
+	
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID	strWID;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+
+	
+	/*prepare configuration packet*/
+	strWID.u16WIDid = (NMI_Uint16)WID_SET_OPERATION_MODE;
+	strWID.enuWIDtype= WID_INT;
+	strWID.ps8WidVal = (NMI_Sint8*)&(pstrHostIfSetOperationMode->u32Mode);
+	strWID.s32ValueSize = sizeof(NMI_Uint32);
+
+	/*Sending Cfg*/
+	printk("(NMI_Uint32)pstrWFIDrv= %x \n",(NMI_Uint32)pstrWFIDrv);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+					
+
+	if((pstrHostIfSetOperationMode->u32Mode)==(NMI_Uint32)NULL)
+{
+	NMI_SemaphoreRelease(&hSemDeinitDrvHandle, NMI_NULL);
+}
+	
+	
+	if(s32Error)
+	{
+		PRINT_ER("Failed to set driver handler\n");
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_STATE);		
+	}
+	NMI_CATCH(s32Error)
+	{
+
+	}
+	
+	return s32Error;
+}
+
+/**
+*  @brief host_int_set_IPAddress
+*  @details 	   Setting IP address params in message queue 
+*  @param[in]    NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8IPAddr
+*  @return 	    Error code.
+*  @author	
+*  @date	
+*  @version	1.0
+*/
+NMI_Sint32 Handle_set_IPAddress(void * drvHandler, NMI_Uint8* pu8IPAddr, NMI_Uint8 idx)
+{
+
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID strWID;
+	char firmwareIPAddress[4] ={0};
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+
+	if(pu8IPAddr[0] <192)
+		pu8IPAddr[0]=0;
+	
+	printk("Indx = %d, Handling set  IP = %d.%d.%d.%d \n",idx, pu8IPAddr[0],pu8IPAddr[1],pu8IPAddr[2],pu8IPAddr[3]);
+
+	NMI_memcpy(gs8SetIP[idx],pu8IPAddr,IP_ALEN);
+	
+	/*prepare configuration packet*/
+	strWID.u16WIDid = (NMI_Uint16)WID_IP_ADDRESS;
+	strWID.enuWIDtype = WID_STR;
+	strWID.ps8WidVal = (NMI_Uint8*)pu8IPAddr;
+	strWID.s32ValueSize = IP_ALEN;	
+
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE, (NMI_Uint32)pstrWFIDrv);
+
+
+	
+	 host_int_get_ipaddress((NMI_WFIDrvHandle)drvHandler, firmwareIPAddress, idx);
+
+	if(s32Error)
+	{
+		PRINT_D(HOSTINF_DBG,"Failed to set IP address\n");
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_STATE);
+	}
+	else
+	{
+		PRINT_INFO(HOSTINF_DBG,"IP address set\n");
+	}
+
+	NMI_CATCH(s32Error)
+	{
+
+	}
+
+	return s32Error;
+}
+
+
+/**
+*  @brief Handle_get_IPAddress
+*  @details 	   Setting IP address params in message queue 
+*  @param[in]    NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8IPAddr
+*  @return 	    Error code.
+*  @author	
+*  @date	
+*  @version	1.0
+*/
+NMI_Sint32 Handle_get_IPAddress(void * drvHandler, NMI_Uint8* pu8IPAddr, NMI_Uint8 idx)
+{
+
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID strWID;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+
+	/*prepare configuration packet*/
+	strWID.u16WIDid = (NMI_Uint16)WID_IP_ADDRESS;
+	strWID.enuWIDtype = WID_STR;
+	strWID.ps8WidVal = (NMI_Uint8*)NMI_MALLOC(IP_ALEN);
+	strWID.s32ValueSize = IP_ALEN;	
+
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE, (NMI_Uint32)pstrWFIDrv);
+		
+	printk("%d.%d.%d.%d\n",(NMI_Uint8)(strWID.ps8WidVal[0]),(NMI_Uint8)(strWID.ps8WidVal[1]),(NMI_Uint8)(strWID.ps8WidVal[2]),(NMI_Uint8)(strWID.ps8WidVal[3]));
+	
+	NMI_memcpy(gs8GetIP[idx],strWID.ps8WidVal,IP_ALEN);
+	
+	/*get the value by searching the local copy*/
+	NMI_FREE(strWID.ps8WidVal);
+
+	if(NMI_memcmp(gs8GetIP[idx], gs8SetIP[idx], IP_ALEN) != 0)
+		host_int_setup_ipaddress((NMI_WFIDrvHandle)pstrWFIDrv, gs8SetIP[idx],idx);
+	
+	if(s32Error != NMI_SUCCESS)
+	{
+		PRINT_ER("Failed to get IP address\n");
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_STATE);
+	}
+	else
+	{
+		printk("IP address retrieved:: u8IfIdx = %d \n",idx);
+		printk("%d.%d.%d.%d\n",gs8GetIP[idx][0],gs8GetIP[idx][1],gs8GetIP[idx][2],gs8GetIP[idx][3]);
+
+		PRINT_INFO(HOSTINF_DBG,"\n");
+	}
+
+	NMI_CATCH(s32Error)
+	{
+
+	}
+
+	return s32Error;
+}
+
+
+/*BugId_5077*/
+/**
+*  @brief Handle_SetMacAddress
+*  @details 	Setting mac address
+*  @param[in]   void * drvHandler,tstrHostIfSetDrvHandler* pstrHostIfSetDrvHandler
+*  @return 	Error code.
+*  @author	Amr Abdel-Moghny
+*  @date		November 2013
+*  @version	7.0
+*/
+static NMI_Sint32 Handle_SetMacAddress(void * drvHandler, tstrHostIfSetMacAddress* pstrHostIfSetMacAddress)
+{
+	
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID	strWID;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+	NMI_Uint8 *mac_buf = (NMI_Uint8*)NMI_MALLOC(ETH_ALEN);
+	if(mac_buf == NULL)
+	{
+		PRINT_ER("No buffer to send mac address\n");
+		return NMI_FAIL;
+	}
+	NMI_memcpy(mac_buf, pstrHostIfSetMacAddress->u8MacAddress, ETH_ALEN);
+	
+	/*prepare configuration packet*/
+	strWID.u16WIDid = (NMI_Uint16)WID_MAC_ADDR;
+	strWID.enuWIDtype= WID_STR;
+	strWID.ps8WidVal = mac_buf;
+	strWID.s32ValueSize = ETH_ALEN;
+PRINT_D(GENERIC_DBG,"mac addr = :%x:%x:%x:%x:%x:%x\n",strWID.ps8WidVal[0], strWID.ps8WidVal[1], strWID.ps8WidVal[2], strWID.ps8WidVal[3], strWID.ps8WidVal[4], strWID.ps8WidVal[5]);
+	/*Sending Cfg*/
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+	if(s32Error)
+	{
+		PRINT_ER("Failed to set mac address\n");
+		NMI_ERRORREPORT(s32Error,NMI_FAIL);		
+	}
+	
+	NMI_CATCH(s32Error)
+	{
+
+	}
+	NMI_FREE(mac_buf);
+	return s32Error;
+}
+
+
+/*BugID_5213*/
+/**
+*  @brief Handle_GetMacAddress
+*  @details 	Getting mac address
+*  @param[in]   void * drvHandler,tstrHostIfSetDrvHandler* pstrHostIfSetDrvHandler
+*  @return 	Error code.
+*  @author	Amr Abdel-Moghny
+*  @date		JAN 2013
+*  @version	8.0
+*/
+static NMI_Sint32 Handle_GetMacAddress(void * drvHandler, tstrHostIfGetMacAddress* pstrHostIfGetMacAddress)
+{
+	
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID	strWID;
+	
+	/*prepare configuration packet*/
+	strWID.u16WIDid = (NMI_Uint16)WID_MAC_ADDR;
+	strWID.enuWIDtype= WID_STR;
+	strWID.ps8WidVal = pstrHostIfGetMacAddress->u8MacAddress;
+	strWID.s32ValueSize = ETH_ALEN;
+
+	/*Sending Cfg*/
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)drvHandler);
+	if(s32Error)
+	{
+		PRINT_ER("Failed to get mac address\n");
+		NMI_ERRORREPORT(s32Error,NMI_FAIL);		
+	}	
+	NMI_CATCH(s32Error)
+	{
+
+	}
+	NMI_SemaphoreRelease(&hWaitResponse, NULL);
+
+	return s32Error;
+}
+
 
 /**
 *  @brief Handle_CfgParam
@@ -576,12 +933,15 @@ static NMI_Sint32 Handle_SetChannel(tstrHostIFSetChan* pstrHostIFSetChan)
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
+static NMI_Sint32 Handle_CfgParam(void * drvHandler,tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID	 strWIDList[32];
 	NMI_Uint8 u8WidCnt= 0;
-	NMI_SemaphoreAcquire(&gtOsCfgValuesSem,NULL);
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+	
+	
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
 
 
 	PRINT_D(HOSTINF_DBG,"Setting CFG params\n");
@@ -600,7 +960,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 			strWIDList[u8WidCnt].ps8WidVal =(NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.bss_type;
 			strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 			strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-			gWFiDrvHandle->strCfgValues.bss_type = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.bss_type;
+			pstrWFIDrv->strCfgValues.bss_type = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.bss_type;
 		}
 		else
 		{
@@ -622,7 +982,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.auth_type;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-				  gWFiDrvHandle->strCfgValues.auth_type= (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.auth_type;
+				  pstrWFIDrv->strCfgValues.auth_type= (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.auth_type;
 			  }
 			  else
 			  {
@@ -639,7 +999,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				 strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.auth_timeout;
 				 strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				 strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				 gWFiDrvHandle->strCfgValues.auth_timeout = strHostIFCfgParamAttr->pstrCfgParamVal.auth_timeout;
+				 pstrWFIDrv->strCfgValues.auth_timeout = strHostIFCfgParamAttr->pstrCfgParamVal.auth_timeout;
 			 }
 			 else
 			 {
@@ -662,7 +1022,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.power_mgmt_mode;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-				  gWFiDrvHandle->strCfgValues.power_mgmt_mode = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.power_mgmt_mode;
+				  pstrWFIDrv->strCfgValues.power_mgmt_mode = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.power_mgmt_mode;
 			  }
 			  else
 			  {
@@ -679,7 +1039,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.short_retry_limit;
 				strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				gWFiDrvHandle->strCfgValues.short_retry_limit = strHostIFCfgParamAttr->pstrCfgParamVal.short_retry_limit;
+				pstrWFIDrv->strCfgValues.short_retry_limit = strHostIFCfgParamAttr->pstrCfgParamVal.short_retry_limit;
 			}
 			else
 			  {
@@ -697,7 +1057,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 
 				strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				gWFiDrvHandle->strCfgValues.long_retry_limit = strHostIFCfgParamAttr->pstrCfgParamVal.long_retry_limit;
+				pstrWFIDrv->strCfgValues.long_retry_limit = strHostIFCfgParamAttr->pstrCfgParamVal.long_retry_limit;
 			}
 			else
 			  {
@@ -714,7 +1074,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.frag_threshold;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				  gWFiDrvHandle->strCfgValues.frag_threshold = strHostIFCfgParamAttr->pstrCfgParamVal.frag_threshold;
+				  pstrWFIDrv->strCfgValues.frag_threshold = strHostIFCfgParamAttr->pstrCfgParamVal.frag_threshold;
 			  }
 			  else
 			  {
@@ -731,7 +1091,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.rts_threshold;
 				strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				gWFiDrvHandle->strCfgValues.rts_threshold = strHostIFCfgParamAttr->pstrCfgParamVal.rts_threshold;
+				pstrWFIDrv->strCfgValues.rts_threshold = strHostIFCfgParamAttr->pstrCfgParamVal.rts_threshold;
 			}
 			else
 			  {
@@ -752,7 +1112,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.preamble_type;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-				  gWFiDrvHandle->strCfgValues.preamble_type = strHostIFCfgParamAttr->pstrCfgParamVal.preamble_type;
+				  pstrWFIDrv->strCfgValues.preamble_type = strHostIFCfgParamAttr->pstrCfgParamVal.preamble_type;
 			  }
 			  else
 			  {
@@ -768,7 +1128,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.short_slot_allowed;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-				  gWFiDrvHandle->strCfgValues.short_slot_allowed = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.short_slot_allowed;
+				  pstrWFIDrv->strCfgValues.short_slot_allowed = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.short_slot_allowed;
 			  }
 			  else
 			  {
@@ -788,7 +1148,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.txop_prot_disabled;
 				strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 				strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-				gWFiDrvHandle->strCfgValues.txop_prot_disabled = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.txop_prot_disabled;
+				pstrWFIDrv->strCfgValues.txop_prot_disabled = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.txop_prot_disabled;
 			}
 			else
 			  {
@@ -805,7 +1165,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.beacon_interval;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				  gWFiDrvHandle->strCfgValues.beacon_interval = strHostIFCfgParamAttr->pstrCfgParamVal.beacon_interval;
+				  pstrWFIDrv->strCfgValues.beacon_interval = strHostIFCfgParamAttr->pstrCfgParamVal.beacon_interval;
 			  }
 			  else
 			  {
@@ -822,7 +1182,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				   strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.dtim_period;
 				   strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 				   strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-				   gWFiDrvHandle->strCfgValues.dtim_period = strHostIFCfgParamAttr->pstrCfgParamVal.dtim_period;
+				   pstrWFIDrv->strCfgValues.dtim_period = strHostIFCfgParamAttr->pstrCfgParamVal.dtim_period;
 			  }
 			   else
 			  {
@@ -843,7 +1203,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.site_survey_enabled;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_CHAR;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Char);
-				  gWFiDrvHandle->strCfgValues.site_survey_enabled = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.site_survey_enabled;
+				  pstrWFIDrv->strCfgValues.site_survey_enabled = (NMI_Uint8)strHostIFCfgParamAttr->pstrCfgParamVal.site_survey_enabled;
 			  }
 				else
 			  {
@@ -860,7 +1220,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.site_survey_scan_time;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				  gWFiDrvHandle->strCfgValues.site_survey_scan_time = strHostIFCfgParamAttr->pstrCfgParamVal.site_survey_scan_time;
+				  pstrWFIDrv->strCfgValues.site_survey_scan_time = strHostIFCfgParamAttr->pstrCfgParamVal.site_survey_scan_time;
 			  }
 			   else
 			  {
@@ -877,7 +1237,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.active_scan_time;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				  gWFiDrvHandle->strCfgValues.active_scan_time = strHostIFCfgParamAttr->pstrCfgParamVal.active_scan_time;
+				  pstrWFIDrv->strCfgValues.active_scan_time = strHostIFCfgParamAttr->pstrCfgParamVal.active_scan_time;
 			  }
 			   else
 			  {
@@ -894,7 +1254,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&strHostIFCfgParamAttr->pstrCfgParamVal.passive_scan_time;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				  gWFiDrvHandle->strCfgValues.passive_scan_time = strHostIFCfgParamAttr->pstrCfgParamVal.passive_scan_time;
+				  pstrWFIDrv->strCfgValues.passive_scan_time = strHostIFCfgParamAttr->pstrCfgParamVal.passive_scan_time;
 			  }
 			   else
 			  {
@@ -921,7 +1281,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 				  strWIDList[u8WidCnt].ps8WidVal = (NMI_Sint8*)&curr_tx_rate;
 				  strWIDList[u8WidCnt].enuWIDtype= WID_SHORT;
 				  strWIDList[u8WidCnt].s32ValueSize = sizeof(NMI_Uint16);
-				  gWFiDrvHandle->strCfgValues.curr_tx_rate = (NMI_Uint8)curr_tx_rate;
+				  pstrWFIDrv->strCfgValues.curr_tx_rate = (NMI_Uint8)curr_tx_rate;
 			  }
 			   else
 			  {
@@ -929,7 +1289,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 			  }
 			  u8WidCnt++;
 		  }
-		  s32Error = SendConfigPkt(SET_CFG, strWIDList, u8WidCnt, NMI_FALSE);
+		  s32Error = SendConfigPkt(SET_CFG, strWIDList, u8WidCnt, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 
 		  if(s32Error)
 		  {
@@ -939,7 +1299,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 		  NMI_CATCH(s32Error)
 		  {
 		  }
-		  NMI_SemaphoreRelease(&gtOsCfgValuesSem, NULL);
+		  NMI_SemaphoreRelease(&(pstrWFIDrv->gtOsCfgValuesSem), NULL);
 		  return s32Error;
 }
 
@@ -952,7 +1312,7 @@ static NMI_Sint32 Handle_CfgParam(tstrHostIFCfgParamAttr* strHostIFCfgParamAttr)
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_Scan(tstrHostIFscanAttr* pstrHostIFscanAttr)
+static NMI_Sint32 Handle_Scan(void * drvHandler,tstrHostIFscanAttr* pstrHostIFscanAttr)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWIDList[5];	
@@ -961,32 +1321,34 @@ static NMI_Sint32 Handle_Scan(tstrHostIFscanAttr* pstrHostIFscanAttr)
 	NMI_Uint8* pu8Buffer;
 	NMI_Uint8 valuesize=0;
 	NMI_Uint8* pu8HdnNtwrksWidVal = NULL;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *) drvHandler;
 	
 	PRINT_D(HOSTINF_DBG,"Setting SCAN params\n");
-	PRINT_D(HOSTINF_DBG,"Scanning: In [%d] state \n", gWFiDrvHandle->enuHostIFstate);
+	PRINT_D(HOSTINF_DBG,"Scanning: In [%d] state \n", pstrWFIDrv->enuHostIFstate);
 	
-	gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult = pstrHostIFscanAttr->pfScanResult;
-	gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid = pstrHostIFscanAttr->pvUserArg;
+	pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult = pstrHostIFscanAttr->pfScanResult;
+	pstrWFIDrv->strNMI_UsrScanReq.u32UserScanPvoid = pstrHostIFscanAttr->pvUserArg;
 
 	#ifdef NMI_P2P
-	
-	if(gWFiDrvHandle->enuHostIFstate== HOST_IF_P2P_LISTEN || (gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED && gWFiDrvHandle->u8P2PConnect) || jiffies < gWFiDrvHandle->u64P2p_MgmtTimeout)
+	#if 1
+	if(pstrWFIDrv->enuHostIFstate== HOST_IF_P2P_LISTEN || (pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED && pstrWFIDrv->u8P2PConnect))
 	{
-	    PRINT_INFO(GENERIC_DBG,"Busy: State: %d\n",gWFiDrvHandle->enuHostIFstate);
-	    PRINT_INFO(GENERIC_DBG,"Current Jiffies: %lu Timeout:%lu\n",jiffies,gWFiDrvHandle->u64P2p_MgmtTimeout);
+	    PRINT_INFO(GENERIC_DBG,"Busy: State: %d\n",pstrWFIDrv->enuHostIFstate);
+	    PRINT_INFO(GENERIC_DBG,"Current Jiffies: %lu Timeout:%llu\n",jiffies,pstrWFIDrv->u64P2p_MgmtTimeout);
 		NMI_ERRORREPORT(s32Error, NMI_BUSY);	
 	}
 	#endif
+	#endif
 	
-	if((gWFiDrvHandle->enuHostIFstate >= HOST_IF_SCANNING) && (gWFiDrvHandle->enuHostIFstate < HOST_IF_CONNECTED))
+	if((pstrWFIDrv->enuHostIFstate >= HOST_IF_SCANNING) && (pstrWFIDrv->enuHostIFstate < HOST_IF_CONNECTED))
 	{
 	    /* here we either in HOST_IF_SCANNING, HOST_IF_WAITING_CONN_REQ or HOST_IF_WAITING_CONN_RESP */
-		PRINT_D(GENERIC_DBG,"Don't scan we are already in [%d] state\n",gWFiDrvHandle->enuHostIFstate);
+		PRINT_D(GENERIC_DBG,"Don't scan we are already in [%d] state\n",pstrWFIDrv->enuHostIFstate);
 		NMI_ERRORREPORT(s32Error, NMI_BUSY);
 	}
 	
 	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-	if((gbIPaddrObtained == NMI_FALSE) && (gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED))
+	if(g_obtainingIP)
 	{
 		PRINT_D(GENERIC_DBG, "[handle_scan]: Don't do obss scan until IP adresss is obtained\n");			
 		NMI_ERRORREPORT(s32Error, NMI_BUSY);
@@ -996,7 +1358,7 @@ static NMI_Sint32 Handle_Scan(tstrHostIFscanAttr* pstrHostIFscanAttr)
 	PRINT_D(HOSTINF_DBG,"Setting SCAN params\n");
 
 
-	gWFiDrvHandle->strNMI_UsrScanReq.u32RcvdChCount = 0;	
+	pstrWFIDrv->strNMI_UsrScanReq.u32RcvdChCount = 0;	
 	
 	/*BugID_4189*/
 	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_SSID_PROBE_REQ;
@@ -1079,16 +1441,16 @@ static NMI_Sint32 Handle_Scan(tstrHostIFscanAttr* pstrHostIFscanAttr)
 	/*keep the state as is , no need to change it*/
 	//gWFiDrvHandle->enuHostIFstate = HOST_IF_SCANNING;
 
-	if(gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED)
+	if(pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED)
 	{
 		gbScanWhileConnected = NMI_TRUE;				
 	}
-	else if(gWFiDrvHandle->enuHostIFstate == HOST_IF_IDLE)
+	else if(pstrWFIDrv->enuHostIFstate == HOST_IF_IDLE)
 	{
 		gbScanWhileConnected = NMI_FALSE;				
 	}
 
-	s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	
 	if(s32Error)
 	{
@@ -1102,9 +1464,9 @@ static NMI_Sint32 Handle_Scan(tstrHostIFscanAttr* pstrHostIFscanAttr)
 	
 	NMI_CATCH(s32Error)
 	{
-		NMI_TimerStop(&hScanTimer, NMI_NULL);
+		NMI_TimerStop(&(pstrWFIDrv->hScanTimer), NMI_NULL);
 		/*if there is an ongoing scan request*/
-		Handle_ScanDone(SCAN_EVENT_ABORTED);
+		Handle_ScanDone(drvHandler,SCAN_EVENT_ABORTED);
 	}
 
 	/* Deallocate pstrHostIFscanAttr->u8ChnlListLen which was prevoisuly allocated by the sending thread */
@@ -1150,19 +1512,49 @@ static NMI_Sint32 Handle_Scan(tstrHostIFscanAttr* pstrHostIFscanAttr)
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_ScanDone(tenuScanEvent enuEvent)
+static NMI_Sint32 Handle_ScanDone(void* drvHandler,tenuScanEvent enuEvent)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 
-	PRINT_D(HOSTINF_DBG,"in Handle_ScanDone()\n");	
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+	
+
+	NMI_Uint8 u8abort_running_scan;
+	tstrWID strWID;
+
+
+	PRINT_D(HOSTINF_DBG,"in Handle_ScanDone()\n");
+
+	/*BugID_4978*/
+	/*Ask FW to abort the running scan, if any*/
+	if(enuEvent == SCAN_EVENT_ABORTED)
+	{
+		PRINT_D(GENERIC_DBG,"Abort running scan\n");		
+		u8abort_running_scan = 1;
+		strWID.u16WIDid	= (NMI_Uint16)WID_ABORT_RUNNING_SCAN;
+		strWID.enuWIDtype	= WID_CHAR;
+		strWID.ps8WidVal = (NMI_Sint8*)&u8abort_running_scan;
+		strWID.s32ValueSize = sizeof(NMI_Char);
+
+		/*Sending Cfg*/
+		s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+		if(s32Error != NMI_SUCCESS)
+		{
+			PRINT_ER("Failed to set abort running scan\n");
+			NMI_ERRORREPORT(s32Error,NMI_FAIL);
+		}
+		NMI_CATCH(s32Error)
+		{
+		}
+	}	
 	
 	/*if there is an ongoing scan request*/
-	if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+	if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
 	{		
-		gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult(enuEvent, NMI_NULL,
-																 gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
+		pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult(enuEvent, NMI_NULL,
+																 pstrWFIDrv->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
 		/*delete current scan request*/
-		gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult= NULL;		
+		pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult= NULL;		
 	}	
 		
 	return s32Error;
@@ -1178,8 +1570,8 @@ static NMI_Sint32 Handle_ScanDone(tenuScanEvent enuEvent)
 *  @version	1.0
 */
 
-static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
-{
+static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHostIFconnectAttr)
+{     tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *) drvHandler;
 	NMI_Sint32 s32Error = NMI_SUCCESS;	
 	tstrWID strWIDList[8];
 	NMI_Uint32 u32WidsCount = 0,dummyval = 0;	
@@ -1206,7 +1598,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 
 	
 	PRINT_D(HOSTINF_DBG,"Getting site survey results\n");
-	s32Err = host_int_get_site_survey_results((NMI_WFIDrvHandle)gWFiDrvHandle,
+	s32Err = host_int_get_site_survey_results((NMI_WFIDrvHandle)pstrWFIDrv,
 									gapu8RcvdSurveyResults, 
 									MAX_SURVEY_RESULT_FRAG_SIZE);
 	if(s32Err)
@@ -1216,16 +1608,16 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 
 	}
 	s32Err = ParseSurveyResults(gapu8RcvdSurveyResults, &pstrSurveyResults, 
-								     &gWFiDrvHandle->u32SurveyResultsCount);
+								     &pstrWFIDrv->u32SurveyResultsCount);
 		
 
 	if(s32Err == NMI_SUCCESS)
 	{								
 		/* use the parsed info in pstrSurveyResults, then deallocate it */
 		PRINT_D(HOSTINF_DBG,"Copying site survey results in global structure, then deallocate\n");
-		for(i = 0; i < gWFiDrvHandle->u32SurveyResultsCount; i++)
+		for(i = 0; i < pstrWFIDrv->u32SurveyResultsCount; i++)
 		{
-			NMI_memcpy(&gWFiDrvHandle->astrSurveyResults[i], &pstrSurveyResults[i],
+			NMI_memcpy(&pstrWFIDrv->astrSurveyResults[i], &pstrSurveyResults[i],
 							  sizeof(wid_site_survey_reslts_s));
 		}			
 
@@ -1238,9 +1630,9 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	}		
 
 	
-	for(i = 0; i < gWFiDrvHandle->u32SurveyResultsCount; i++)
+	for(i = 0; i < pstrWFIDrv->u32SurveyResultsCount; i++)
 	{		
-		if(NMI_memcmp(gWFiDrvHandle->astrSurveyResults[i].SSID, 
+		if(NMI_memcmp(pstrWFIDrv->astrSurveyResults[i].SSID, 
 						pstrHostIFconnectAttr->pu8ssid, 
 						pstrHostIFconnectAttr->ssidLen) == 0)
 		{
@@ -1257,7 +1649,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 				/* BSSID is also passed from the user, so decision of matching
 				 * should consider also this passed BSSID */
 
-				if(NMI_memcmp(gWFiDrvHandle->astrSurveyResults[i].BSSID, 
+				if(NMI_memcmp(pstrWFIDrv->astrSurveyResults[i].BSSID, 
 							       pstrHostIFconnectAttr->pu8bssid, 
 							       6) == 0)
 				{
@@ -1268,43 +1660,43 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 		}
 	}			
 
-	if(i < gWFiDrvHandle->u32SurveyResultsCount)
+	if(i < pstrWFIDrv->u32SurveyResultsCount)
 	{
 		u8bssDscListIndex = i;		
 
 		PRINT_INFO(HOSTINF_DBG,"Connecting to network of Bss Idx %d and SSID %s and channel %d \n",
-					u8bssDscListIndex, gWFiDrvHandle->astrSurveyResults[u8bssDscListIndex].SSID,
-					gWFiDrvHandle->astrSurveyResults[u8bssDscListIndex].Channel);		
+					u8bssDscListIndex, pstrWFIDrv->astrSurveyResults[u8bssDscListIndex].SSID,
+					pstrWFIDrv->astrSurveyResults[u8bssDscListIndex].Channel);		
 		
 		PRINT_INFO(HOSTINF_DBG,"Saving connection parameters in global structure\n");
 
 		if(pstrHostIFconnectAttr->pu8bssid != NULL)
 		{
-			gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid = (NMI_Uint8*)NMI_MALLOC(6);
-			NMI_memcpy(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid, pstrHostIFconnectAttr->pu8bssid, 6);			
-		}		
+			pstrWFIDrv->strNMI_UsrConnReq.pu8bssid = (NMI_Uint8*)NMI_MALLOC(6);
+			NMI_memcpy(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid, pstrHostIFconnectAttr->pu8bssid, 6);			
+		}	
 
-		gWFiDrvHandle->strNMI_UsrConnReq.ssidLen = pstrHostIFconnectAttr->ssidLen;
+		pstrWFIDrv->strNMI_UsrConnReq.ssidLen = pstrHostIFconnectAttr->ssidLen;
 		if(pstrHostIFconnectAttr->pu8ssid != NULL)
 		{									
-			gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->ssidLen+1);
-			NMI_memcpy(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid, pstrHostIFconnectAttr->pu8ssid, 
+			pstrWFIDrv->strNMI_UsrConnReq.pu8ssid = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->ssidLen+1);
+			NMI_memcpy(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid, pstrHostIFconnectAttr->pu8ssid, 
 						  pstrHostIFconnectAttr->ssidLen);
-			gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid[pstrHostIFconnectAttr->ssidLen] = '\0';			
+			pstrWFIDrv->strNMI_UsrConnReq.pu8ssid[pstrHostIFconnectAttr->ssidLen] = '\0';			
 		}
 
-		gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen = pstrHostIFconnectAttr->IEsLen;
+		pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen = pstrHostIFconnectAttr->IEsLen;
 		if(pstrHostIFconnectAttr->pu8IEs != NULL)
 		{					
-			gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->IEsLen);
-			NMI_memcpy(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs, pstrHostIFconnectAttr->pu8IEs, 
+			pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->IEsLen);
+			NMI_memcpy(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs, pstrHostIFconnectAttr->pu8IEs, 
 						  pstrHostIFconnectAttr->IEsLen);			
 		}
 
-		gWFiDrvHandle->strNMI_UsrConnReq.u8security= pstrHostIFconnectAttr->u8security;
-		gWFiDrvHandle->strNMI_UsrConnReq.tenuAuth_type= pstrHostIFconnectAttr->tenuAuth_type;
-		gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult = pstrHostIFconnectAttr->pfConnectResult;
-		gWFiDrvHandle->strNMI_UsrConnReq.u32UserConnectPvoid = pstrHostIFconnectAttr->pvUserArg;				
+		pstrWFIDrv->strNMI_UsrConnReq.u8security= pstrHostIFconnectAttr->u8security;
+		pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type= pstrHostIFconnectAttr->tenuAuth_type;
+		pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult = pstrHostIFconnectAttr->pfConnectResult;
+		pstrWFIDrv->strNMI_UsrConnReq.u32UserConnectPvoid = pstrHostIFconnectAttr->pvUserArg;				
 		
 		
 		//if((gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs != NULL) && 
@@ -1313,25 +1705,25 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 			/* IEs to be inserted in Association Request */
 			strWIDList[u32WidsCount].u16WIDid = WID_INFO_ELEMENT_ASSOCIATE;
 			strWIDList[u32WidsCount].enuWIDtype = WID_BIN_DATA;
-			strWIDList[u32WidsCount].ps8WidVal = gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs;
-			strWIDList[u32WidsCount].s32ValueSize = gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen;
+			strWIDList[u32WidsCount].ps8WidVal = pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs;
+			strWIDList[u32WidsCount].s32ValueSize = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
 			u32WidsCount++;
 		}
 		strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_11I_MODE;
 		strWIDList[u32WidsCount].enuWIDtype = WID_CHAR;
 		strWIDList[u32WidsCount].s32ValueSize = sizeof(NMI_Char);
-		strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&(gWFiDrvHandle->strNMI_UsrConnReq.u8security));
+		strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&(pstrWFIDrv->strNMI_UsrConnReq.u8security));
 		u32WidsCount++;
 		
-		PRINT_INFO(HOSTINF_DBG,"Encrypt Mode = %x\n",gWFiDrvHandle->strNMI_UsrConnReq.u8security);
+		PRINT_INFO(HOSTINF_DBG,"Encrypt Mode = %x\n",pstrWFIDrv->strNMI_UsrConnReq.u8security);
 		
 		strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_AUTH_TYPE;
 		strWIDList[u32WidsCount].enuWIDtype = WID_CHAR;
 		strWIDList[u32WidsCount].s32ValueSize = sizeof(NMI_Char);
-		strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&gWFiDrvHandle->strNMI_UsrConnReq.tenuAuth_type);
+		strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type);
 		u32WidsCount++;
 		
-		PRINT_INFO(HOSTINF_DBG,"Authentication Type = %x\n",gWFiDrvHandle->strNMI_UsrConnReq.tenuAuth_type);
+		PRINT_INFO(HOSTINF_DBG,"Authentication Type = %x\n",pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type);
 		/*
 		strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_11I_PSK;
 		strWIDList[u32WidsCount].enuWIDtype = WID_STR;
@@ -1355,7 +1747,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 		////////////////////////
 		#endif
 		
-		s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE);
+		s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 		if(s32Error)
 		{
 			PRINT_ER("Handle_Connect()] failed to send config packet\n");
@@ -1363,7 +1755,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 		}
 		else
 		{
-			gWFiDrvHandle->enuHostIFstate = HOST_IF_WAITING_CONN_RESP;
+			pstrWFIDrv->enuHostIFstate = HOST_IF_WAITING_CONN_RESP;
 		}
 
 	}
@@ -1389,33 +1781,31 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	
 	if(pstrHostIFconnectAttr->pu8bssid != NULL)
 	{
-		gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid = (NMI_Uint8*)NMI_MALLOC(6);
-		NMI_memcpy(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid, pstrHostIFconnectAttr->pu8bssid, 6);			
+		pstrWFIDrv->strNMI_UsrConnReq.pu8bssid = (NMI_Uint8*)NMI_MALLOC(6);
+		NMI_memcpy(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid, pstrHostIFconnectAttr->pu8bssid, 6);			
 	}		
 
-	gWFiDrvHandle->strNMI_UsrConnReq.ssidLen = pstrHostIFconnectAttr->ssidLen;
+	pstrWFIDrv->strNMI_UsrConnReq.ssidLen = pstrHostIFconnectAttr->ssidLen;
 	if(pstrHostIFconnectAttr->pu8ssid != NULL)
 	{									
-		gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->ssidLen+1);
-		NMI_memcpy(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid, pstrHostIFconnectAttr->pu8ssid, 
+		pstrWFIDrv->strNMI_UsrConnReq.pu8ssid = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->ssidLen+1);
+		NMI_memcpy(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid, pstrHostIFconnectAttr->pu8ssid, 
 					  pstrHostIFconnectAttr->ssidLen);
-		gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid[pstrHostIFconnectAttr->ssidLen] = '\0';			
+		pstrWFIDrv->strNMI_UsrConnReq.pu8ssid[pstrHostIFconnectAttr->ssidLen] = '\0';			
 	}
 
-	gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen = pstrHostIFconnectAttr->IEsLen;
+	pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen = pstrHostIFconnectAttr->IEsLen;
 	if(pstrHostIFconnectAttr->pu8IEs != NULL)
 	{					
-		gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->IEsLen);
-		NMI_memcpy(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs, pstrHostIFconnectAttr->pu8IEs, 
+		pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = (NMI_Uint8*)NMI_MALLOC(pstrHostIFconnectAttr->IEsLen);
+		NMI_memcpy(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs, pstrHostIFconnectAttr->pu8IEs, 
 					  pstrHostIFconnectAttr->IEsLen);			
 	}
 
-	gWFiDrvHandle->strNMI_UsrConnReq.u8security= pstrHostIFconnectAttr->u8security;
-	gWFiDrvHandle->strNMI_UsrConnReq.tenuAuth_type= pstrHostIFconnectAttr->tenuAuth_type;
-	gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult = pstrHostIFconnectAttr->pfConnectResult;
-	gWFiDrvHandle->strNMI_UsrConnReq.u32UserConnectPvoid = pstrHostIFconnectAttr->pvUserArg;				
-
-
+	pstrWFIDrv->strNMI_UsrConnReq.u8security= pstrHostIFconnectAttr->u8security;
+	pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type= pstrHostIFconnectAttr->tenuAuth_type;
+	pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult = pstrHostIFconnectAttr->pfConnectResult;
+	pstrWFIDrv->strNMI_UsrConnReq.u32UserConnectPvoid = pstrHostIFconnectAttr->pvUserArg;				
 	
 	strWIDList[u32WidsCount].u16WIDid = WID_SUCCESS_FRAME_COUNT;
 	strWIDList[u32WidsCount].enuWIDtype= WID_INT;
@@ -1441,26 +1831,38 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 		/* IEs to be inserted in Association Request */
 		strWIDList[u32WidsCount].u16WIDid = WID_INFO_ELEMENT_ASSOCIATE;
 		strWIDList[u32WidsCount].enuWIDtype = WID_BIN_DATA;
-		strWIDList[u32WidsCount].ps8WidVal = gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs;
-		strWIDList[u32WidsCount].s32ValueSize = gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen;
+		strWIDList[u32WidsCount].ps8WidVal = pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs;
+		strWIDList[u32WidsCount].s32ValueSize = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
 		u32WidsCount++;
+
+		/*BugID_5137*/
+		gu32FlushedInfoElemAsocSize = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
+		gu8FlushedInfoElemAsoc =  NMI_MALLOC(gu32FlushedInfoElemAsocSize);
+		memcpy(gu8FlushedInfoElemAsoc, pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs,
+			gu32FlushedInfoElemAsocSize);
 	}
 	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_11I_MODE;
 	strWIDList[u32WidsCount].enuWIDtype = WID_CHAR;
 	strWIDList[u32WidsCount].s32ValueSize = sizeof(NMI_Char);
-	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&(gWFiDrvHandle->strNMI_UsrConnReq.u8security));
+	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&(pstrWFIDrv->strNMI_UsrConnReq.u8security));
 	u32WidsCount++;
+
+	/*BugID_5137*/
+	gu8Flushed11iMode = pstrWFIDrv->strNMI_UsrConnReq.u8security;
 	
-	PRINT_INFO(HOSTINF_DBG,"Encrypt Mode = %x\n",gWFiDrvHandle->strNMI_UsrConnReq.u8security);
+	PRINT_INFO(HOSTINF_DBG,"Encrypt Mode = %x\n",pstrWFIDrv->strNMI_UsrConnReq.u8security);
 
 	
 	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_AUTH_TYPE;
 	strWIDList[u32WidsCount].enuWIDtype = WID_CHAR;
 	strWIDList[u32WidsCount].s32ValueSize = sizeof(NMI_Char);
-	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&gWFiDrvHandle->strNMI_UsrConnReq.tenuAuth_type);
+	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type);
 	u32WidsCount++;
+
+	/*BugID_5137*/
+	gu8FlushedAuthType = (NMI_Uint8)pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type;
 	
-	PRINT_INFO(HOSTINF_DBG,"Authentication Type = %x\n",gWFiDrvHandle->strNMI_UsrConnReq.tenuAuth_type);
+	PRINT_INFO(HOSTINF_DBG,"Authentication Type = %x\n",pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type);
 	/*
 	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_11I_PSK;
 	strWIDList[u32WidsCount].enuWIDtype = WID_STR;
@@ -1470,7 +1872,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	*/
 
 	PRINT_D(HOSTINF_DBG,"Connecting to network of SSID %s on channel %d\n", 
-				  gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid, pstrHostIFconnectAttr->u8channel);		
+				  pstrWFIDrv->strNMI_UsrConnReq.pu8ssid, pstrHostIFconnectAttr->u8channel);		
 	
 
 #ifndef NMI_PARSE_SCAN_IN_HOST	
@@ -1514,8 +1916,14 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 
 	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_JOIN_REQ_EXTENDED;
 	strWIDList[u32WidsCount].enuWIDtype = WID_STR;
-	strWIDList[u32WidsCount].s32ValueSize = 79;
+
+	/*Sending NoA attributes during connection*/
+	strWIDList[u32WidsCount].s32ValueSize = 112;//79;
 	strWIDList[u32WidsCount].ps8WidVal = NMI_MALLOC(strWIDList[u32WidsCount].s32ValueSize);
+
+	/*BugID_5137*/
+	gu32FlushedJoinReqSize = strWIDList[u32WidsCount].s32ValueSize;
+	gu8FlushedJoinReq = NMI_MALLOC(gu32FlushedJoinReqSize);
 
 	if(strWIDList[u32WidsCount].ps8WidVal == NMI_NULL)
 	{
@@ -1583,7 +1991,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	/* ht cap*/
 	*(pu8CurrByte++)  = ptstrJoinBssParam->ht_capable;
 	//copy this information to the user request
-	gWFiDrvHandle->strNMI_UsrConnReq.IsHTCapable = ptstrJoinBssParam->ht_capable;
+	pstrWFIDrv->strNMI_UsrConnReq.IsHTCapable = ptstrJoinBssParam->ht_capable;
 
 	/* rsn found*/
 	*(pu8CurrByte++)  =  ptstrJoinBssParam->rsn_found;
@@ -1606,6 +2014,47 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	NMI_memcpy(pu8CurrByte, ptstrJoinBssParam->rsn_cap, sizeof( ptstrJoinBssParam->rsn_cap));
 	pu8CurrByte += sizeof( ptstrJoinBssParam->rsn_cap);
 
+	/*BugID_5137*/
+	*(pu8CurrByte++) = REAL_JOIN_REQ;
+	
+		#ifdef NMI_P2P
+	*(pu8CurrByte++) = ptstrJoinBssParam->u8NoaEnbaled;
+	if(ptstrJoinBssParam->u8NoaEnbaled)
+	{
+	PRINT_D(HOSTINF_DBG,"NOA present\n");
+	
+	*(pu8CurrByte++) = (ptstrJoinBssParam->tsf) & 0xFF;
+	*(pu8CurrByte++) = ((ptstrJoinBssParam->tsf)>>8) & 0xFF;
+	*(pu8CurrByte++) = ((ptstrJoinBssParam->tsf)>>16) & 0xFF;
+	*(pu8CurrByte++) = ((ptstrJoinBssParam->tsf)>>24) & 0xFF;
+
+	*(pu8CurrByte++) = ptstrJoinBssParam->u8Index;
+	
+	*(pu8CurrByte++) =ptstrJoinBssParam->u8OppEnable;
+	
+	if(ptstrJoinBssParam->u8OppEnable)
+		*(pu8CurrByte++) = ptstrJoinBssParam->u8CtWindow;
+	
+	*(pu8CurrByte++) = ptstrJoinBssParam->u8Count;
+
+	NMI_memcpy(pu8CurrByte, ptstrJoinBssParam->au8Duration, sizeof( ptstrJoinBssParam->au8Duration));
+
+	pu8CurrByte += sizeof( ptstrJoinBssParam->au8Duration);
+
+	NMI_memcpy(pu8CurrByte, ptstrJoinBssParam->au8Interval, sizeof( ptstrJoinBssParam->au8Interval));
+	
+	pu8CurrByte += sizeof( ptstrJoinBssParam->au8Interval);
+
+	NMI_memcpy(pu8CurrByte, ptstrJoinBssParam->au8StartTime, sizeof( ptstrJoinBssParam->au8StartTime));
+	
+	pu8CurrByte += sizeof( ptstrJoinBssParam->au8StartTime);
+
+		}
+	else
+		PRINT_D(HOSTINF_DBG,"NOA not present\n");
+	#endif
+	
+
 	/* keep the buffer at the start of the allocated pointer to use it with the free*/
 	pu8CurrByte = strWIDList[u32WidsCount].ps8WidVal ;
 	
@@ -1621,8 +2070,12 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	gu32WidConnRstHack = 0;
 	////////////////////////
 	#endif
+
+	/*BugID_5137*/
+	memcpy(gu8FlushedJoinReq, pu8CurrByte, gu32FlushedJoinReqSize);
+	gu8FlushedJoinReqDrvHandler = (NMI_Uint32)pstrWFIDrv;
 	
-	s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Handle_Connect()] failed to send config packet\n");
@@ -1630,7 +2083,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	}
 	else
 	{
-		gWFiDrvHandle->enuHostIFstate = HOST_IF_WAITING_CONN_RESP;
+		pstrWFIDrv->enuHostIFstate = HOST_IF_WAITING_CONN_RESP;
 	}		
 	#endif
 	
@@ -1638,7 +2091,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 	{
 		tstrConnectInfo strConnectInfo;
 
-		NMI_TimerStop(&hConnectTimer, NMI_NULL);
+		NMI_TimerStop(&(pstrWFIDrv->hConnectTimer), NMI_NULL);
 		
 		PRINT_D(HOSTINF_DBG,"could not start connecting to the required network\n");
 
@@ -1666,7 +2119,7 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 												   NULL,
 												   pstrHostIFconnectAttr->pvUserArg);
 			/*Change state to idle*/
-			gWFiDrvHandle->enuHostIFstate = HOST_IF_IDLE;
+			pstrWFIDrv->enuHostIFstate = HOST_IF_IDLE;
 			/* Deallocation */
 			if(strConnectInfo.pu8ReqIEs != NULL)
 			{
@@ -1711,6 +2164,76 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 }
 
 /**
+*  @brief 			Handle_FlushConnect
+*  @details 	   	Sending config packet to firmware to flush an old connection
+				after switching FW from station one to hybrid one
+*  @param[in]    	void * drvHandler
+*  @return 	    	Error code.
+*  @author		Amr Abdel-Moghny
+*  @date			19 DEC 2013
+*  @version		8.0
+*/
+
+static NMI_Sint32 Handle_FlushConnect(void * drvHandler)
+{     
+	NMI_Sint32 s32Error = NMI_SUCCESS;	
+	tstrWID strWIDList[5];
+	NMI_Uint32 u32WidsCount = 0;	
+	NMI_Uint8* pu8CurrByte = NMI_NULL;
+	
+
+	/* IEs to be inserted in Association Request */
+	strWIDList[u32WidsCount].u16WIDid = WID_INFO_ELEMENT_ASSOCIATE;
+	strWIDList[u32WidsCount].enuWIDtype = WID_BIN_DATA;
+	strWIDList[u32WidsCount].ps8WidVal = gu8FlushedInfoElemAsoc;
+	strWIDList[u32WidsCount].s32ValueSize = gu32FlushedInfoElemAsocSize;
+	u32WidsCount++;
+
+	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_11I_MODE;
+	strWIDList[u32WidsCount].enuWIDtype = WID_CHAR;
+	strWIDList[u32WidsCount].s32ValueSize = sizeof(NMI_Char);
+	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&(gu8Flushed11iMode));
+	u32WidsCount++;
+	
+
+	
+	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_AUTH_TYPE;
+	strWIDList[u32WidsCount].enuWIDtype = WID_CHAR;
+	strWIDList[u32WidsCount].s32ValueSize = sizeof(NMI_Char);
+	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&gu8FlushedAuthType);
+	u32WidsCount++;
+	
+
+	#ifdef NMI_PARSE_SCAN_IN_HOST	
+	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_JOIN_REQ_EXTENDED;
+	strWIDList[u32WidsCount].enuWIDtype = WID_STR;
+	strWIDList[u32WidsCount].s32ValueSize = gu32FlushedJoinReqSize;
+	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)gu8FlushedJoinReq;
+	pu8CurrByte = strWIDList[u32WidsCount].ps8WidVal;
+
+	pu8CurrByte += FLUSHED_BYTE_POS;
+	*(pu8CurrByte) = FLUSHED_JOIN_REQ;
+
+	u32WidsCount++;
+
+	#endif
+
+	s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE, gu8FlushedJoinReqDrvHandler);
+	if(s32Error)
+	{
+		PRINT_ER("Handle_Flush_Connect()] failed to send config packet\n");
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_STATE);
+	}
+	
+	NMI_CATCH(s32Error)
+	{
+
+	}
+	
+	return s32Error;
+}
+
+/**
 *  @brief 		   Handle_ConnectTimeout
 *  @details 	   Call connect notification callback function indicating connection failure
 *  @param[in]    NONE
@@ -1719,14 +2242,15 @@ static NMI_Sint32 Handle_Connect(tstrHostIFconnectAttr* pstrHostIFconnectAttr)
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_ConnectTimeout(void)
+static NMI_Sint32 Handle_ConnectTimeout(void* drvHandler)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrConnectInfo strConnectInfo;	
 	tstrWID strWID;	
 	NMI_Uint16 u16DummyReasonCode = 0;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *) drvHandler;
 	
-	gWFiDrvHandle->enuHostIFstate = HOST_IF_IDLE;
+	pstrWFIDrv->enuHostIFstate = HOST_IF_IDLE;
 
 	gbScanWhileConnected = NMI_FALSE;			
 
@@ -1736,28 +2260,28 @@ static NMI_Sint32 Handle_ConnectTimeout(void)
 	/* First, we will notify the upper layer with the Connection failure {through the Connect Callback function}, 
 	     then we will notify our firmware also with the Connection failure {through sending to it Cfg packet carrying 
 	     WID_DISCONNECT} */	
-	if(gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult != NULL)
+	if(pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult != NULL)
 	{
-		if(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid != NULL)
+		if(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid != NULL)
 		{
 			NMI_memcpy(strConnectInfo.au8bssid, 
-						  gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid, 6);				
+						  pstrWFIDrv->strNMI_UsrConnReq.pu8bssid, 6);				
 		}				
 
-		if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
+		if(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
 		{
-			strConnectInfo.ReqIEsLen = gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen;
-			strConnectInfo.pu8ReqIEs = (NMI_Uint8*)NMI_MALLOC(gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen);
+			strConnectInfo.ReqIEsLen = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
+			strConnectInfo.pu8ReqIEs = (NMI_Uint8*)NMI_MALLOC(pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen);
 			NMI_memcpy(strConnectInfo.pu8ReqIEs,
-						  gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs,
-						  gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen);
+						  pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs,
+						  pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen);
 		}		
 		
-		gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_CONN_RESP,
+		pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_CONN_RESP,
 														      &strConnectInfo,
 														      MAC_DISCONNECTED,
 														      NULL,
-														      gWFiDrvHandle->strNMI_UsrConnReq.u32UserConnectPvoid);		
+														      pstrWFIDrv->strNMI_UsrConnReq.u32UserConnectPvoid);		
 		
 		/* Deallocation of strConnectInfo.pu8ReqIEs */
 		if(strConnectInfo.pu8ReqIEs != NULL)
@@ -1780,32 +2304,45 @@ static NMI_Sint32 Handle_ConnectTimeout(void)
 
 	PRINT_D(HOSTINF_DBG,"Sending disconnect request\n");
 
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE);	
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);	
 	if(s32Error)
 	{
 		PRINT_ER("Failed to send dissconect config packet\n");		
 	}
 
 	/* Deallocation of the Saved Connect Request in the global Handle */	
-	gWFiDrvHandle->strNMI_UsrConnReq.ssidLen = 0;
-	if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid != NULL)
+	pstrWFIDrv->strNMI_UsrConnReq.ssidLen = 0;
+	if(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid != NULL)
 	{
-		NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid);
-		gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid = NULL;
+		NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid);
+		pstrWFIDrv->strNMI_UsrConnReq.pu8ssid = NULL;
 	}
 
-	if(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid != NULL)
+	if(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid != NULL)
 	{
-		NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid);
-		gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid = NULL;
+		NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid);
+		pstrWFIDrv->strNMI_UsrConnReq.pu8bssid = NULL;
 	}
 
-	gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen = 0;
-	if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
+	pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen = 0;
+	if(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
 	{
-		NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs);
-		gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
+		NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs);
+		pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
 	}		
+
+	/*BugID_5213*/
+	/*Freeing flushed join request params on connect timeout*/
+	if(gu8FlushedJoinReq != NULL)
+	{
+		NMI_FREE(gu8FlushedJoinReq);
+		gu8FlushedJoinReq = NULL;
+	}
+	if(gu8FlushedInfoElemAsoc != NULL)
+	{
+		NMI_FREE(gu8FlushedInfoElemAsoc);
+		gu8FlushedInfoElemAsoc = NULL;
+	}
 	
 	return s32Error;
 }
@@ -1819,40 +2356,46 @@ static NMI_Sint32 Handle_ConnectTimeout(void)
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_RcvdNtwrkInfo(tstrRcvdNetworkInfo* pstrRcvdNetworkInfo)
+static NMI_Sint32 Handle_RcvdNtwrkInfo(void* drvHandler,tstrRcvdNetworkInfo* pstrRcvdNetworkInfo)
 {
-	NMI_Sint32 s32Error = NMI_SUCCESS;
-	tstrNetworkInfo * pstrNetworkInfo = NULL;	
 	NMI_Uint32 i;
 	NMI_Bool bNewNtwrkFound;
+	
+
+	
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrNetworkInfo * pstrNetworkInfo = NULL;	
 	void* pJoinParams = NULL;
 	
-	bNewNtwrkFound = NMI_TRUE;
+	tstrNMI_WFIDrv * pstrWFIDrv  = (tstrNMI_WFIDrv *)drvHandler;
 	
+
+
+	bNewNtwrkFound = NMI_TRUE;
 	PRINT_INFO(HOSTINF_DBG,"Handling received network info\n");	
 
 	/*if there is a an ongoing scan request*/
-	if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+	if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
 	{
 		PRINT_D(HOSTINF_DBG,"State: Scanning, parsing network information received\n");
 		ParseNetworkInfo(pstrRcvdNetworkInfo->pu8Buffer, &pstrNetworkInfo);
 		if((pstrNetworkInfo == NULL) 
-		    ||(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult == NMI_NULL))
+		    ||(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult == NMI_NULL))
 		{
 			NMI_ERRORREPORT(s32Error, NMI_INVALID_ARGUMENT);
 		}		
 		
 		/* check whether this network is discovered before */
-		for(i = 0; i < gWFiDrvHandle->strNMI_UsrScanReq.u32RcvdChCount; i++)
+		for(i = 0; i < pstrWFIDrv->strNMI_UsrScanReq.u32RcvdChCount; i++)
 		{
 
-			if((gWFiDrvHandle->strNMI_UsrScanReq.astrFoundNetworkInfo[i].au8bssid != NULL) &&
+			if((pstrWFIDrv->strNMI_UsrScanReq.astrFoundNetworkInfo[i].au8bssid != NULL) &&
 			   (pstrNetworkInfo->au8bssid != NULL))
 			{
-				if(NMI_memcmp(gWFiDrvHandle->strNMI_UsrScanReq.astrFoundNetworkInfo[i].au8bssid,
+				if(NMI_memcmp(pstrWFIDrv->strNMI_UsrScanReq.astrFoundNetworkInfo[i].au8bssid,
 								  pstrNetworkInfo->au8bssid, 6) == 0)
 				{
-					if(pstrNetworkInfo->s8rssi <= gWFiDrvHandle->strNMI_UsrScanReq.astrFoundNetworkInfo[i].s8rssi)
+					if(pstrNetworkInfo->s8rssi <= pstrWFIDrv->strNMI_UsrScanReq.astrFoundNetworkInfo[i].s8rssi)
 					{
 						/*we have already found this network with better rssi, so keep the old cached one and don't 
 						    send anything to the upper layer */
@@ -1864,7 +2407,7 @@ static NMI_Sint32 Handle_RcvdNtwrkInfo(tstrRcvdNetworkInfo* pstrRcvdNetworkInfo)
 						/* here the same already found network is found again but with a better rssi, so just update 
 				     		     the rssi for this cached network and send this updated network to the upper layer but 
 				     		     don't add a new record for it */
-				     	 	gWFiDrvHandle->strNMI_UsrScanReq.astrFoundNetworkInfo[i].s8rssi = pstrNetworkInfo->s8rssi;
+				     	 	pstrWFIDrv->strNMI_UsrScanReq.astrFoundNetworkInfo[i].s8rssi = pstrNetworkInfo->s8rssi;
 						bNewNtwrkFound = NMI_FALSE;
 						break;
 					}
@@ -1879,17 +2422,17 @@ static NMI_Sint32 Handle_RcvdNtwrkInfo(tstrRcvdNetworkInfo* pstrRcvdNetworkInfo)
 
 			PRINT_D(HOSTINF_DBG,"New network found\n");
 
-			if(gWFiDrvHandle->strNMI_UsrScanReq.u32RcvdChCount < MAX_NUM_SCANNED_NETWORKS)
+			if(pstrWFIDrv->strNMI_UsrScanReq.u32RcvdChCount < MAX_NUM_SCANNED_NETWORKS)
 			{
-				gWFiDrvHandle->strNMI_UsrScanReq.astrFoundNetworkInfo[gWFiDrvHandle->strNMI_UsrScanReq.u32RcvdChCount].s8rssi = pstrNetworkInfo->s8rssi;
+				pstrWFIDrv->strNMI_UsrScanReq.astrFoundNetworkInfo[pstrWFIDrv->strNMI_UsrScanReq.u32RcvdChCount].s8rssi = pstrNetworkInfo->s8rssi;
 				
-				if((gWFiDrvHandle->strNMI_UsrScanReq.astrFoundNetworkInfo[gWFiDrvHandle->strNMI_UsrScanReq.u32RcvdChCount].au8bssid != NULL)
+				if((pstrWFIDrv->strNMI_UsrScanReq.astrFoundNetworkInfo[pstrWFIDrv->strNMI_UsrScanReq.u32RcvdChCount].au8bssid != NULL)
 					&& (pstrNetworkInfo->au8bssid != NULL))
 				{
-					NMI_memcpy(gWFiDrvHandle->strNMI_UsrScanReq.astrFoundNetworkInfo[gWFiDrvHandle->strNMI_UsrScanReq.u32RcvdChCount].au8bssid,
+					NMI_memcpy(pstrWFIDrv->strNMI_UsrScanReq.astrFoundNetworkInfo[pstrWFIDrv->strNMI_UsrScanReq.u32RcvdChCount].au8bssid,
 							   pstrNetworkInfo->au8bssid, 6);
 
-					gWFiDrvHandle->strNMI_UsrScanReq.u32RcvdChCount++;
+					pstrWFIDrv->strNMI_UsrScanReq.u32RcvdChCount++;
 
 				pstrNetworkInfo->bNewNetwork = NMI_TRUE;
 				/*Bug4218: Parsing Join Param*/
@@ -1898,8 +2441,8 @@ static NMI_Sint32 Handle_RcvdNtwrkInfo(tstrRcvdNetworkInfo* pstrRcvdNetworkInfo)
 				pJoinParams = host_int_ParseJoinBssParam(pstrNetworkInfo);
 				#endif/*NMI_PARSE_SCAN_IN_HOST*/
 
-				gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_NETWORK_FOUND, pstrNetworkInfo,
-																	  gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid,
+				pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_NETWORK_FOUND, pstrNetworkInfo,
+																	  pstrWFIDrv->strNMI_UsrScanReq.u32UserScanPvoid,
 																	  pJoinParams);
 
 
@@ -1914,8 +2457,8 @@ static NMI_Sint32 Handle_RcvdNtwrkInfo(tstrRcvdNetworkInfo* pstrRcvdNetworkInfo)
 		{
 			pstrNetworkInfo->bNewNetwork = NMI_FALSE;
 			/* just call the User CallBack function to send the same discovered network with its updated RSSI */
-			gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_NETWORK_FOUND, pstrNetworkInfo,
-																		  gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
+			pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_NETWORK_FOUND, pstrNetworkInfo,
+																		  pstrWFIDrv->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
 		}
 	}
 	
@@ -1952,7 +2495,7 @@ done:
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAsyncInfo)
+static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(void * drvHandler,tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAsyncInfo)
 {
 	//TODO: mostafa: till now, this function just handles only the received mac status msg, 
 	//				 which carries only 1 WID which have WID ID = WID_STATUS
@@ -1963,19 +2506,21 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 	NMI_Uint16 u16WidID = (NMI_Uint16)WID_NIL;
 	NMI_Uint8 u8WidLen  = 0;
 	NMI_Uint8 u8MacStatus;
+	NMI_Uint8 u8MacStatusReasonCode;
+	NMI_Uint8 u8MacStatusAdditionalInfo;
 	tstrConnectInfo strConnectInfo;
 	tstrDisconnectNotifInfo strDisconnectNotifInfo;
 	NMI_Sint32 s32Err = NMI_SUCCESS;
-	
-	PRINT_D(HOSTINF_DBG,"Current State = %d,Received state = %d\n",gWFiDrvHandle->enuHostIFstate,
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *) drvHandler;
+	PRINT_D(HOSTINF_DBG,"Current State = %d,Received state = %d\n",pstrWFIDrv->enuHostIFstate,
 		pstrRcvdGnrlAsyncInfo->pu8Buffer[7]);
-	
-	if((gWFiDrvHandle->enuHostIFstate == HOST_IF_WAITING_CONN_RESP) ||
-	   (gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED) ||
-	   gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+
+	if((pstrWFIDrv->enuHostIFstate == HOST_IF_WAITING_CONN_RESP) ||
+	   (pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED) ||
+	   pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
 	{		
 		if((pstrRcvdGnrlAsyncInfo->pu8Buffer == NULL) || 
-		   (gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult == NMI_NULL))
+		   (pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult == NMI_NULL))
 		{
 			NMI_ERRORREPORT(s32Error, NMI_INVALID_ARGUMENT);
 		}				
@@ -2003,14 +2548,16 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 
 		/* get the WID value [expected to be one of two values: either MAC_CONNECTED = (1) or MAC_DISCONNECTED = (0)] */
 		u8MacStatus  = pstrRcvdGnrlAsyncInfo->pu8Buffer[7];
-
-		if(gWFiDrvHandle->enuHostIFstate == HOST_IF_WAITING_CONN_RESP)
+		u8MacStatusReasonCode = pstrRcvdGnrlAsyncInfo->pu8Buffer[8];
+		u8MacStatusAdditionalInfo = pstrRcvdGnrlAsyncInfo->pu8Buffer[9];
+		printk("Recieved MAC status = %d with Reason = %d , Info = %d\n",u8MacStatus, u8MacStatusReasonCode, u8MacStatusAdditionalInfo);
+		if(pstrWFIDrv->enuHostIFstate == HOST_IF_WAITING_CONN_RESP)
 		{
 			/* our station had sent Association Request frame, so here it will get the Association Response frame then parse it */
 			NMI_Uint32 u32RcvdAssocRespInfoLen;
 			tstrConnectRespInfo* pstrConnectRespInfo = NULL;
 			
-			PRINT_D(HOSTINF_DBG,"MAC status = %d\n",u8MacStatus);
+			PRINT_D(HOSTINF_DBG,"Recieved MAC status = %d with Reason = %d , Code = %d\n",u8MacStatus, u8MacStatusReasonCode, u8MacStatusAdditionalInfo);
 			
 			NMI_memset(&strConnectInfo, 0, sizeof(tstrConnectInfo));
 
@@ -2018,7 +2565,7 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 			{
 				NMI_memset(gapu8RcvdAssocResp, 0, MAX_ASSOC_RESP_FRAME_SIZE);
 				
-				host_int_get_assoc_res_info((NMI_WFIDrvHandle)gWFiDrvHandle, 
+				host_int_get_assoc_res_info((NMI_WFIDrvHandle)pstrWFIDrv, 
 											gapu8RcvdAssocResp, 
 											MAX_ASSOC_RESP_FRAME_SIZE, 
 											&u32RcvdAssocRespInfoLen);								
@@ -2079,38 +2626,38 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 			
 			//TODO: mostafa: correct BSSID should be retrieved from actual BSSID received from AP
 			//               through a structure of type tstrConnectRespInfo
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid != NULL)
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid != NULL)
 			{
 				PRINT_D(HOSTINF_DBG,"Retrieving actual BSSID from AP\n");
-				NMI_memcpy(strConnectInfo.au8bssid, gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid, 6);
+				NMI_memcpy(strConnectInfo.au8bssid, pstrWFIDrv->strNMI_UsrConnReq.pu8bssid, 6);
 
 				if((u8MacStatus == MAC_CONNECTED) &&
 			    	    (strConnectInfo.u16ConnectStatus == SUCCESSFUL_STATUSCODE))
 
 
 				{
-					NMI_memcpy(gWFiDrvHandle->au8AssociatedBSSID,
-							   gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid, ETH_ALEN);
+					NMI_memcpy(pstrWFIDrv->au8AssociatedBSSID,
+							   pstrWFIDrv->strNMI_UsrConnReq.pu8bssid, ETH_ALEN);
 				}
 			}
 
 				
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
 			{
-				strConnectInfo.ReqIEsLen = gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen;
-				strConnectInfo.pu8ReqIEs = (NMI_Uint8*)NMI_MALLOC(gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen);
+				strConnectInfo.ReqIEsLen = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
+				strConnectInfo.pu8ReqIEs = (NMI_Uint8*)NMI_MALLOC(pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen);
 				NMI_memcpy(strConnectInfo.pu8ReqIEs, 
-							  gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs, 
-							  gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen);
+							  pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs, 
+							  pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen);
 			}						
 
 			
-			NMI_TimerStop(&hConnectTimer, NMI_NULL);					
-			gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_CONN_RESP, 
+			NMI_TimerStop(&(pstrWFIDrv->hConnectTimer), NMI_NULL);					
+			pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_CONN_RESP, 
 															      &strConnectInfo,
 															      u8MacStatus,
 															      NULL,
-															      gWFiDrvHandle->strNMI_UsrConnReq.u32UserConnectPvoid);												
+															      pstrWFIDrv->strNMI_UsrConnReq.u32UserConnectPvoid);												
 			
 
 			/* if received mac status is MAC_CONNECTED and 
@@ -2120,25 +2667,31 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 			   (strConnectInfo.u16ConnectStatus == SUCCESSFUL_STATUSCODE))
 			{
 				#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-				gbIPaddrObtained = NMI_FALSE;
-				host_int_set_power_mgmt((NMI_WFIDrvHandle)gWFiDrvHandle, 0, 0);
+				
+				host_int_set_power_mgmt((NMI_WFIDrvHandle)pstrWFIDrv, 0, 0);
 				#endif
 				
 				PRINT_D(HOSTINF_DBG,"MAC status : CONNECTED and Connect Status : Successful\n");
-				gWFiDrvHandle->enuHostIFstate = HOST_IF_CONNECTED;
+				pstrWFIDrv->enuHostIFstate = HOST_IF_CONNECTED;
+
+				#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+				PRINT_D(GENERIC_DBG,"during ip, scan disabled\n");
+				g_obtainingIP=NMI_TRUE;
+				#endif
+
 				#ifdef NMI_PARSE_SCAN_IN_HOST				
 				//open a BA session if possible
-				//if(gWFiDrvHandle->strNMI_UsrConnReq.IsHTCapable)
+				//if(pstrWFIDrv->strNMI_UsrConnReq.IsHTCapable)
 				
 				#endif
 				
-				//host_int_addBASession(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid,0,
+				//host_int_addBASession(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid,0,
 					//BA_SESSION_DEFAULT_BUFFER_SIZE,BA_SESSION_DEFAULT_TIMEOUT);
 			}
 			else
 			{
 				PRINT_D(HOSTINF_DBG,"MAC status : %d and Connect Status : %d\n",u8MacStatus,strConnectInfo.u16ConnectStatus);
-				gWFiDrvHandle->enuHostIFstate = HOST_IF_IDLE;
+				pstrWFIDrv->enuHostIFstate = HOST_IF_IDLE;
 				gbScanWhileConnected = NMI_FALSE;
 			}
 
@@ -2156,61 +2709,59 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 			}
 
 
-			gWFiDrvHandle->strNMI_UsrConnReq.ssidLen = 0;
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid != NULL)
+			pstrWFIDrv->strNMI_UsrConnReq.ssidLen = 0;
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid != NULL)
 			{
-				NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid);
-				gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid = NULL;
+				NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid);
+				pstrWFIDrv->strNMI_UsrConnReq.pu8ssid = NULL;
 			}
 
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid != NULL)
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid != NULL)
 			{
-				NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid);
-				gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid = NULL;
+				NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid);
+				pstrWFIDrv->strNMI_UsrConnReq.pu8bssid = NULL;
 			}
 
-			gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen = 0;
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
+			pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen = 0;
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
 			{
-				NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs);
-				gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
+				NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs);
+				pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
 			}
 			
 		}
 		else if((u8MacStatus == MAC_DISCONNECTED) &&
-			    (gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED))
+			    (pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED))
 		{
 			/* Disassociation or Deauthentication frame has been received */
 			PRINT_D(HOSTINF_DBG,"Received MAC_DISCONNECTED from the FW\n");
 
 			NMI_memset(&strDisconnectNotifInfo, 0, sizeof(tstrDisconnectNotifInfo));
 
-			if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+			if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
 		       {                
-		       	printk("\n\n<< Abort the running OBSS Scan >> \n\n");
-				NMI_TimerStop(&hScanTimer, NMI_NULL);
-				gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_ABORTED, NMI_NULL,
-						gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
-		              
-		    		gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult= NMI_NULL;              
+			       	printk("\n\n<< Abort the running OBSS Scan >> \n\n");
+					NMI_TimerStop(&(pstrWFIDrv->hScanTimer), NMI_NULL);
+					Handle_ScanDone((void*)pstrWFIDrv,SCAN_EVENT_ABORTED);              
 		       }			
 
 			strDisconnectNotifInfo.u16reason = 0;
 			strDisconnectNotifInfo.ie = NULL;
 			strDisconnectNotifInfo.ie_len = 0;
 			
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult != NULL)
+			if(pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult != NULL)
 			{
 				#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-				gbIPaddrObtained = NMI_FALSE;
-				host_int_set_power_mgmt((NMI_WFIDrvHandle)gWFiDrvHandle, 0, 0);
+				
+				g_obtainingIP=NMI_FALSE;
+				host_int_set_power_mgmt((NMI_WFIDrvHandle)pstrWFIDrv, 0, 0);
 				#endif
 				
-				gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_DISCONN_NOTIF, 
+				pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_DISCONN_NOTIF, 
 															      	      NULL,
 															      	      0,
 															      	      &strDisconnectNotifInfo,
-															      	      gWFiDrvHandle->strNMI_UsrConnReq.u32UserConnectPvoid);
+															      	      pstrWFIDrv->strNMI_UsrConnReq.u32UserConnectPvoid);
 
 			}
 
@@ -2219,7 +2770,7 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 				PRINT_ER("Connect result callback function is NULL \n");
 			}
 
-			NMI_memset(gWFiDrvHandle->au8AssociatedBSSID, 0, ETH_ALEN);
+			NMI_memset(pstrWFIDrv->au8AssociatedBSSID, 0, ETH_ALEN);
 
 			
 			/* Deallocation */
@@ -2234,41 +2785,53 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 			}		
 			*/
 			
-			gWFiDrvHandle->strNMI_UsrConnReq.ssidLen = 0;
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid != NULL)
+			pstrWFIDrv->strNMI_UsrConnReq.ssidLen = 0;
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid != NULL)
 			{
-				NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid);
-				gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid = NULL;
+				NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid);
+				pstrWFIDrv->strNMI_UsrConnReq.pu8ssid = NULL;
 			}
 
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid != NULL)
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid != NULL)
 			{
-				NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid);
-				gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid = NULL;
+				NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid);
+				pstrWFIDrv->strNMI_UsrConnReq.pu8bssid = NULL;
 			}
 
-			gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen = 0;
-			if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
+			pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen = 0;
+			if(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
 			{
-				NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs);
-				gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
+				NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs);
+				pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
 			}			
 
-			gWFiDrvHandle->enuHostIFstate = HOST_IF_IDLE;
+			/*BugID_5213*/
+			/*Freeing flushed join request params on receiving*/
+			/*MAC_DISCONNECTED while connected*/
+			if(gu8FlushedJoinReq != NULL)
+			{
+				NMI_FREE(gu8FlushedJoinReq);
+				gu8FlushedJoinReq = NULL;
+			}
+			if(gu8FlushedInfoElemAsoc != NULL)
+			{
+				NMI_FREE(gu8FlushedInfoElemAsoc);
+				gu8FlushedInfoElemAsoc = NULL;
+			}
+
+			pstrWFIDrv->enuHostIFstate = HOST_IF_IDLE;
 			gbScanWhileConnected = NMI_FALSE;
 			
 		}else if((u8MacStatus == MAC_DISCONNECTED) &&
-			    (gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult != NULL)){
+			    (pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult != NULL)){
 					PRINT_D(HOSTINF_DBG,"Received MAC_DISCONNECTED from the FW while scanning\n");
 			       	printk("\n\n<< Abort the running Scan >> \n\n");
 					/*Abort the running scan*/
-					NMI_TimerStop(&hScanTimer, NMI_NULL);
-					if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+					NMI_TimerStop(&(pstrWFIDrv->hScanTimer), NMI_NULL);
+					if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
 				       {                       
-				        	gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_ABORTED, NMI_NULL,
-								gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
-				              
-				    		gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult= NMI_NULL;              
+				        	Handle_ScanDone((void*)pstrWFIDrv,SCAN_EVENT_ABORTED);     
+				    		
 				       }				
 			}
 		
@@ -2298,7 +2861,7 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(tstrRcvdGnrlAsyncInfo* pstrRcvdGnrlAs
 *  @date	
 *  @version	1.0
 */
-static int Handle_Key(tstrHostIFkeyAttr* pstrHostIFkeyAttr)
+static int Handle_Key(void * drvHandler,tstrHostIFkeyAttr* pstrHostIFkeyAttr)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
@@ -2309,6 +2872,7 @@ static int Handle_Key(tstrHostIFkeyAttr* pstrHostIFkeyAttr)
 	NMI_Uint8* pu8keybuf;
 	NMI_Sint8 s8idxarray[1];	
 	NMI_Sint8 ret = 0;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 	
 
 	switch(pstrHostIFkeyAttr->enuKeyType)
@@ -2361,7 +2925,7 @@ pu8keybuf = (NMI_Uint8*)NMI_MALLOC(pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIF
 				strWIDList[3].ps8WidVal = (NMI_Sint8*)pu8keybuf;
 
 			
-				s32Error = SendConfigPkt(SET_CFG, strWIDList, 4, NMI_TRUE);
+				s32Error = SendConfigPkt(SET_CFG, strWIDList, 4, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 				NMI_FREE(pu8keybuf);
 
 
@@ -2391,7 +2955,7 @@ pu8keybuf = (NMI_Uint8*)NMI_MALLOC(pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIF
 				strWID.ps8WidVal	= (NMI_Sint8*)pu8keybuf;
 				strWID.s32ValueSize = pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIFwepAttr.u8WepKeylen + 2;
 				
-				s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+				s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 				NMI_FREE(pu8keybuf);
 		}
 		else if(pstrHostIFkeyAttr->u8KeyAction & REMOVEKEY)
@@ -2405,7 +2969,7 @@ pu8keybuf = (NMI_Uint8*)NMI_MALLOC(pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIF
 				strWID.ps8WidVal = s8idxarray;
 				strWID.s32ValueSize = 1;
 				
-				s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+				s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 		}
 		else
 		{
@@ -2416,7 +2980,7 @@ pu8keybuf = (NMI_Uint8*)NMI_MALLOC(pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIF
 			
 			PRINT_D(HOSTINF_DBG,"Setting default key index\n");
 
-			s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+			s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 		}
 		break;
 		case WPARxGtk:
@@ -2462,12 +3026,12 @@ pu8keybuf = (NMI_Uint8*)NMI_MALLOC(pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIF
 				strWIDList[1].ps8WidVal	= (NMI_Sint8*)pu8keybuf;
 				strWIDList[1].s32ValueSize = RX_MIC_KEY_MSG_LEN;
 		
-				s32Error = SendConfigPkt(SET_CFG, strWIDList, 2, NMI_TRUE);
+				s32Error = SendConfigPkt(SET_CFG, strWIDList, 2, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 
 				NMI_FREE(pu8keybuf);
 
 				////////////////////////////
-				NMI_SemaphoreRelease(&hSemTestKeyBlock, NMI_NULL);
+				NMI_SemaphoreRelease(&(pstrWFIDrv->hSemTestKeyBlock), NMI_NULL);
 				///////////////////////////
 			}
 			 
@@ -2492,9 +3056,9 @@ pu8keybuf = (NMI_Uint8*)NMI_MALLOC(pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIF
 				  |------------|---------|-------|------------|---------------|----------------|
 				  |	6 bytes	 | 8 byte  |1 byte |  1 byte	|   16 bytes	|	  8 bytes	 |*/
 
-				if(gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED)
+				if(pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED)
 				{
-					NMI_memcpy(pu8keybuf, gWFiDrvHandle->au8AssociatedBSSID, ETH_ALEN);
+					NMI_memcpy(pu8keybuf, pstrWFIDrv->au8AssociatedBSSID, ETH_ALEN);
 				}
 				else
 				{
@@ -2514,12 +3078,12 @@ pu8keybuf = (NMI_Uint8*)NMI_MALLOC(pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIF
 				strWID.ps8WidVal	= (NMI_Sint8*)pu8keybuf;
 				strWID.s32ValueSize = RX_MIC_KEY_MSG_LEN;
 				
-				s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+				s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 
 				NMI_FREE(pu8keybuf);
 
 				////////////////////////////
-				NMI_SemaphoreRelease(&hSemTestKeyBlock, NMI_NULL);
+				NMI_SemaphoreRelease(&(pstrWFIDrv->hSemTestKeyBlock), NMI_NULL);
 				///////////////////////////
 }
 _WPARxGtk_end_case_:
@@ -2573,11 +3137,11 @@ _WPARxGtk_end_case_:
 			strWIDList[1].ps8WidVal	= (NMI_Sint8 *)pu8keybuf;
 			strWIDList[1].s32ValueSize = PTK_KEY_MSG_LEN+1;			
 			
-			s32Error = SendConfigPkt(SET_CFG, strWIDList, 2, NMI_TRUE);
+			s32Error = SendConfigPkt(SET_CFG, strWIDList, 2, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 			NMI_FREE(pu8keybuf);
 			
 			////////////////////////////
-			NMI_SemaphoreRelease(&hSemTestKeyBlock, NMI_NULL);
+			NMI_SemaphoreRelease(&(pstrWFIDrv->hSemTestKeyBlock), NMI_NULL);
 			///////////////////////////
 			}
 		#endif
@@ -2616,11 +3180,11 @@ _WPARxGtk_end_case_:
 			strWID.ps8WidVal	= (NMI_Sint8 *)pu8keybuf;
 			strWID.s32ValueSize = PTK_KEY_MSG_LEN;			
 			
-			s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+			s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 			NMI_FREE(pu8keybuf);
 			
 			////////////////////////////
-			NMI_SemaphoreRelease(&hSemTestKeyBlock, NMI_NULL);
+			NMI_SemaphoreRelease(&(pstrWFIDrv->hSemTestKeyBlock), NMI_NULL);
 			///////////////////////////
 		}
 
@@ -2657,7 +3221,7 @@ _WPAPtk_end_case_:
 		strWID.ps8WidVal = (NMI_Sint8*)pu8keybuf;
 		strWID.s32ValueSize = (pstrHostIFkeyAttr->uniHostIFkeyAttr.strHostIFpmkidAttr.numpmkid*PMKSA_KEY_LEN) + 1;
 		
-		s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+		s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 
 		NMI_FREE(pu8keybuf);
 		break;
@@ -2680,26 +3244,31 @@ _WPAPtk_end_case_:
 *  @date	
 *  @version	1.0
 */
-static void Handle_Disconnect(void)
+static void Handle_Disconnect(void* drvHandler)
 {	
-	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;	
+
+	NMI_Sint32 s32Error = NMI_SUCCESS;
 	NMI_Uint16 u16DummyReasonCode = 0;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+
 	
 	strWID.u16WIDid = (NMI_Uint16)WID_DISCONNECT;
 	strWID.enuWIDtype = WID_CHAR;
 	strWID.ps8WidVal = (NMI_Sint8*)&u16DummyReasonCode;
 	strWID.s32ValueSize = sizeof(NMI_Char);		
+	
 
 
 	PRINT_D(HOSTINF_DBG,"Sending disconnect request\n");
 
 	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-	gbIPaddrObtained = NMI_FALSE;
-	host_int_set_power_mgmt((NMI_WFIDrvHandle)gWFiDrvHandle, 0, 0);
+	
+	g_obtainingIP=NMI_FALSE;
+	host_int_set_power_mgmt((NMI_WFIDrvHandle)pstrWFIDrv, 0, 0);
 	#endif
 	
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	
 	if(s32Error)
 	{
@@ -2716,20 +3285,20 @@ static void Handle_Disconnect(void)
 		strDisconnectNotifInfo.ie = NULL;
 		strDisconnectNotifInfo.ie_len = 0;
 
-		if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+		if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
 	       {                       
-			NMI_TimerStop(&hScanTimer, NMI_NULL);
-			gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_ABORTED, NMI_NULL,
-			gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
+			NMI_TimerStop(&(pstrWFIDrv->hScanTimer), NMI_NULL);
+			pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_ABORTED, NMI_NULL,
+			pstrWFIDrv->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
 		              
-	    		gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult= NMI_NULL;              
+	    		pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult= NMI_NULL;              
 	       }				
 					
-		if(gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult != NULL)
+		if(pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult != NULL)
 		{			
 
-			gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_DISCONN_NOTIF, NULL,
-				0, &strDisconnectNotifInfo,gWFiDrvHandle->strNMI_UsrConnReq.u32UserConnectPvoid);
+			pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult(CONN_DISCONN_EVENT_DISCONN_NOTIF, NULL,
+				0, &strDisconnectNotifInfo,pstrWFIDrv->strNMI_UsrConnReq.u32UserConnectPvoid);
 		}
 		else
 		{
@@ -2738,31 +3307,43 @@ static void Handle_Disconnect(void)
 
 		gbScanWhileConnected = NMI_FALSE;
 		
-		gWFiDrvHandle->enuHostIFstate = HOST_IF_IDLE;
+		pstrWFIDrv->enuHostIFstate = HOST_IF_IDLE;
 
-		NMI_memset(gWFiDrvHandle->au8AssociatedBSSID, 0, ETH_ALEN);
+		NMI_memset(pstrWFIDrv->au8AssociatedBSSID, 0, ETH_ALEN);
 
 		
 		/* Deallocation */
-		gWFiDrvHandle->strNMI_UsrConnReq.ssidLen = 0;
-		if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid != NULL)
+		pstrWFIDrv->strNMI_UsrConnReq.ssidLen = 0;
+		if(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid != NULL)
 		{
-			NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid);
-			gWFiDrvHandle->strNMI_UsrConnReq.pu8ssid = NULL;
+			NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ssid);
+			pstrWFIDrv->strNMI_UsrConnReq.pu8ssid = NULL;
 		}
 
-		if(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid != NULL)
+		if(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid != NULL)
 		{
-			NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid);
-			gWFiDrvHandle->strNMI_UsrConnReq.pu8bssid = NULL;
+			NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8bssid);
+			pstrWFIDrv->strNMI_UsrConnReq.pu8bssid = NULL;
 		}
 
-		gWFiDrvHandle->strNMI_UsrConnReq.ConnReqIEsLen = 0;
-		if(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
+		pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen = 0;
+		if(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs != NULL)
 		{
-			NMI_FREE(gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs);
-			gWFiDrvHandle->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
+			NMI_FREE(pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs);
+			pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
 		}			
+
+		/*BugID_5137*/
+		if(gu8FlushedJoinReq != NULL)
+		{
+			NMI_FREE(gu8FlushedJoinReq);
+			gu8FlushedJoinReq = NULL;
+		}
+		if(gu8FlushedInfoElemAsoc != NULL)
+		{
+			NMI_FREE(gu8FlushedInfoElemAsoc);
+			gu8FlushedInfoElemAsoc = NULL;
+		}
 
 		
 	}
@@ -2773,33 +3354,39 @@ static void Handle_Disconnect(void)
 	}
 
 	////////////////////////////
-	NMI_SemaphoreRelease(&hSemTestDisconnectBlock, NMI_NULL);
+	NMI_SemaphoreRelease(&(pstrWFIDrv->hSemTestDisconnectBlock), NMI_NULL);
 	///////////////////////////
 	
 }
 
-void resolve_disconnect_aberration(void)
-{
-	if(gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED){
-		printk("\n\n<< correcting Supplicant state machine >>\n\n");
-			host_int_disconnect((NMI_WFIDrvHandle)gWFiDrvHandle, 1);
+
+void resolve_disconnect_aberration(void* drvHandler)
+{	tstrNMI_WFIDrv * pstrWFIDrv;
+	
+	pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+		if (pstrWFIDrv  == NMI_NULL)
+		return;
+	if(pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED)
+		{
+			printk("\n\n<< correcting Supplicant state machine >>\n\n");
+			host_int_disconnect((NMI_WFIDrvHandle)pstrWFIDrv, 1);
 		}
 }
-static NMI_Sint32 Switch_Log_Terminal(void)
+static NMI_Sint32 Switch_Log_Terminal(void * drvHandler)
 {
 	
 
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
 	static char dummy=9;
-	
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 
 	strWID.u16WIDid = (NMI_Uint16)WID_LOGTerminal_Switch;
 	strWID.enuWIDtype = WID_CHAR;
 	strWID.ps8WidVal = &dummy;
 	strWID.s32ValueSize = sizeof(NMI_Char);	
 
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 		
 
 	if(s32Error)
@@ -2832,13 +3419,13 @@ static NMI_Sint32 Switch_Log_Terminal(void)
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_GetChnl(void)
+static NMI_Sint32 Handle_GetChnl(void* drvHandler)
 {
 
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID	strWID;
 	//tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
-
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 	strWID.u16WIDid = (NMI_Uint16)WID_CURRENT_CHANNEL;
 	strWID.enuWIDtype = WID_CHAR;
 	strWID.ps8WidVal = (NMI_Sint8 *)&gu8Chnl;
@@ -2846,7 +3433,7 @@ static NMI_Sint32 Handle_GetChnl(void)
 
 	PRINT_D(HOSTINF_DBG,"Getting channel value\n");
 
-	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	/*get the value by searching the local copy*/
 	if(s32Error)
 	{
@@ -2859,7 +3446,7 @@ static NMI_Sint32 Handle_GetChnl(void)
 	{
 
 	}
-	NMI_SemaphoreRelease(&hSemGetCHNL, NMI_NULL);
+	NMI_SemaphoreRelease(&(pstrWFIDrv->hSemGetCHNL), NMI_NULL);
 
 	return s32Error;
 
@@ -2877,10 +3464,11 @@ static NMI_Sint32 Handle_GetChnl(void)
 *  @date	
 *  @version	1.0
 */
-static void Handle_GetRssi(void)
+static void Handle_GetRssi(void* drvHandler)
 {	
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
+	tstrNMI_WFIDrv* pstrWFIDrv=(tstrNMI_WFIDrv*)drvHandler;
 		
 	strWID.u16WIDid = (NMI_Uint16)WID_RSSI;
 	strWID.enuWIDtype = WID_CHAR;
@@ -2890,7 +3478,7 @@ static void Handle_GetRssi(void)
 	/*Sending Cfg*/
 	PRINT_D(HOSTINF_DBG,"Getting RSSI value\n");
 
-	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Failed to get RSSI value\n");
@@ -2901,16 +3489,17 @@ static void Handle_GetRssi(void)
 	{
 
 	}
-	NMI_SemaphoreRelease(&hSemGetRSSI, NMI_NULL);
+	NMI_SemaphoreRelease(&(pstrWFIDrv->hSemGetRSSI), NMI_NULL);
 	
 	
 }
 
 
-static void Handle_GetLinkspeed(void)
+static void Handle_GetLinkspeed(void* drvHandler)
 {	
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
+	tstrNMI_WFIDrv* pstrWFIDrv=(tstrNMI_WFIDrv*)drvHandler;
 
 	gs8lnkspd = 0;
 	
@@ -2921,7 +3510,7 @@ static void Handle_GetLinkspeed(void)
 	/*Sending Cfg*/
 	PRINT_D(HOSTINF_DBG,"Getting LINKSPEED value\n");
 
-	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Failed to get LINKSPEED value\n");
@@ -2932,12 +3521,12 @@ static void Handle_GetLinkspeed(void)
 	{
 
 	}
-	NMI_SemaphoreRelease(&hSemGetLINKSPEED, NMI_NULL);
+	NMI_SemaphoreRelease(&(pstrWFIDrv->hSemGetLINKSPEED), NMI_NULL);
 	
 	
 }
 
-NMI_Sint32 Handle_GetStatistics(tstrStatistics* pstrStatistics)
+NMI_Sint32 Handle_GetStatistics(void * drvHandler,tstrStatistics* pstrStatistics)
 {
 	tstrWID strWIDList[5];
 	uint32_t u32WidsCount = 0,s32Error = 0;
@@ -2972,7 +3561,7 @@ NMI_Sint32 Handle_GetStatistics(tstrStatistics* pstrStatistics)
 	strWIDList[u32WidsCount].ps8WidVal = (NMI_Sint8*)(&(pstrStatistics->u32TxFailureCount));
 	u32WidsCount++;
 	
-	s32Error = SendConfigPkt(GET_CFG, strWIDList, u32WidsCount, NMI_FALSE);
+	s32Error = SendConfigPkt(GET_CFG, strWIDList, u32WidsCount, NMI_FALSE,(NMI_Uint32)drvHandler);
 		
 	if(s32Error)
 	{
@@ -2999,13 +3588,13 @@ NMI_Sint32 Handle_GetStatistics(tstrStatistics* pstrStatistics)
 *  @date	
 *  @version	1.0
 */
-static NMI_Sint32 Handle_Get_InActiveTime(tstrHostIfStaInactiveT* strHostIfStaInactiveT)
+static NMI_Sint32 Handle_Get_InActiveTime(void* drvHandler,tstrHostIfStaInactiveT* strHostIfStaInactiveT)
 {
 
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	NMI_Uint8 *stamac;
 	tstrWID	strWID;
-	
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 
 	
 	strWID.u16WIDid = (NMI_Uint16)WID_SET_STA_MAC_INACTIVE_TIME;
@@ -3021,7 +3610,7 @@ static NMI_Sint32 Handle_Get_InActiveTime(tstrHostIfStaInactiveT* strHostIfStaIn
 	PRINT_D(CFG80211_DBG,"SETING STA inactive time\n");
 
 	
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	/*get the value by searching the local copy*/
 	if(s32Error)
 	{
@@ -3036,7 +3625,7 @@ static NMI_Sint32 Handle_Get_InActiveTime(tstrHostIfStaInactiveT* strHostIfStaIn
 	strWID.s32ValueSize = sizeof(NMI_Uint32);
 
 	
-	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	/*get the value by searching the local copy*/
 	if(s32Error)
 	{
@@ -3047,7 +3636,7 @@ static NMI_Sint32 Handle_Get_InActiveTime(tstrHostIfStaInactiveT* strHostIfStaIn
 
 	PRINT_D(CFG80211_DBG,"Getting inactive time : %d\n",gu32InactiveTime);
 	
-	NMI_SemaphoreRelease(&hSemInactiveTime, NMI_NULL);
+	NMI_SemaphoreRelease(&(pstrWFIDrv->hSemInactiveTime), NMI_NULL);
 	NMI_CATCH(s32Error)
 	{
 
@@ -3070,12 +3659,12 @@ static NMI_Sint32 Handle_Get_InActiveTime(tstrHostIfStaInactiveT* strHostIfStaIn
 *  @date	
 *  @version	1.0
 */
-static void Handle_AddBeacon(tstrHostIFSetBeacon* pstrSetBeaconParam)
+static void Handle_AddBeacon(void* drvHandler,tstrHostIFSetBeacon* pstrSetBeaconParam)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
 	NMI_Uint8* pu8CurrByte;
-
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 	PRINT_D(HOSTINF_DBG,"Adding BEACON\n");
 
 	strWID.u16WIDid = (NMI_Uint16)WID_ADD_BEACON;
@@ -3119,7 +3708,7 @@ static void Handle_AddBeacon(tstrHostIFSetBeacon* pstrSetBeaconParam)
 
 	
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Failed to send add beacon config packet\n");
@@ -3144,12 +3733,12 @@ static void Handle_AddBeacon(tstrHostIFSetBeacon* pstrSetBeaconParam)
 *  @date	
 *  @version	1.0
 */
-static void Handle_DelBeacon(tstrHostIFDelBeacon* pstrDelBeacon)
+static void Handle_DelBeacon(void* drvHandler,tstrHostIFDelBeacon* pstrDelBeacon)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
 	NMI_Uint8* pu8CurrByte;
-
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 	strWID.u16WIDid = (NMI_Uint16)WID_DEL_BEACON;
 	strWID.enuWIDtype = WID_CHAR;
 	strWID.s32ValueSize = sizeof(NMI_Char);
@@ -3166,7 +3755,7 @@ static void Handle_DelBeacon(tstrHostIFDelBeacon* pstrDelBeacon)
 	/* TODO: build del beacon message*/
 
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 	
@@ -3245,12 +3834,12 @@ static NMI_Uint32 NMI_HostIf_PackStaParam(NMI_Uint8* pu8Buffer, tstrNMI_AddStaPa
 *  @date	
 *  @version	1.0
 */
-static void Handle_AddStation(tstrNMI_AddStaParam* pstrStationParam)
+static void Handle_AddStation(void* drvHandler,tstrNMI_AddStaParam* pstrStationParam)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
 	NMI_Uint8* pu8CurrByte;
-
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 	PRINT_D(HOSTINF_DBG,"Handling add station\n");
 	strWID.u16WIDid = (NMI_Uint16)WID_ADD_STA;
 	strWID.enuWIDtype = WID_BIN;
@@ -3266,7 +3855,7 @@ static void Handle_AddStation(tstrNMI_AddStaParam* pstrStationParam)
 	pu8CurrByte += NMI_HostIf_PackStaParam(pu8CurrByte, pstrStationParam);
 
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error != NMI_SUCCESS)
 	{
 	
@@ -3291,11 +3880,12 @@ static void Handle_AddStation(tstrNMI_AddStaParam* pstrStationParam)
 *  @date	
 *  @version	1.0
 */
-static void Handle_DelStation(tstrHostIFDelSta* pstrDelStaParam)
+static void Handle_DelStation(void * drvHandler,tstrHostIFDelSta* pstrDelStaParam)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
 	NMI_Uint8* pu8CurrByte;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 
 	strWID.u16WIDid = (NMI_Uint16)WID_REMOVE_STA;
 	strWID.enuWIDtype = WID_BIN;
@@ -3314,7 +3904,7 @@ static void Handle_DelStation(tstrHostIFDelSta* pstrDelStaParam)
 	NMI_memcpy(pu8CurrByte, pstrDelStaParam->au8MacAddr, ETH_ALEN);
 
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 	
@@ -3338,11 +3928,12 @@ static void Handle_DelStation(tstrHostIFDelSta* pstrDelStaParam)
 *  @date	
 *  @version	1.0
 */
-static void Handle_EditStation(tstrNMI_AddStaParam* pstrStationParam)
+static void Handle_EditStation(void* drvHandler,tstrNMI_AddStaParam* pstrStationParam)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
 	NMI_Uint8* pu8CurrByte;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 
 	strWID.u16WIDid = (NMI_Uint16)WID_EDIT_STA;
 	strWID.enuWIDtype = WID_BIN;
@@ -3359,7 +3950,7 @@ static void Handle_EditStation(tstrNMI_AddStaParam* pstrStationParam)
 	pu8CurrByte += NMI_HostIf_PackStaParam(pu8CurrByte, pstrStationParam);
 
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 	
@@ -3385,37 +3976,48 @@ static void Handle_EditStation(tstrNMI_AddStaParam* pstrStationParam)
 *  @date	
 *  @version	1.0
 */
-static int Handle_RemainOnChan(tstrHostIfRemainOnChan* pstrHostIfRemainOnChan)
+static int Handle_RemainOnChan(void* drvHandler,tstrHostIfRemainOnChan* pstrHostIfRemainOnChan)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	NMI_Uint8 u8remain_on_chan_flag;
 	tstrWID strWIDList[2];
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *) drvHandler;
 
 	
 	/*If it's a pendig remain-on-channel, don't overwrite gWFiDrvHandle values (since incoming msg is garbbage)*/
-	if(!gWFiDrvHandle->u8RemainOnChan_pendingreq)
+	if(!pstrWFIDrv->u8RemainOnChan_pendingreq)
 	{
-		gWFiDrvHandle->strHostIfRemainOnChan.pVoid=pstrHostIfRemainOnChan->pVoid;
-		gWFiDrvHandle->strHostIfRemainOnChan.pRemainOnChanExpired = pstrHostIfRemainOnChan->pRemainOnChanExpired;
-		gWFiDrvHandle->strHostIfRemainOnChan.pRemainOnChanReady= pstrHostIfRemainOnChan->pRemainOnChanReady;
-		gWFiDrvHandle->strHostIfRemainOnChan.u16Channel = pstrHostIfRemainOnChan->u16Channel;
+		pstrWFIDrv->strHostIfRemainOnChan.pVoid=pstrHostIfRemainOnChan->pVoid;
+		pstrWFIDrv->strHostIfRemainOnChan.pRemainOnChanExpired = pstrHostIfRemainOnChan->pRemainOnChanExpired;
+		pstrWFIDrv->strHostIfRemainOnChan.pRemainOnChanReady= pstrHostIfRemainOnChan->pRemainOnChanReady;
+		pstrWFIDrv->strHostIfRemainOnChan.u16Channel = pstrHostIfRemainOnChan->u16Channel;
 	}
 	else
 	{	
 		/*Set the channel to use it as a wid val*/
-		pstrHostIfRemainOnChan->u16Channel = gWFiDrvHandle->strHostIfRemainOnChan.u16Channel;
+		pstrHostIfRemainOnChan->u16Channel = pstrWFIDrv->strHostIfRemainOnChan.u16Channel;
 	}
-	if(gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED )
+	if(pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED )
 	{
-		gWFiDrvHandle->u8RemainOnChan_pendingreq = 1;
+		pstrWFIDrv->u8RemainOnChan_pendingreq = 1;
 		return NMI_BUSY;
 	}
-	if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult!=NULL)
+	if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult!=NULL)
 	{
 	    PRINT_INFO(GENERIC_DBG,"Required to remain on chan while scanning return\n");
 		/*Calling the CFG80211 scan done function with the abort flag set to true*/
-		gWFiDrvHandle->u8RemainOnChan_pendingreq = 1;
-		return NMI_BUSY;
+		pstrWFIDrv->u8RemainOnChan_pendingreq = 1;
+		//return NMI_BUSY;
+		NMI_ERRORREPORT(s32Error, NMI_BUSY);
+	}
+	if(pstrWFIDrv->enuHostIFstate == HOST_IF_WAITING_CONN_RESP)
+	{
+	    PRINT_INFO(GENERIC_DBG,"Required to remain on chan while connecting return\n");
+		/*Calling the CFG80211 scan done function with the abort flag set to true*/
+		//return NMI_BUSY;
+		
+		NMI_ERRORREPORT(s32Error, NMI_BUSY);
+		
 	}
 	PRINT_D(HOSTINF_DBG,"Setting channel :%d\n",pstrHostIfRemainOnChan->u16Channel);
 	
@@ -3439,23 +4041,27 @@ static int Handle_RemainOnChan(tstrHostIfRemainOnChan* pstrHostIfRemainOnChan)
 	strWIDList[1].s32ValueSize = sizeof(NMI_Char);*/
 	
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, strWIDList, 2, NMI_TRUE);
+	
+	s32Error = SendConfigPkt(SET_CFG, strWIDList, 2, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error != NMI_SUCCESS)
 	{
 		PRINT_ER("Failed to set remain on channel\n");	
 	}
 
-	gWFiDrvHandle->enuHostIFstate= HOST_IF_P2P_LISTEN;
-	NMI_TimerStart(&hRemainOnChannel, pstrHostIfRemainOnChan->u32duration, NMI_NULL, NMI_NULL);
+NMI_CATCH(-1)
+	{
+	pstrWFIDrv->enuHostIFstate= HOST_IF_P2P_LISTEN;
+	NMI_TimerStart(&(pstrWFIDrv->hRemainOnChannel), pstrHostIfRemainOnChan->u32duration, (void*)pstrWFIDrv, NMI_NULL);
 
 	/*Calling CFG ready_on_channel*/
-	if(gWFiDrvHandle->strHostIfRemainOnChan.pRemainOnChanReady)
+	if(pstrWFIDrv->strHostIfRemainOnChan.pRemainOnChanReady)
 	{		
-		gWFiDrvHandle->strHostIfRemainOnChan.pRemainOnChanReady(gWFiDrvHandle->strHostIfRemainOnChan.pVoid);
+		pstrWFIDrv->strHostIfRemainOnChan.pRemainOnChanReady(pstrWFIDrv->strHostIfRemainOnChan.pVoid);
 	}
 
-	if(gWFiDrvHandle->u8RemainOnChan_pendingreq)
-		gWFiDrvHandle->u8RemainOnChan_pendingreq = 0;
+	if(pstrWFIDrv->u8RemainOnChan_pendingreq)
+		pstrWFIDrv->u8RemainOnChan_pendingreq = 0;
+	}
 
 
 	return s32Error;
@@ -3470,11 +4076,12 @@ static int Handle_RemainOnChan(tstrHostIfRemainOnChan* pstrHostIfRemainOnChan)
 *  @date	
 *  @version	1.0
 */
-static int Handle_RegisterFrame(tstrHostIfRegisterFrame* pstrHostIfRegisterFrame)
+static int Handle_RegisterFrame(void* drvHandler,tstrHostIfRegisterFrame* pstrHostIfRegisterFrame)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
        NMI_Uint8* pu8CurrByte;
+	   tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 
 	PRINT_D(HOSTINF_DBG,"Handling frame register Flag : %d FrameType: %d\n",pstrHostIfRegisterFrame->bReg,pstrHostIfRegisterFrame->u16FrameType);
 
@@ -3498,7 +4105,7 @@ static int Handle_RegisterFrame(tstrHostIfRegisterFrame* pstrHostIfRegisterFrame
 
 
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Failed to frame register config packet\n");
@@ -3523,11 +4130,12 @@ static int Handle_RegisterFrame(tstrHostIfRegisterFrame* pstrHostIfRegisterFrame
 *  @date	
 *  @version		1.0
 */
-static NMI_Uint32 Handle_ListenStateExpired(tstrHostIfRemainOnChan* pstrHostIfRemainOnChan)
+static NMI_Uint32 Handle_ListenStateExpired(void *drvHandler,tstrHostIfRemainOnChan* pstrHostIfRemainOnChan)
 {
    	NMI_Uint8 u8remain_on_chan_flag;
 	tstrWID strWID;
 	NMI_Sint32 s32Error = NMI_SUCCESS;	
+tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *) drvHandler;
 		
 	PRINT_D(HOSTINF_DBG,"CANCEL REMAIN ON CHAN\n");
 	
@@ -3538,17 +4146,17 @@ static NMI_Uint32 Handle_ListenStateExpired(tstrHostIfRemainOnChan* pstrHostIfRe
 	strWID.s32ValueSize = sizeof(NMI_Char);
 
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error != NMI_SUCCESS)
 	{
 		PRINT_ER("Failed to set remain on channel\n");
 		return s32Error;
 	}
-	if(gWFiDrvHandle->strHostIfRemainOnChan.pRemainOnChanExpired)
+	if(pstrWFIDrv->strHostIfRemainOnChan.pRemainOnChanExpired)
 	{		
-		gWFiDrvHandle->strHostIfRemainOnChan.pRemainOnChanExpired(gWFiDrvHandle->strHostIfRemainOnChan.pVoid);
+		pstrWFIDrv->strHostIfRemainOnChan.pRemainOnChanExpired(pstrWFIDrv->strHostIfRemainOnChan.pVoid);
 	}
-	gWFiDrvHandle->enuHostIFstate= HOST_IF_IDLE;
+	pstrWFIDrv->enuHostIFstate= HOST_IF_IDLE;
 	return s32Error;
 }
 
@@ -3565,13 +4173,14 @@ static NMI_Uint32 Handle_ListenStateExpired(tstrHostIfRemainOnChan* pstrHostIfRe
 static void ListenTimerCB(void* pvArg)
 {
 	tstrHostIFmsg strHostIFmsg;
-	
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)pvArg;
 	/*Stopping remain-on-channel timer*/
-	NMI_TimerStop(&hRemainOnChannel, NMI_NULL);
+	NMI_TimerStop(&(pstrWFIDrv->hRemainOnChannel), NMI_NULL);
 	
 	/* prepare the Timer Callback message */
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));	
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_LISTEN_TIMER_FIRED;
+	strHostIFmsg.drvHandler=pstrWFIDrv;
 
 	/* send the message */
 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
@@ -3588,11 +4197,12 @@ static void ListenTimerCB(void* pvArg)
 *  @date	
 *  @version	1.0
 */
-static void Handle_PowerManagement(tstrHostIfPowerMgmtParam* strPowerMgmtParam)
+static void Handle_PowerManagement(void* drvHandler,tstrHostIfPowerMgmtParam* strPowerMgmtParam)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID strWID;
 	NMI_Sint8 s8PowerMode;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 	strWID.u16WIDid = (NMI_Uint16)WID_POWER_MANAGEMENT;
 	
 	if(strPowerMgmtParam->bIsEnabled == NMI_TRUE)
@@ -3610,7 +4220,7 @@ static void Handle_PowerManagement(tstrHostIfPowerMgmtParam* strPowerMgmtParam)
 	PRINT_D(HOSTINF_DBG,"Handling Power Management\n");
 	
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Failed to send power management config packet\n");
@@ -3622,6 +4232,221 @@ static void Handle_PowerManagement(tstrHostIfPowerMgmtParam* strPowerMgmtParam)
 
 	}
 }
+
+/**
+*  @brief Handle_SetMulticastFilter
+*  @details 	    Set Multicast filter in firmware
+*  @param[in]   tstrHostIFSetMulti* strHostIfSetMulti
+*  @return 	    NONE
+*  @author		asobhy
+*  @date	
+*  @version	1.0
+*/
+static void Handle_SetMulticastFilter(void * drvHandler,tstrHostIFSetMulti*		strHostIfSetMulti)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID strWID;
+	NMI_Uint8* pu8CurrByte;
+
+	PRINT_D(HOSTINF_DBG,"Setup Multicast Filter\n");
+
+	strWID.u16WIDid = (NMI_Uint16)WID_SETUP_MULTICAST_FILTER;
+	strWID.enuWIDtype = WID_BIN;
+	strWID.s32ValueSize = sizeof(tstrHostIFSetMulti) + ((strHostIfSetMulti->u32count) * ETH_ALEN) ;
+	strWID.ps8WidVal = NMI_MALLOC(strWID.s32ValueSize);
+	if(strWID.ps8WidVal == NULL)
+	{
+		NMI_ERRORREPORT(s32Error, NMI_NO_MEM);
+	}
+
+	pu8CurrByte = strWID.ps8WidVal;
+	*pu8CurrByte++ = (strHostIfSetMulti->bIsEnabled & 0xFF);
+	*pu8CurrByte++ = ((strHostIfSetMulti->bIsEnabled >> 8) & 0xFF);
+	*pu8CurrByte++ = ((strHostIfSetMulti->bIsEnabled >> 16) & 0xFF);
+	*pu8CurrByte++ = ((strHostIfSetMulti->bIsEnabled >> 24) & 0xFF);
+
+	*pu8CurrByte++ = (strHostIfSetMulti->u32count & 0xFF);
+	*pu8CurrByte++ = ((strHostIfSetMulti->u32count >> 8) & 0xFF);
+	*pu8CurrByte++ = ((strHostIfSetMulti->u32count >> 16) & 0xFF);
+	*pu8CurrByte++ = ((strHostIfSetMulti->u32count >> 24) & 0xFF);
+
+	if((strHostIfSetMulti->u32count) > 0)
+		memcpy(pu8CurrByte, gau8MulticastMacAddrList, ((strHostIfSetMulti->u32count) * ETH_ALEN));
+	
+	/*Sending Cfg*/
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_FALSE,(NMI_Uint32)drvHandler);
+	if(s32Error)
+	{
+		PRINT_ER("Failed to send setup multicast config packet\n");
+		NMI_ERRORREPORT(s32Error, NMI_FAIL);
+	}	
+	
+	NMI_CATCH(s32Error)
+	{
+	}
+	NMI_FREE_IF_TRUE(strWID.ps8WidVal);
+
+}
+
+
+/*BugID_5222*/
+/**
+*  @brief 			Handle_AddBASession
+*  @details 	    	Add block ack session
+*  @param[in]   	tstrHostIFSetMulti* strHostIfSetMulti
+*  @return 	    	NONE
+*  @author		Amr Abdel-Moghny
+*  @date			Feb. 2014
+*  @version		9.0
+*/
+static NMI_Sint32 Handle_AddBASession(void * drvHandler, tstrHostIfBASessionInfo* strHostIfBASessionInfo)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID strWID;
+	int AddbaTimeout = 100;
+	char* ptr = NULL;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+
+	PRINT_D(HOSTINF_DBG, "Opening Block Ack session with\nBSSID = %.2x:%.2x:%.2x \nTID=%d \nBufferSize == %d \nSessionTimeOut = %d\n",
+			strHostIfBASessionInfo->au8Bssid[0],
+			strHostIfBASessionInfo->au8Bssid[1],
+			strHostIfBASessionInfo->au8Bssid[2],
+			strHostIfBASessionInfo->u16BufferSize,
+			strHostIfBASessionInfo->u16SessionTimeout,
+			strHostIfBASessionInfo->u8Ted);
+
+	strWID.u16WIDid = (NMI_Uint16)WID_11E_P_ACTION_REQ;
+	strWID.enuWIDtype = WID_STR;
+	strWID.ps8WidVal = (NMI_Uint8*)NMI_MALLOC(BLOCK_ACK_REQ_SIZE);
+	strWID.s32ValueSize = BLOCK_ACK_REQ_SIZE;
+	ptr = strWID.ps8WidVal;
+	//*ptr++ = 0x14;
+	*ptr++ = 0x14;
+	*ptr++ = 0x3;
+	*ptr++ = 0x0;
+	NMI_memcpy(ptr,strHostIfBASessionInfo->au8Bssid, ETH_ALEN);
+	ptr += ETH_ALEN;
+	*ptr++ = strHostIfBASessionInfo->u8Ted;
+	/* BA Policy*/
+	*ptr++ = 1;
+	/* Buffer size*/
+	*ptr++ = (strHostIfBASessionInfo->u16BufferSize & 0xFF);
+	*ptr++ = ((strHostIfBASessionInfo->u16BufferSize >>16) & 0xFF);
+	/* BA timeout*/
+	*ptr++ = (strHostIfBASessionInfo->u16SessionTimeout & 0xFF);
+	*ptr++ = ((strHostIfBASessionInfo->u16SessionTimeout >>16) & 0xFF);
+	/* ADDBA timeout*/
+	*ptr++ = (AddbaTimeout& 0xFF);
+	*ptr++ = ((AddbaTimeout>>16) & 0xFF);
+	/* Group Buffer Max Frames*/
+	*ptr++ = 8;
+	/* Group Buffer Timeout */
+	*ptr++ = 0;
+
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+	if(s32Error)
+		PRINT_D(HOSTINF_DBG, "Couldn't open BA Session\n");
+
+
+	strWID.u16WIDid = (NMI_Uint16)WID_11E_P_ACTION_REQ;
+	strWID.enuWIDtype = WID_STR;
+	strWID.s32ValueSize = 15;
+	ptr = strWID.ps8WidVal;
+	//*ptr++ = 0x14;
+	*ptr++ = 15;
+	*ptr++ = 7;
+	*ptr++ = 0x2;
+	NMI_memcpy(ptr,strHostIfBASessionInfo->au8Bssid, ETH_ALEN);
+	ptr += ETH_ALEN;
+	/* TID*/
+	*ptr++ = strHostIfBASessionInfo->u8Ted;
+	/* Max Num MSDU */
+	*ptr++ = 8;
+	/* BA timeout*/
+	*ptr++ = (strHostIfBASessionInfo->u16BufferSize & 0xFF);
+	*ptr++ = ((strHostIfBASessionInfo->u16SessionTimeout>>16) & 0xFF);
+	/*Ack-Policy */
+	*ptr++ = 3;
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+
+	if(strWID.ps8WidVal != NULL)
+		NMI_FREE(strWID.ps8WidVal);
+	
+	return s32Error;
+
+}
+
+
+/*BugID_5222*/
+/**
+*  @brief 			Handle_DelBASession
+*  @details 	    	Delete block ack session
+*  @param[in]  	tstrHostIFSetMulti* strHostIfSetMulti
+*  @return 	    	NONE
+*  @author		Amr Abdel-Moghny
+*  @date			Feb. 2013
+*  @version		9.0
+*/
+static NMI_Sint32 Handle_DelBASession(void * drvHandler, tstrHostIfBASessionInfo* strHostIfBASessionInfo)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrWID strWID;
+	char* ptr = NULL;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+
+	PRINT_D(GENERIC_DBG, "Delete Block Ack session with\nBSSID = %.2x:%.2x:%.2x \nTID=%d\n",
+			strHostIfBASessionInfo->au8Bssid[0],
+			strHostIfBASessionInfo->au8Bssid[1],
+			strHostIfBASessionInfo->au8Bssid[2],
+			strHostIfBASessionInfo->u8Ted);
+
+	strWID.u16WIDid = (NMI_Uint16)WID_11E_P_ACTION_REQ;
+	strWID.enuWIDtype = WID_STR;
+	strWID.ps8WidVal = (NMI_Uint8*)NMI_MALLOC(BLOCK_ACK_REQ_SIZE);
+	strWID.s32ValueSize = BLOCK_ACK_REQ_SIZE;
+	ptr = strWID.ps8WidVal;
+	//*ptr++ = 0x14;
+	*ptr++ = 0x14;
+	*ptr++ = 0x3;
+	*ptr++ = 0x2;
+	NMI_memcpy(ptr,strHostIfBASessionInfo->au8Bssid, ETH_ALEN);
+	ptr += ETH_ALEN;
+	*ptr++ = strHostIfBASessionInfo->u8Ted;
+	/* BA direction = recipent*/
+	*ptr++ = 0;
+	/* Delba Reason */
+	*ptr++ = 32; // Unspecific QOS reason
+
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+	if(s32Error)
+		PRINT_D(HOSTINF_DBG, "Couldn't delete BA Session\n");
+
+
+	strWID.u16WIDid = (NMI_Uint16)WID_11E_P_ACTION_REQ;
+	strWID.enuWIDtype = WID_STR;
+	strWID.s32ValueSize = 15;
+	ptr = strWID.ps8WidVal;
+	//*ptr++ = 0x14;
+	*ptr++ = 15;
+	*ptr++ = 7;
+	*ptr++ = 0x3;
+	NMI_memcpy(ptr, strHostIfBASessionInfo->au8Bssid, ETH_ALEN);
+	ptr += ETH_ALEN;
+	/* TID*/
+	*ptr++ = strHostIfBASessionInfo->u8Ted;
+
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
+
+	if(strWID.ps8WidVal != NULL)
+		NMI_FREE(strWID.ps8WidVal);
+
+	/*BugID_5222*/
+	NMI_SemaphoreRelease(&hWaitResponse, NULL);
+	
+	return s32Error;
+
+}
+
 
 /**
 *  @brief hostIFthread
@@ -3636,18 +4461,29 @@ static void hostIFthread(void* pvArg)
 {
 	NMI_Uint32 u32Ret;
 	tstrHostIFmsg strHostIFmsg;
+	tstrNMI_WFIDrv * pstrWFIDrv ;
+
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 	
 	while(1)
 	{
 		NMI_MsgQueueRecv(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), &u32Ret, NMI_NULL);				
-		
+		pstrWFIDrv = (tstrNMI_WFIDrv *)strHostIFmsg.drvHandler;
 		if(strHostIFmsg.u16MsgId == HOST_IF_MSG_EXIT)
 		{
 			PRINT_D(GENERIC_DBG,"THREAD: Exiting HostIfThread\n");
 			break;
 		}
-		if(strHostIFmsg.u16MsgId == HOST_IF_MSG_CONNECT && gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult != NULL){
+
+		/*BugID_5137*/
+		/*Drop any configuration packet sent during nmc wlan init-deinit*/
+		if(!g_nmc_initialized)
+		{
+			PRINT_D(HOSTINF_DBG, "--WAIT--");
+			continue;
+		}
+	
+		if(strHostIFmsg.u16MsgId == HOST_IF_MSG_CONNECT && pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult != NULL){
 			PRINT_D(HOSTINF_DBG,"Requeue connect request till scan done received\n");
 			NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 			NMI_Sleep(2);
@@ -3658,138 +4494,195 @@ static void hostIFthread(void* pvArg)
 		{
 			case HOST_IF_MSG_SCAN:
 			{
-				Handle_Scan(&strHostIFmsg.uniHostIFmsgBody.strHostIFscanAttr);
+				Handle_Scan(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFscanAttr);
 				break;
 			}			
 			case HOST_IF_MSG_CONNECT:
 			{
-				Handle_Connect(&strHostIFmsg.uniHostIFmsgBody.strHostIFconnectAttr);
+				Handle_Connect(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFconnectAttr);
 				break;
 			}
+
+			/*BugID_5137*/
+			case HOST_IF_MSG_FLUSH_CONNECT:
+			{
+				Handle_FlushConnect(strHostIFmsg.drvHandler);
+				break;
+			}
+			
 			case HOST_IF_MSG_RCVD_NTWRK_INFO:
 			{
-				Handle_RcvdNtwrkInfo(&strHostIFmsg.uniHostIFmsgBody.strRcvdNetworkInfo);
+				Handle_RcvdNtwrkInfo(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strRcvdNetworkInfo);
 				break;
 			}
 			case HOST_IF_MSG_RCVD_GNRL_ASYNC_INFO:
 			{
-				Handle_RcvdGnrlAsyncInfo(&strHostIFmsg.uniHostIFmsgBody.strRcvdGnrlAsyncInfo);
+				Handle_RcvdGnrlAsyncInfo(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strRcvdGnrlAsyncInfo);
 				break;
 			}
 			case HOST_IF_MSG_KEY:
 			{
-				Handle_Key(&strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr);
+				Handle_Key(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr);
 				break;
 			}
 			case HOST_IF_MSG_CFG_PARAMS:
 			{
 				
-				Handle_CfgParam(&strHostIFmsg.uniHostIFmsgBody.strHostIFCfgParamAttr);
+				Handle_CfgParam(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFCfgParamAttr);
 				break;
 			}
 			case HOST_IF_MSG_SET_CHANNEL:
 			{
-				Handle_SetChannel(&strHostIFmsg.uniHostIFmsgBody.strHostIFSetChan);
+				Handle_SetChannel(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFSetChan);
 				break;
 			}			
 			case HOST_IF_MSG_DISCONNECT:
 			{
-				Handle_Disconnect();				
+				Handle_Disconnect(strHostIFmsg.drvHandler);				
 				break;
 			}
 			case HOST_IF_MSG_RCVD_SCAN_COMPLETE:
 			{	
-				NMI_TimerStop(&hScanTimer, NMI_NULL);
+				NMI_TimerStop(&(pstrWFIDrv->hScanTimer), NMI_NULL);
 				PRINT_D(HOSTINF_DBG, "scan completed successfully\n");
 
-				if(gWFiDrvHandle->enuHostIFstate != HOST_IF_CONNECTED) 
+				/*BugID_5213*/
+				/*Allow chip sleep, only if both interfaces are not connected*/
+				if(!linux_wlan_get_num_conn_ifcs())
 				{
-					/* force the chip manually to sleep */
 					chip_sleep_manually(INFINITE_SLEEP_TIME);
 				}
 				
-				Handle_ScanDone(SCAN_EVENT_DONE);	
+				Handle_ScanDone(strHostIFmsg.drvHandler,SCAN_EVENT_DONE);	
 
 				#ifdef NMI_P2P
-				if(gWFiDrvHandle->u8RemainOnChan_pendingreq)
-					Handle_RemainOnChan(&strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan);
+				if(pstrWFIDrv->u8RemainOnChan_pendingreq)
+					Handle_RemainOnChan(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan);
 				#endif
 				
 				break;
 			}
 			case HOST_IF_MSG_GET_RSSI:
 			{
-				Handle_GetRssi();				
+				Handle_GetRssi(strHostIFmsg.drvHandler);				
 				break;
 			}
 			case HOST_IF_MSG_GET_LINKSPEED:
 			{
-				Handle_GetLinkspeed();				
+				Handle_GetLinkspeed(strHostIFmsg.drvHandler);				
 				break;
 			}
 			case HOST_IF_MSG_GET_STATISTICS:
 			{
-				Handle_GetStatistics((tstrStatistics*)strHostIFmsg.uniHostIFmsgBody.pUserData);				
+				Handle_GetStatistics(strHostIFmsg.drvHandler,(tstrStatistics*)strHostIFmsg.uniHostIFmsgBody.pUserData);				
 				break;
 			}
 			case HOST_IF_MSG_GET_CHNL:
 			{
-				Handle_GetChnl();
+				Handle_GetChnl(strHostIFmsg.drvHandler);
 				break;
 			}
 
 			#ifdef NMI_AP_EXTERNAL_MLME
 			case HOST_IF_MSG_ADD_BEACON:
 			{
-				Handle_AddBeacon(&strHostIFmsg.uniHostIFmsgBody.strHostIFSetBeacon);
+				Handle_AddBeacon(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFSetBeacon);
 				break;
 			}
 			break;
 			
 			case HOST_IF_MSG_DEL_BEACON:
 			{
-				Handle_DelBeacon(&strHostIFmsg.uniHostIFmsgBody.strHostIFDelBeacon);
+				Handle_DelBeacon(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFDelBeacon);
 				break;
 			}
 			break;
 			
 			case HOST_IF_MSG_ADD_STATION:
 			{
-				Handle_AddStation(&strHostIFmsg.uniHostIFmsgBody.strAddStaParam);
+				Handle_AddStation(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strAddStaParam);
 				break;
 			}
 
 			case HOST_IF_MSG_DEL_STATION:
 			{
-				Handle_DelStation(&strHostIFmsg.uniHostIFmsgBody.strDelStaParam);
+				Handle_DelStation(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strDelStaParam);
 				break;
 			}
 			case HOST_IF_MSG_EDIT_STATION:
 			{
-				Handle_EditStation(&strHostIFmsg.uniHostIFmsgBody.strEditStaParam);
+				Handle_EditStation(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strEditStaParam);
 				break;
 			}
 			case HOST_IF_MSG_GET_INACTIVETIME:
 			{
-				Handle_Get_InActiveTime(&strHostIFmsg.uniHostIFmsgBody.strHostIfStaInactiveT);
+				Handle_Get_InActiveTime(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfStaInactiveT);
 				break;
 			}
 			#endif /*NMI_AP_EXTERNAL_MLME*/
 			case HOST_IF_MSG_SCAN_TIMER_FIRED:
 			{
 				NMI_PRINTF("Scan Timeout\n");
-				Handle_ScanDone(SCAN_EVENT_DONE);
+
+				Handle_ScanDone(strHostIFmsg.drvHandler,SCAN_EVENT_ABORTED);
+
+				
+
 				break;
 			}
 			case HOST_IF_MSG_CONNECT_TIMER_FIRED:
 			{
 				NMI_PRINTF("Connect Timeout \n");
-				Handle_ConnectTimeout();
+				Handle_ConnectTimeout(strHostIFmsg.drvHandler);
 				break;
 			}
 			case HOST_IF_MSG_POWER_MGMT:
 			{
-				Handle_PowerManagement(&strHostIFmsg.uniHostIFmsgBody.strPowerMgmtparam);
+				Handle_PowerManagement(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strPowerMgmtparam);
+				break;
+			}
+
+			case HOST_IF_MSG_SET_WFIDRV_HANDLER:
+			{	
+			
+				Handle_SetWfiDrvHandler(&strHostIFmsg.uniHostIFmsgBody.strHostIfSetDrvHandler);
+				
+			
+				break;
+			}
+			case HOST_IF_MSG_SET_OPERATION_MODE:
+			{	
+			
+				Handle_SetOperationMode(strHostIFmsg.drvHandler, &strHostIFmsg.uniHostIFmsgBody.strHostIfSetOperationMode);
+				
+			
+				break;
+			}
+			
+			case HOST_IF_MSG_SET_IPADDRESS:
+			{
+				PRINT_D(HOSTINF_DBG,"HOST_IF_MSG_SET_IPADDRESS\n");
+				Handle_set_IPAddress(strHostIFmsg.drvHandler, strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.au8IPAddr, strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.idx);
+				break;
+			}
+			case HOST_IF_MSG_GET_IPADDRESS:
+			{
+				PRINT_D(HOSTINF_DBG,"HOST_IF_MSG_SET_IPADDRESS\n");
+				Handle_get_IPAddress(strHostIFmsg.drvHandler, strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.au8IPAddr, strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.idx);
+				break;
+			}
+			
+			/*BugID_5077*/
+			case HOST_IF_MSG_SET_MAC_ADDRESS:
+			{		
+				Handle_SetMacAddress(strHostIFmsg.drvHandler, &strHostIFmsg.uniHostIFmsgBody.strHostIfSetMacAddress);			
+				break;
+			}
+
+			/*BugID_5213*/
+			case HOST_IF_MSG_GET_MAC_ADDRESS:
+			{		
+				Handle_GetMacAddress(strHostIFmsg.drvHandler, &strHostIFmsg.uniHostIFmsgBody.strHostIfGetMacAddress);			
 				break;
 			}
 
@@ -3797,22 +4690,40 @@ static void hostIFthread(void* pvArg)
 			case HOST_IF_MSG_REMAIN_ON_CHAN:
 			{
 				PRINT_D(HOSTINF_DBG,"HOST_IF_MSG_REMAIN_ON_CHAN\n");
-				Handle_RemainOnChan(&strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan);
+				Handle_RemainOnChan(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan);
 				break;
 			}
 			case HOST_IF_MSG_REGISTER_FRAME:
 			{
 				PRINT_D(HOSTINF_DBG,"HOST_IF_MSG_REGISTER_FRAME\n");
-				Handle_RegisterFrame(&strHostIFmsg.uniHostIFmsgBody.strHostIfRegisterFrame);
+				Handle_RegisterFrame(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfRegisterFrame);
 				break;
 			}
 			case HOST_IF_MSG_LISTEN_TIMER_FIRED:
 			{
-				Handle_ListenStateExpired(&strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan);
+				Handle_ListenStateExpired(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan);
 				break;
 			}
 			#endif
-			
+			case HOST_IF_MSG_SET_MULTICAST_FILTER:
+			{
+				PRINT_D(HOSTINF_DBG,"HOST_IF_MSG_SET_MULTICAST_FILTER\n");
+				Handle_SetMulticastFilter(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfSetMulti);
+				break;
+			}
+
+			/*BugID_5222*/
+			case HOST_IF_MSG_ADD_BA_SESSION:
+			{
+				Handle_AddBASession(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfBASessionInfo);
+				break;
+			}
+			case HOST_IF_MSG_DEL_BA_SESSION:
+			{
+				Handle_DelBASession(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIfBASessionInfo);
+				break;
+			}
+
 			default:
 			{
 				NMI_ERROR("[Host Interface] undefined Received Msg ID  \n");
@@ -3829,32 +4740,32 @@ static void hostIFthread(void* pvArg)
 	
 }
 
-static void TimerCB(void* pvArg)
+static void TimerCB_Scan(void* pvArg)
 {
 	tstrHostIFmsg strHostIFmsg;
-	tenuScanConnTimer enuScanConnTimer;
-
-	enuScanConnTimer = (tenuScanConnTimer)pvArg;
-
-	PRINT_D(HOSTINF_DBG, "TimerCB(): rcvd enuScanConnTimer=%d\n", enuScanConnTimer);
 	
 	/* prepare the Timer Callback message */
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));	
-	
-	if(enuScanConnTimer == SCAN_TIMER)
-	{	
-		strHostIFmsg.u16MsgId = HOST_IF_MSG_SCAN_TIMER_FIRED;
-		strHostIFmsg.uniHostIFmsgBody.strTimerCb.pvUsrArg = (void*)enuScanConnTimer;		
-	}
-	else if(enuScanConnTimer == CONNECT_TIMER)
-	{	
-		strHostIFmsg.u16MsgId = HOST_IF_MSG_CONNECT_TIMER_FIRED;
-		strHostIFmsg.uniHostIFmsgBody.strTimerCb.pvUsrArg = (void*)enuScanConnTimer;		
-	}
+	strHostIFmsg.drvHandler=pvArg;
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_SCAN_TIMER_FIRED;
+
+	// send the message 
+	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+}
+
+static void TimerCB_Connect(void* pvArg)
+{
+	tstrHostIFmsg strHostIFmsg;
+
+	//prepare the Timer Callback message 
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));	
+	strHostIFmsg.drvHandler=pvArg;
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_CONNECT_TIMER_FIRED;
 
 	/* send the message */
 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 }
+
 
 /**
 *  @brief 		removes wpa/wpa2 keys
@@ -3917,6 +4828,8 @@ NMI_Sint32 host_int_remove_wep_key(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8 u8keyIdx)
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_KEY;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.enuKeyType = WEP;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.u8KeyAction = REMOVEKEY;
+	strHostIFmsg.drvHandler = hWFIDrv;
+	
 
 
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.
@@ -3965,6 +4878,7 @@ NMI_Sint32 host_int_set_WEPDefaultKeyID(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8 u8Ind
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_KEY;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.enuKeyType = WEP;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.u8KeyAction = DEFAULTKEY;
+	strHostIFmsg.drvHandler= hWFIDrv;
 
 
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.
@@ -4022,6 +4936,7 @@ NMI_Sint32 host_int_add_wep_key_bss_sta(NMI_WFIDrvHandle hWFIDrv, const NMI_Uint
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_KEY;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.enuKeyType = WEP;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.u8KeyAction = ADDKEY;
+	strHostIFmsg.drvHandler = hWFIDrv;
 
 	
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.
@@ -4092,6 +5007,7 @@ NMI_Sint32 host_int_add_wep_key_bss_ap(NMI_WFIDrvHandle hWFIDrv, const NMI_Uint8
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_KEY;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.enuKeyType = WEP;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.u8KeyAction = ADDKEY_AP;
+	strHostIFmsg.drvHandler = hWFIDrv;
 
 	
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.
@@ -4219,6 +5135,7 @@ NMI_Sint32 host_int_add_ptk(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8* pu8Ptk,NMI_Uint8
 			uniHostIFkeyAttr.strHostIFwpaAttr.u8Ciphermode = u8Ciphermode;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.
 				uniHostIFkeyAttr.strHostIFwpaAttr.pu8macaddr = mac_addr;	
+	strHostIFmsg.drvHandler= hWFIDrv;
 	
 	/* send the message */
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
@@ -4227,7 +5144,7 @@ NMI_Sint32 host_int_add_ptk(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8* pu8Ptk,NMI_Uint8
 		PRINT_ER("Error in sending message queue:  PTK Key\n");
 
 	////////////////
-	NMI_SemaphoreAcquire(&hSemTestKeyBlock,NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->hSemTestKeyBlock),NULL);
 	//NMI_Sleep(100);
 	/////////	
 
@@ -4289,6 +5206,7 @@ NMI_Sint32 host_int_add_rx_gtk(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8RxGtk,NMI
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_KEY;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.enuKeyType = WPARxGtk;
+	strHostIFmsg.drvHandler = hWFIDrv;
 	
     #ifdef NMI_AP_EXTERNAL_MLME
     if(mode == AP_MODE)
@@ -4337,7 +5255,7 @@ NMI_Sint32 host_int_add_rx_gtk(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8RxGtk,NMI
 	if(s32Error)
 		NMI_ERROR("Error in sending message queue:  RX GTK\n");
 	////////////////
-	NMI_SemaphoreAcquire(&hSemTestKeyBlock,NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->hSemTestKeyBlock),NULL);
 	//NMI_Sleep(100);
 	/////////	
 
@@ -4446,6 +5364,7 @@ NMI_Sint32 host_int_set_pmkid_info(NMI_WFIDrvHandle hWFIDrv, tstrHostIFpmkidAttr
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_KEY;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.enuKeyType = PMKSA;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFkeyAttr.u8KeyAction = ADDKEY;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	for(i = 0 ; i< pu8PmkidInfoArray->numpmkid;i++)
 	{
@@ -4552,45 +5471,24 @@ NMI_Sint32 host_int_set_RSNAConfigPSKPassPhrase(NMI_WFIDrvHandle hWFIDrv, NMI_Ui
 */
 NMI_Sint32 host_int_get_MacAddress(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8* pu8MacAddress)
 {
-	NMI_Sint32 s32Error = NMI_SUCCESS;
-	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
-	tstrWID strWID;
+	NMI_Sint32 s32Error = NMI_SUCCESS;	
+	tstrHostIFmsg strHostIFmsg;
 
-	if(pstrWFIDrv == NMI_NULL )
-	{
-		NMI_ERRORREPORT(s32Error,NMI_INVALID_ARGUMENT);
-	}
-	strWID.u16WIDid = (NMI_Uint16)WID_MAC_ADDR;
-	strWID.enuWIDtype = WID_STR;
-	strWID.ps8WidVal = (NMI_Uint8*)NMI_MALLOC(ETH_ALEN);
-	strWID.s32ValueSize = ETH_ALEN;
 	
-	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE);
+	/* prepare the Message */
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
-	NMI_memcpy(pu8MacAddress,strWID.ps8WidVal,ETH_ALEN);
-	/*get the value by searching the local copy*/
-	NMI_FREE(strWID.ps8WidVal);
-	if(s32Error)
-	{
-		PRINT_ER("Failed to get mac address\n");
-		NMI_ERRORREPORT(s32Error,NMI_INVALID_STATE);
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_MAC_ADDRESS;
+	strHostIFmsg.uniHostIFmsgBody.strHostIfGetMacAddress.u8MacAddress = pu8MacAddress;
+	strHostIFmsg.drvHandler=hWFIDrv;
+	/* send the message */
+	s32Error = 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error){
+		PRINT_ER("Failed to send get mac address\n");
+		return NMI_FAIL;
 	}
 
-	else
-	{
-		PRINT_INFO(HOSTINF_DBG,"MAC address retrieved:: \n");
-		
-		PRINT_INFO(HOSTINF_DBG,"%2x.%2x.%2x.%2x.%2x.%2x.\n",(NMI_Uint8)(strWID.ps8WidVal[0]),(NMI_Uint8)(strWID.ps8WidVal[1]),
-		(NMI_Uint8)(strWID.ps8WidVal[2]),(NMI_Uint8)(strWID.ps8WidVal[3]),(NMI_Uint8)(strWID.ps8WidVal[4]),(NMI_Uint8)(strWID.ps8WidVal[5]));
-
-		PRINT_INFO(HOSTINF_DBG,"\n");
-	}
-
-	NMI_CATCH(s32Error)
-	{
-
-	}
-
+	NMI_SemaphoreAcquire(&hWaitResponse, NULL);	
 	return s32Error;
 }
 
@@ -4608,44 +5506,29 @@ NMI_Sint32 host_int_get_MacAddress(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8* pu8MacAdd
 NMI_Sint32 host_int_set_MacAddress(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8* pu8MacAddress)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
-	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
-	tstrWID strWID;
-	
-	if(pstrWFIDrv == NMI_NULL)
-	{
-		PRINT_ER("Driver not initialized: pstrWFIDrv = NULL \n");
-		NMI_ERRORREPORT(s32Error, NMI_INVALID_ARGUMENT);
-	}
+	tstrHostIFmsg strHostIFmsg;
 
-	strWID.u16WIDid = (NMI_Uint16)WID_MAC_ADDR;
-	strWID.enuWIDtype = WID_STR;
-	strWID.ps8WidVal = (NMI_Sint8*)pu8MacAddress;
-	strWID.s32ValueSize = ETH_ALEN;	
+	PRINT_D(GENERIC_DBG,"mac addr = %x:%x:%x\n",pu8MacAddress[0], pu8MacAddress[1], pu8MacAddress[2]);
 
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
-		
+	/* prepare setting mac address message */	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_SET_MAC_ADDRESS;
+	NMI_memcpy(strHostIFmsg.uniHostIFmsgBody.strHostIfSetMacAddress.u8MacAddress, pu8MacAddress, ETH_ALEN);
+	strHostIFmsg.drvHandler=hWFIDrv;
 
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
 	{
-		PRINT_D(HOSTINF_DBG,"Failed to set mac address\n");
-		NMI_ERRORREPORT(s32Error,NMI_INVALID_STATE);
+		PRINT_ER("Failed to send message queue: Set mac address\n");
+		NMI_ERRORREPORT(s32Error, s32Error);
 	}
-	else
-	{
-		PRINT_INFO(HOSTINF_DBG,"MAC address set :: \n");
-		
-		PRINT_INFO(HOSTINF_DBG,"%2x.%2x.%2x.%2x.%2x.%2x.\n",(NMI_Uint8)(strWID.ps8WidVal[0]),(NMI_Uint8)(strWID.ps8WidVal[1]),
-		(NMI_Uint8)(strWID.ps8WidVal[2]),(NMI_Uint8)(strWID.ps8WidVal[3]),(NMI_Uint8)(strWID.ps8WidVal[4]),(NMI_Uint8)(strWID.ps8WidVal[5]));
-
-		PRINT_INFO(HOSTINF_DBG,"\n");
-	}
-
 	NMI_CATCH(s32Error)
 	{
-
+	
 	}
 
 	return s32Error;
+	
 }
 
 /**
@@ -4715,7 +5598,7 @@ NMI_Sint32 host_int_get_site_survey_results(NMI_WFIDrvHandle hWFIDrv,
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrWID astrWIDList[2];
-	//tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
 
 	astrWIDList[0].u16WIDid = (NMI_Uint16)WID_SITE_SURVEY_RESULTS;
 	astrWIDList[0].enuWIDtype = WID_STR;
@@ -4727,7 +5610,7 @@ NMI_Sint32 host_int_get_site_survey_results(NMI_WFIDrvHandle hWFIDrv,
 	astrWIDList[1].ps8WidVal = ppu8RcvdSiteSurveyResults[1];
 	astrWIDList[1].s32ValueSize = u32MaxSiteSrvyFragLen;		
 
-	s32Error = SendConfigPkt(GET_CFG, astrWIDList, 2, NMI_TRUE);
+	s32Error = SendConfigPkt(GET_CFG, astrWIDList, 2, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 		
 	/*get the value by searching the local copy*/
 	if(s32Error)
@@ -4833,7 +5716,7 @@ NMI_Sint32 host_int_set_join_req(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8bssid,
 		NMI_ERRORREPORT(s32Error, NMI_INVALID_ARGUMENT);
 	}
 
-	if(gWFiDrvHandle == NULL)
+	if(hWFIDrv== NULL)
 	{
 		PRINT_ER("Driver not initialized: gWFiDrvHandle = NULL\n");
 		NMI_ERRORREPORT(s32Error, NMI_FAIL);
@@ -4862,6 +5745,7 @@ NMI_Sint32 host_int_set_join_req(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8bssid,
 	strHostIFmsg.uniHostIFmsgBody.strHostIFconnectAttr.pfConnectResult = pfConnectResult;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFconnectAttr.pvUserArg = pvUserArg;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFconnectAttr.pJoinParams = pJoinParams;
+	strHostIFmsg.drvHandler= hWFIDrv;
 	
 	if(pu8bssid != NULL)
 	{
@@ -4902,13 +5786,61 @@ NMI_Sint32 host_int_set_join_req(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8bssid,
 	}
 
 	enuScanConnTimer = CONNECT_TIMER;	
-	NMI_TimerStart(&hConnectTimer, HOST_IF_CONNECT_TIMEOUT, (void*)enuScanConnTimer, NMI_NULL);
+	NMI_TimerStart(&(pstrWFIDrv->hConnectTimer), HOST_IF_CONNECT_TIMEOUT,(void*) hWFIDrv, NMI_NULL);
 	
 	NMI_CATCH(s32Error)
 	{
 
 	}
 
+	return s32Error;
+}
+
+/**
+*  @brief 		Flush a join request parameters to FW, but actual connection
+*  @details 	The function is called in situation where NMC is connected to AP and 
+			required to switch to hybrid FW for P2P connection 	
+*  @param[in] handle to the wifi driver,
+*  @return 	Error code indicating success/failure
+*  @note 		
+*  @author	Amr Abdel-Moghny
+*  @date		19 DEC 2013
+*  @version	8.0
+*/
+
+NMI_Sint32 host_int_flush_join_req(NMI_WFIDrvHandle hWFIDrv)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;	
+	tstrHostIFmsg strHostIFmsg;	
+
+	if(!gu8FlushedJoinReq)
+	{
+		s32Error = NMI_FAIL;
+		return s32Error;
+	}
+
+		
+	if(hWFIDrv  == NMI_NULL)
+	{
+		NMI_ERRORREPORT(s32Error, NMI_INVALID_ARGUMENT);
+	}
+
+
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_FLUSH_CONNECT;
+	strHostIFmsg.drvHandler= hWFIDrv;
+	
+	/* send the message */
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		PRINT_ER("Failed to send message queue: Flush join request\n");
+		NMI_ERRORREPORT(s32Error, NMI_FAIL);
+	}
+	
+	NMI_CATCH(s32Error)
+	{
+
+	}
 	return s32Error;
 }
 
@@ -4935,7 +5867,7 @@ NMI_Sint32 host_int_disconnect(NMI_WFIDrvHandle hWFIDrv, NMI_Uint16 u16ReasonCod
 		NMI_ERRORREPORT(s32Error, NMI_INVALID_ARGUMENT);
 	}
 
-	if(gWFiDrvHandle == NULL)
+	if(pstrWFIDrv == NULL)
 	{
 		PRINT_ER("gWFiDrvHandle = NULL\n");
 		NMI_ERRORREPORT(s32Error, NMI_FAIL);
@@ -4945,13 +5877,14 @@ NMI_Sint32 host_int_disconnect(NMI_WFIDrvHandle hWFIDrv, NMI_Uint16 u16ReasonCod
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_DISCONNECT;
+	strHostIFmsg.drvHandler=hWFIDrv;
 	
 	/* send the message */
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
 		PRINT_ER("Failed to send message queue: disconnect\n");
 	////////////////
-	NMI_SemaphoreAcquire(&hSemTestDisconnectBlock,NULL);	
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->hSemTestDisconnectBlock),NULL);	
 	/////////
 	
 	NMI_CATCH(s32Error)
@@ -5060,7 +5993,7 @@ NMI_Sint32 host_int_get_assoc_res_info(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8A
 
 	
 	/* Sending Configuration packet */
-	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Failed to send association response config packet\n");
@@ -5140,6 +6073,64 @@ NMI_Sint32 host_int_set_mac_chnl_num(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8 u8ChNum)
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_SET_CHANNEL;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFSetChan.u8SetChan= u8ChNum;
+	strHostIFmsg.drvHandler=hWFIDrv;
+
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	
+	}
+
+	return s32Error;
+}
+
+
+NMI_Sint32 host_int_set_wfi_drv_handler(NMI_Uint32 u32address)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+
+	tstrHostIFmsg strHostIFmsg;
+
+
+	/* prepare the set driver handler message */
+	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_SET_WFIDRV_HANDLER;
+	strHostIFmsg.uniHostIFmsgBody.strHostIfSetDrvHandler.u32Address=u32address;
+	//strHostIFmsg.drvHandler=hWFIDrv;
+
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	
+	}
+
+	return s32Error;
+}
+
+
+
+NMI_Sint32 host_int_set_operation_mode(NMI_WFIDrvHandle hWFIDrv, NMI_Uint32 u32mode)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+
+	tstrHostIFmsg strHostIFmsg;
+
+
+	/* prepare the set driver handler message */
+	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_SET_OPERATION_MODE;
+	strHostIFmsg.uniHostIFmsgBody.strHostIfSetOperationMode.u32Mode=u32mode;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
@@ -5185,12 +6176,13 @@ NMI_Sint32 host_int_get_host_chnl_num(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8Ch
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_CHNL;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	/* send the message */
 	s32Error = 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
 		PRINT_ER("Failed to send get host channel param's message queue ");
-	NMI_SemaphoreAcquire(&hSemGetCHNL, NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->hSemGetCHNL), NULL);
 	//gu8Chnl = 11;
 
 	*pu8ChNo = gu8Chnl;
@@ -5234,7 +6226,7 @@ NMI_Sint32 host_int_test_set_int_wid(NMI_WFIDrvHandle hWFIDrv, NMI_Uint32 u32Tes
 	strWID.s32ValueSize = sizeof(NMI_Uint32);
 	
 	/*Sending Cfg*/
-	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
 		PRINT_ER("Test Function: Failed to set wid value\n");
@@ -5284,13 +6276,14 @@ NMI_Sint32 host_int_get_inactive_time(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8 * mac,
 					  mac, ETH_ALEN);
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_INACTIVETIME;
+	strHostIFmsg.drvHandler=hWFIDrv;
        
 	/* send the message */
 	s32Error = 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
 		PRINT_ER("Failed to send get host channel param's message queue ");
 
-	NMI_SemaphoreAcquire(&hSemInactiveTime, NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->hSemInactiveTime), NULL);
 	
 	*pu32InactiveTime = gu32InactiveTime;
 
@@ -5329,7 +6322,7 @@ NMI_Sint32 host_int_test_get_int_wid(NMI_WFIDrvHandle hWFIDrv, NMI_Uint32* pu32T
 	strWID.ps8WidVal = (NMI_Sint8*)pu32TestMemAddr;
 	strWID.s32ValueSize = sizeof(NMI_Uint32);
 	
-	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE);
+	s32Error = SendConfigPkt(GET_CFG, &strWID, 1, NMI_TRUE,(NMI_Uint32)pstrWFIDrv);
 	/*get the value by searching the local copy*/
 	if(s32Error)
 	{
@@ -5367,12 +6360,14 @@ NMI_Sint32 host_int_get_rssi(NMI_WFIDrvHandle hWFIDrv, NMI_Sint8* ps8Rssi)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;	
 	tstrHostIFmsg strHostIFmsg;
+	tstrNMI_WFIDrv* pstrWFIDrv=(tstrNMI_WFIDrv*)hWFIDrv;
 
 	
 	/* prepare the Get RSSI Message */
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_RSSI;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	/* send the message */
 	s32Error = 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
@@ -5381,7 +6376,7 @@ NMI_Sint32 host_int_get_rssi(NMI_WFIDrvHandle hWFIDrv, NMI_Sint8* ps8Rssi)
 		return NMI_FAIL;
 		}
 
-	NMI_SemaphoreAcquire(&hSemGetRSSI, NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->hSemGetRSSI), NULL);
 	
 	
 	if(ps8Rssi == NULL)
@@ -5399,14 +6394,18 @@ NMI_Sint32 host_int_get_rssi(NMI_WFIDrvHandle hWFIDrv, NMI_Sint8* ps8Rssi)
 
 NMI_Sint32 host_int_get_link_speed(NMI_WFIDrvHandle hWFIDrv, NMI_Sint8* ps8lnkspd)
 {
-	NMI_Sint32 s32Error = NMI_SUCCESS;	
 	tstrHostIFmsg strHostIFmsg;
+	NMI_Sint32 s32Error = NMI_SUCCESS;	
+
+	tstrNMI_WFIDrv* pstrWFIDrv=(tstrNMI_WFIDrv*)hWFIDrv;
+	
 
 	
 	/* prepare the Get LINKSPEED Message */
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_LINKSPEED;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	/* send the message */
 	s32Error = 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
@@ -5415,7 +6414,7 @@ NMI_Sint32 host_int_get_link_speed(NMI_WFIDrvHandle hWFIDrv, NMI_Sint8* ps8lnksp
 		return NMI_FAIL;
 		}
 
-	NMI_SemaphoreAcquire(&hSemGetLINKSPEED, NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->hSemGetLINKSPEED), NULL);
 	
 	
 	if(ps8lnkspd == NULL)
@@ -5442,7 +6441,7 @@ NMI_Sint32 host_int_get_statistics(NMI_WFIDrvHandle hWFIDrv, tstrStatistics* pst
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_STATISTICS;
 	strHostIFmsg.uniHostIFmsgBody.pUserData =(NMI_Char*)pstrStatistics;
-
+	strHostIFmsg.drvHandler=hWFIDrv;
 	/* send the message */
 	s32Error = 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error){
@@ -5502,7 +6501,7 @@ NMI_Sint32 host_int_scan(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8 u8ScanSource,
 		else
 			NMI_PRINTF("pstrHiddenNetwork IS EQUAL TO NULL\n");
 
-
+		strHostIFmsg.drvHandler=hWFIDrv;
 		strHostIFmsg.uniHostIFmsgBody.strHostIFscanAttr.u8ScanSource = u8ScanSource;
 		strHostIFmsg.uniHostIFmsgBody.strHostIFscanAttr.u8ScanType = u8ScanType;
 		strHostIFmsg.uniHostIFmsgBody.strHostIFscanAttr.pfScanResult = ScanResult;
@@ -5532,7 +6531,7 @@ NMI_Sint32 host_int_scan(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8 u8ScanSource,
 
 		enuScanConnTimer = SCAN_TIMER;	
 		printk(">> Starting the SCAN timer\n");
-		NMI_TimerStart(&hScanTimer, HOST_IF_SCAN_TIMEOUT, (void*)enuScanConnTimer, NMI_NULL);
+		NMI_TimerStart(&(pstrWFIDrv->hScanTimer), HOST_IF_SCAN_TIMEOUT,(void*) hWFIDrv, NMI_NULL);
 		
 	
 	NMI_CATCH(s32Error)
@@ -5570,6 +6569,7 @@ NMI_Sint32 hif_set_cfg(NMI_WFIDrvHandle hWFIDrv, tstrCfgParamVal * pstrCfgParamV
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_CFG_PARAMS;
 	strHostIFmsg.uniHostIFmsgBody.strHostIFCfgParamAttr.pstrCfgParamVal = *pstrCfgParamVal;
+	strHostIFmsg.drvHandler=hWFIDrv;
 	
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 
@@ -5600,7 +6600,7 @@ NMI_Sint32 hif_get_cfg(NMI_WFIDrvHandle hWFIDrv,NMI_Uint16 u16WID,NMI_Uint16* pu
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
 
-	NMI_SemaphoreAcquire(&gtOsCfgValuesSem,NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
 	
 	if(pstrWFIDrv == NMI_NULL)
 	{
@@ -5614,21 +6614,21 @@ NMI_Sint32 hif_get_cfg(NMI_WFIDrvHandle hWFIDrv,NMI_Uint16 u16WID,NMI_Uint16* pu
 		case WID_BSS_TYPE:
 			  {
 	
-				  *pu16WID_Value = (NMI_Uint16)gWFiDrvHandle->strCfgValues.bss_type;
+				  *pu16WID_Value = (NMI_Uint16)pstrWFIDrv->strCfgValues.bss_type;
 			 
 			  }
 			  break;
 		case WID_AUTH_TYPE:
 			  {
 
-					*pu16WID_Value =(NMI_Uint16)gWFiDrvHandle->strCfgValues.auth_type;
+					*pu16WID_Value =(NMI_Uint16)pstrWFIDrv->strCfgValues.auth_type;
 		
 			  }
 			  break;
 		case WID_AUTH_TIMEOUT:
 			  {
 
-				  *pu16WID_Value = gWFiDrvHandle->strCfgValues.auth_timeout;
+				  *pu16WID_Value = pstrWFIDrv->strCfgValues.auth_timeout;
 
 			  }
 			  break;
@@ -5636,88 +6636,88 @@ NMI_Sint32 hif_get_cfg(NMI_WFIDrvHandle hWFIDrv,NMI_Uint16 u16WID,NMI_Uint16* pu
 		case WID_POWER_MANAGEMENT:
 			  {
 	
-				*pu16WID_Value = (NMI_Uint16)gWFiDrvHandle->strCfgValues.power_mgmt_mode;
+				*pu16WID_Value = (NMI_Uint16)pstrWFIDrv->strCfgValues.power_mgmt_mode;
 			  }
 			  break;
 		case WID_SHORT_RETRY_LIMIT:
 			  {
-				 *pu16WID_Value =	gWFiDrvHandle->strCfgValues.short_retry_limit;
+				 *pu16WID_Value =	pstrWFIDrv->strCfgValues.short_retry_limit;
 			  }
 			  break;
 		case WID_LONG_RETRY_LIMIT:
 			  {
-					*pu16WID_Value = gWFiDrvHandle->strCfgValues.long_retry_limit;
+					*pu16WID_Value = pstrWFIDrv->strCfgValues.long_retry_limit;
 				
 			  }
 			  break;
 		case WID_FRAG_THRESHOLD:
 			  {
-				  *pu16WID_Value = gWFiDrvHandle->strCfgValues.frag_threshold;
+				  *pu16WID_Value = pstrWFIDrv->strCfgValues.frag_threshold;
 			  }
 			  break;
 		case WID_RTS_THRESHOLD:
 			 {
-				 *pu16WID_Value = gWFiDrvHandle->strCfgValues.rts_threshold;
+				 *pu16WID_Value = pstrWFIDrv->strCfgValues.rts_threshold;
 			 }
 			 break;
 		case WID_PREAMBLE:
 			 {
-				*pu16WID_Value = (NMI_Uint16)gWFiDrvHandle->strCfgValues.preamble_type;
+				*pu16WID_Value = (NMI_Uint16)pstrWFIDrv->strCfgValues.preamble_type;
 			  }
 			  break;
 		case WID_SHORT_SLOT_ALLOWED:
 			  {
-				  *pu16WID_Value =(NMI_Uint16) gWFiDrvHandle->strCfgValues.short_slot_allowed;
+				  *pu16WID_Value =(NMI_Uint16) pstrWFIDrv->strCfgValues.short_slot_allowed;
 			  }
 			  break;
 		case WID_11N_TXOP_PROT_DISABLE:
 			 {
-				  *pu16WID_Value = (NMI_Uint16)gWFiDrvHandle->strCfgValues.txop_prot_disabled;
+				  *pu16WID_Value = (NMI_Uint16)pstrWFIDrv->strCfgValues.txop_prot_disabled;
 			 }
 			 break;
 		case WID_BEACON_INTERVAL:
 			  {
-				*pu16WID_Value = gWFiDrvHandle->strCfgValues.beacon_interval;
+				*pu16WID_Value = pstrWFIDrv->strCfgValues.beacon_interval;
 			  }
 			  break;
 		case WID_DTIM_PERIOD:
 			  {
-				*pu16WID_Value = (NMI_Uint16)gWFiDrvHandle->strCfgValues.dtim_period;
+				*pu16WID_Value = (NMI_Uint16)pstrWFIDrv->strCfgValues.dtim_period;
 			  }
 			  break;
 		case WID_SITE_SURVEY:
 			{	
-				*pu16WID_Value = (NMI_Uint16)gWFiDrvHandle->strCfgValues.site_survey_enabled;
+				*pu16WID_Value = (NMI_Uint16)pstrWFIDrv->strCfgValues.site_survey_enabled;
 			}
 			break;
 		case WID_SITE_SURVEY_SCAN_TIME:
 			  {
-				*pu16WID_Value = gWFiDrvHandle->strCfgValues.site_survey_scan_time;
+				*pu16WID_Value = pstrWFIDrv->strCfgValues.site_survey_scan_time;
 			  }
 			  break;
 
 		case WID_ACTIVE_SCAN_TIME:
 			  {
 	
-					*pu16WID_Value= gWFiDrvHandle->strCfgValues.active_scan_time;
+					*pu16WID_Value=pstrWFIDrv->strCfgValues.active_scan_time;
 			  }
 			  break;
 		case WID_PASSIVE_SCAN_TIME:
 			  {
-				*pu16WID_Value = gWFiDrvHandle->strCfgValues.passive_scan_time;
+				*pu16WID_Value = pstrWFIDrv->strCfgValues.passive_scan_time;
 			  
 			  }
 			  break;
 		case WID_CURRENT_TX_RATE:
 			  {
-					*pu16WID_Value = gWFiDrvHandle->strCfgValues.curr_tx_rate;
+					*pu16WID_Value = pstrWFIDrv->strCfgValues.curr_tx_rate;
 			  }
 			  break;
 		default:
 			break;
 		}
 
-		NMI_SemaphoreRelease(&gtOsCfgValuesSem, NULL);
+		NMI_SemaphoreRelease(&(pstrWFIDrv->gtOsCfgValuesSem), NULL);
 
 	NMI_CATCH(s32Error)
 	{
@@ -5762,11 +6762,12 @@ void host_int_send_join_leave_info_to_host
 *  @version		1.0
 */
 
-void GetPeriodicRSSI(void* vp)
-{
+void GetPeriodicRSSI(void * pvArg)
+{	
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)pvArg;
+	if(pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED)
+	{	
 	
-	if((NMI_WFIDrvHandle)gWFiDrvHandle->enuHostIFstate == HOST_IF_CONNECTED)
-	{
 		//printk("get peridoc rssi\n");
 		NMI_Sint32 s32Error = NMI_SUCCESS;	
 		tstrHostIFmsg strHostIFmsg;
@@ -5776,16 +6777,17 @@ void GetPeriodicRSSI(void* vp)
 		NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
 		strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_RSSI;
+		strHostIFmsg.drvHandler=pstrWFIDrv;
 
 		/* send the message */
 		s32Error = 	NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 		if(s32Error)
 		{
 			PRINT_ER("Failed to send get host channel param's message queue ");
-			return NMI_FAIL;
+			return;
 		}
 	}
-	NMI_TimerStart(&hPeriodicRSSI,5000,NULL,NULL);
+	NMI_TimerStart(&(pstrWFIDrv->hPeriodicRSSI),5000,(void*)pstrWFIDrv,NULL);
 }
 
 
@@ -5803,97 +6805,35 @@ void host_int_send_network_info_to_host
 *  @version		1.0
 */
 static NMI_Uint32 u32Intialized = 0;
+static NMI_Uint32 msgQ_created=0;
+static NMI_Uint32 clients_count=0;
+	
 NMI_Sint32 host_int_init(NMI_WFIDrvHandle* phWFIDrv)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrNMI_WFIDrv * pstrWFIDrv;
 	tstrNMI_SemaphoreAttrs strSemaphoreAttrs;
 
-	if(u32Intialized == 1)
+
+	/*if(u32Intialized == 1)
 	{
 		PRINT_D(HOSTINF_DBG,"Host interface is previously initialized\n");
-		*phWFIDrv = (NMI_WFIDrvHandle)gWFiDrvHandle;
+		*phWFIDrv = (NMI_WFIDrvHandle)gWFiDrvHandle; //Will be adjusted later for P2P
 		return 0;
-	}	
-	PRINT_D(HOSTINF_DBG,"Initializing host interface\n");
+	}	*/
+	PRINT_D(HOSTINF_DBG,"Initializing host interface for client %d\n",clients_count+1);
 
 	gbScanWhileConnected = NMI_FALSE;	
 
 	NMI_SemaphoreFillDefault(&strSemaphoreAttrs);	
 
-	strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemHostIFthrdEnd, &strSemaphoreAttrs);
-	
-	/////////////////////////////////////////
-	strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemTestKeyBlock, &strSemaphoreAttrs);
-	/////////////////////////////////////////
-
-	/////////////////////////////////////////
-	strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemTestDisconnectBlock, &strSemaphoreAttrs);
-	/////////////////////////////////////////
-
-	/////////////////////////////////////////
-	strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemGetRSSI, &strSemaphoreAttrs);
-
-	strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemGetLINKSPEED, &strSemaphoreAttrs);	
-	/////////////////////////////////////////
-	strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemGetCHNL, &strSemaphoreAttrs);	
-
-	/////////////////////////////////////////
-	strSemaphoreAttrs.u32InitCount = 0;
-	NMI_SemaphoreCreate(&hSemInactiveTime, &strSemaphoreAttrs);	
 
 	strSemaphoreAttrs.u32InitCount = 0;
 	NMI_SemaphoreCreate(&hWaitResponse, &strSemaphoreAttrs);
 	
 	
-	s32Error = NMI_MsgQueueCreate(&gMsgQHostIF, NMI_NULL);
-	if(s32Error < 0){
-		PRINT_ER("Failed to creat MQ\n");
-		goto _fail_;
-		}
 		
-	s32Error = NMI_ThreadCreate(&HostIFthreadHandler,hostIFthread, NMI_NULL, NMI_NULL);
-	if(s32Error < 0){
-		PRINT_ER("Failed to creat Thread\n");
-		goto _fail_mq_;
-		}
-	s32Error = NMI_TimerCreate(&hScanTimer, TimerCB, NMI_NULL);
-	if(s32Error < 0){
-		PRINT_ER("Failed to creat Timer\n");
-		goto _fail_thread_;
-		}
-
-	s32Error = NMI_TimerCreate(&hConnectTimer, TimerCB, NMI_NULL);
-	if(s32Error < 0){
-		PRINT_ER("Failed to creat Timer\n");
-		goto _fail_timer_1;
-		}
-	s32Error = NMI_TimerCreate(&hPeriodicRSSI,GetPeriodicRSSI, NMI_NULL);
-	if(s32Error < 0){
-		PRINT_ER("Failed to creat Timer\n");
-		goto _fail_timer_1;
-		}
-	NMI_TimerStart(&hPeriodicRSSI,5000,NULL,NULL);
-
-	#ifdef NMI_P2P
-	/*Remain on channel timer*/
-	s32Error = NMI_TimerCreate(&hRemainOnChannel, ListenTimerCB, NMI_NULL);
-	if(s32Error < 0){
-		PRINT_ER("Failed to creat Remain-on-channel Timer\n");
-		goto _fail_timer_3;
-	}
-	#endif
-				
-	NMI_SemaphoreCreate(&gtOsCfgValuesSem,NULL);
-	NMI_SemaphoreAcquire(&gtOsCfgValuesSem,NULL);
-	
-	/*Allocate host interface private structure*/
+		/*Allocate host interface private structure*/
 	pstrWFIDrv  = (tstrNMI_WFIDrv*)NMI_MALLOC(sizeof(tstrNMI_WFIDrv));
 	if(pstrWFIDrv == NMI_NULL)
 	{
@@ -5906,34 +6846,128 @@ NMI_Sint32 host_int_init(NMI_WFIDrvHandle* phWFIDrv)
 	/*return driver handle to user*/
 	*phWFIDrv = (NMI_WFIDrvHandle)pstrWFIDrv;
 	/*save into globl handle*/
-	gWFiDrvHandle = pstrWFIDrv;
+
+	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
 	
-	PRINT_D(HOSTINF_DBG,"Global handle pointer value=%x\n",(NMI_Uint32)gWFiDrvHandle);
+	g_obtainingIP=NMI_FALSE;
+	#endif
+	
+	PRINT_D(HOSTINF_DBG,"Global handle pointer value=%x\n",(NMI_Uint32)pstrWFIDrv);
+	/////////////////////////////////////////
+	if(clients_count==0)
+	{	
+		strSemaphoreAttrs.u32InitCount = 0;
+		NMI_SemaphoreCreate(&hSemHostIFthrdEnd, &strSemaphoreAttrs);
+	
+    		strSemaphoreAttrs.u32InitCount = 0;
+		NMI_SemaphoreCreate(&hSemDeinitDrvHandle, &strSemaphoreAttrs);
+	}
+	
+	strSemaphoreAttrs.u32InitCount = 0;
+	NMI_SemaphoreCreate(&(pstrWFIDrv->hSemTestKeyBlock), &strSemaphoreAttrs);
+	strSemaphoreAttrs.u32InitCount = 0;
+	NMI_SemaphoreCreate(&(pstrWFIDrv->hSemTestDisconnectBlock), &strSemaphoreAttrs);
+	strSemaphoreAttrs.u32InitCount = 0;
+	NMI_SemaphoreCreate(&(pstrWFIDrv->hSemGetRSSI), &strSemaphoreAttrs);
+	strSemaphoreAttrs.u32InitCount = 0;
+	NMI_SemaphoreCreate(&(pstrWFIDrv->hSemGetLINKSPEED), &strSemaphoreAttrs);
+	strSemaphoreAttrs.u32InitCount = 0;
+	NMI_SemaphoreCreate(&(pstrWFIDrv->hSemGetCHNL), &strSemaphoreAttrs);
+	strSemaphoreAttrs.u32InitCount = 0;
+	NMI_SemaphoreCreate(&(pstrWFIDrv->hSemInactiveTime), &strSemaphoreAttrs);	
+
+	
+	/////////////////////////////////////////
+
+
+
+	PRINT_D(HOSTINF_DBG,"INIT: CLIENT COUNT %d\n",clients_count);
+	
+	if(clients_count==0)
+	{
+
+		s32Error = NMI_MsgQueueCreate(&gMsgQHostIF, NMI_NULL);
+	
+
+		if(s32Error < 0)
+		{
+			PRINT_ER("Failed to creat MQ\n");
+			goto _fail_;
+		}
+		msgQ_created=1;
+		s32Error = NMI_ThreadCreate(&HostIFthreadHandler,hostIFthread, NMI_NULL, NMI_NULL);
+		if(s32Error < 0)
+		{
+			PRINT_ER("Failed to creat Thread\n");
+			goto _fail_mq_;
+		}
+
+	
+	}
+
+
+	s32Error = NMI_TimerCreate(&(pstrWFIDrv->hScanTimer), TimerCB_Scan, NMI_NULL);
+	if(s32Error < 0){
+		PRINT_ER("Failed to creat Timer\n");
+		goto _fail_thread_;
+		}
+
+	s32Error = NMI_TimerCreate(&(pstrWFIDrv->hConnectTimer), TimerCB_Connect, NMI_NULL);
+	if(s32Error < 0){
+		PRINT_ER("Failed to creat Timer\n");
+		goto _fail_timer_1;
+		}
+	s32Error = NMI_TimerCreate(&(pstrWFIDrv->hPeriodicRSSI),GetPeriodicRSSI, NMI_NULL);
+	if(s32Error < 0){
+		PRINT_ER("Failed to creat Timer\n");
+		goto _fail_timer_1;
+		}
+	NMI_TimerStart(&(pstrWFIDrv->hPeriodicRSSI),5000,(void*)pstrWFIDrv,NULL);
+
+	#ifdef NMI_P2P
+	/*Remain on channel timer*/
+	s32Error = NMI_TimerCreate(&(pstrWFIDrv->hRemainOnChannel),ListenTimerCB, NMI_NULL);
+	if(s32Error < 0){
+		PRINT_ER("Failed to creat Remain-on-channel Timer\n");
+		goto _fail_timer_3;
+	}
+	#endif
+				
+	NMI_SemaphoreCreate(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
+	
+	
 
 #ifdef SIMULATION
 	TransportInit();
 #endif
 	
-	gWFiDrvHandle->enuHostIFstate = HOST_IF_IDLE;
+	pstrWFIDrv->enuHostIFstate = HOST_IF_IDLE;
 	//gWFiDrvHandle->bPendingConnRequest = NMI_FALSE;
 
 	/*Initialize CFG WIDS Defualt Values*/
-	gWFiDrvHandle->strCfgValues.site_survey_enabled = SITE_SURVEY_OFF;
-	gWFiDrvHandle->strCfgValues.scan_source = DEFAULT_SCAN;
-	gWFiDrvHandle->strCfgValues.active_scan_time = ACTIVE_SCAN_TIME;
-	gWFiDrvHandle->strCfgValues.passive_scan_time= PASSIVE_SCAN_TIME;
-	gWFiDrvHandle->strCfgValues.curr_tx_rate = AUTORATE;
+
+	pstrWFIDrv->strCfgValues.site_survey_enabled = SITE_SURVEY_OFF;
+	pstrWFIDrv->strCfgValues.scan_source = DEFAULT_SCAN;
+	pstrWFIDrv->strCfgValues.active_scan_time = ACTIVE_SCAN_TIME;
+	pstrWFIDrv->strCfgValues.passive_scan_time= PASSIVE_SCAN_TIME;
+	pstrWFIDrv->strCfgValues.curr_tx_rate = AUTORATE;
+
 
 	#ifdef NMI_P2P
-	gWFiDrvHandle->u64P2p_MgmtTimeout = 0;
+
+	pstrWFIDrv->u64P2p_MgmtTimeout = 0;
+
 	#endif
 
 	PRINT_INFO(HOSTINF_DBG,"Initialization values, Site survey value: %d\n Scan source: %d\n Active scan time: %d\n Passive scan time: %d\nCurrent tx Rate = %d\n",
-			gWFiDrvHandle->strCfgValues.site_survey_enabled,gWFiDrvHandle->strCfgValues.scan_source,
-			gWFiDrvHandle->strCfgValues.active_scan_time,gWFiDrvHandle->strCfgValues.passive_scan_time,
-			gWFiDrvHandle->strCfgValues.curr_tx_rate);
 
-	NMI_SemaphoreRelease(&gtOsCfgValuesSem,NULL);
+			pstrWFIDrv->strCfgValues.site_survey_enabled,pstrWFIDrv->strCfgValues.scan_source,
+			pstrWFIDrv->strCfgValues.active_scan_time,pstrWFIDrv->strCfgValues.passive_scan_time,
+			pstrWFIDrv->strCfgValues.curr_tx_rate);
+
+
+	NMI_SemaphoreRelease(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
 	
 	/*TODO Code to setup simulation to be removed later*/
 	/*Intialize configurator module*/
@@ -5947,7 +6981,10 @@ NMI_Sint32 host_int_init(NMI_WFIDrvHandle* phWFIDrv)
 	/*Initialize Simulaor*/
 	CoreConfigSimulatorInit();
 #endif
+
 	u32Intialized = 1;
+	clients_count++;//increase number of created entities
+
 	return s32Error;
 
 	
@@ -5956,13 +6993,13 @@ _fail_mem_:
 			NMI_FREE(pstrWFIDrv);
 #ifdef NMI_P2P
 _fail_timer_3:
-	NMI_TimerDestroy(&hRemainOnChannel, NMI_NULL);
+	NMI_TimerDestroy(&(pstrWFIDrv->hRemainOnChannel), NMI_NULL);
 #endif
 _fail_timer_2:
-	NMI_SemaphoreRelease(&gtOsCfgValuesSem,NULL);
-	NMI_TimerDestroy(&hConnectTimer,NMI_NULL);
+	NMI_SemaphoreRelease(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
+	NMI_TimerDestroy(&(pstrWFIDrv->hConnectTimer),NMI_NULL);
 _fail_timer_1:
-	NMI_TimerDestroy(&hScanTimer,NMI_NULL);
+	NMI_TimerDestroy(&(pstrWFIDrv->hScanTimer),NMI_NULL);
 _fail_thread_:
 	NMI_ThreadDestroy(&HostIFthreadHandler, NMI_NULL);
 _fail_mq_:
@@ -5981,28 +7018,42 @@ _fail_:
 *  @date		8 March 2012
 *  @version		1.0
 */
+
 NMI_Sint32 host_int_deinit(NMI_WFIDrvHandle hWFIDrv)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
 	tstrHostIFmsg strHostIFmsg;
+	
 
 	/*obtain driver handle*/
 	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
-	if(u32Intialized == 0)
+	/*if(u32Intialized == 0)
 	{
 		PRINT_ER("Host Interface is not initialized\n");
 		return 0;
-	}
-	PRINT_D(HOSTINF_DBG,"De-initializing host interface\n");
+	}*/
+
+	terminated_handle=pstrWFIDrv;
+PRINT_D( HOSTINF_DBG,"De-initializing host interface for client %d\n",clients_count);
+host_int_set_wfi_drv_handler((NMI_Uint32)NMI_NULL);
+NMI_SemaphoreAcquire(&hSemDeinitDrvHandle, NULL);
+
+
+
 	
 
+	
+	
+
+
+
 	/*Calling the CFG80211 scan done function with the abort flag set to true*/
-	if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+	if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
        {                       
-        	gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_ABORTED, NMI_NULL,
-				gWFiDrvHandle->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
+        	pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult(SCAN_EVENT_ABORTED, NMI_NULL,
+				pstrWFIDrv->strNMI_UsrScanReq.u32UserScanPvoid,NULL);
               
-    		gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult= NMI_NULL;              
+    		pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult= NMI_NULL;              
        }
 	/*deinit configurator and simulator*/
 #ifdef SIMULATION
@@ -6013,76 +7064,110 @@ NMI_Sint32 host_int_deinit(NMI_WFIDrvHandle hWFIDrv)
 	TransportDeInit();
 #endif
 
-	if(NMI_TimerDestroy(&hScanTimer, NMI_NULL)){
+	if(NMI_TimerDestroy(&(pstrWFIDrv->hScanTimer), NMI_NULL)){
 		printk(">> Scan timer is active \n");
 		//msleep(HOST_IF_SCAN_TIMEOUT+1000);
 	}
 	
-	if(NMI_TimerDestroy(&hConnectTimer, NMI_NULL)){
+	if(NMI_TimerDestroy(&(pstrWFIDrv->hConnectTimer), NMI_NULL)){
 		printk(">> Connect timer is active \n");
 		//msleep(HOST_IF_CONNECT_TIMEOUT+1000);
 	}
 
 	
-	if(NMI_TimerDestroy(&hPeriodicRSSI, NMI_NULL)){
+	if(NMI_TimerDestroy(&(pstrWFIDrv->hPeriodicRSSI), NMI_NULL)){
 			printk(">> Connect timer is active \n");
 			//msleep(HOST_IF_CONNECT_TIMEOUT+1000);
 		}
+	
 	#ifdef NMI_P2P
 	/*Destroy Remain-onchannel Timer*/
-	NMI_TimerDestroy(&hRemainOnChannel, NMI_NULL);
+	NMI_TimerDestroy(&(pstrWFIDrv->hRemainOnChannel), NMI_NULL);
 	#endif
 	
 	pstrWFIDrv->enuHostIFstate = HOST_IF_IDLE;	
-	
+
 	gbScanWhileConnected = NMI_FALSE;	
 
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 	
        
+
+	
+	
+
+	
+
+
+
+	
+if(clients_count==1)
+{
+
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_EXIT;
+	strHostIFmsg.drvHandler=hWFIDrv;
+	
+	
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error != NMI_SUCCESS)
 	{
 		PRINT_ER("Error in sending deinit's message queue message function: Error(%d)\n",s32Error);
 	}
-	
+
 	NMI_SemaphoreAcquire(&hSemHostIFthrdEnd, NULL);
 
 	
 	//PRINT_D(HOSTINF_DBG,"Thread Destroy %p\n",&HostIFthreadHandler);
 	//s32Error = NMI_ThreadDestroy(&HostIFthreadHandler, NMI_NULL);
 	//NMI_ERRORCHECK(s32Error);
+}
 
-	if(pstrWFIDrv != NMI_NULL)
-	{		
-		NMI_FREE(pstrWFIDrv);
-	}
 
-	/* Destroy the MSG Queue */
+
+
+
+	
+/* Destroy the MSG Queue */
+if(clients_count==1)
+{
 	NMI_MsgQueueDestroy(&gMsgQHostIF, NMI_NULL);
+	msgQ_created=0;
 	
+}
+	
+
+
+
 	/*Destroy Semaphores*/	
-	NMI_SemaphoreDestroy(&hSemHostIFthrdEnd,NULL);
-	
-	NMI_SemaphoreDestroy(&hSemTestKeyBlock,NULL);	
-	NMI_SemaphoreDestroy(&hSemTestDisconnectBlock,NULL);	
-	NMI_SemaphoreDestroy(&hSemGetRSSI,NULL);
-	NMI_SemaphoreDestroy(&hSemGetLINKSPEED,NULL);	
-	NMI_SemaphoreDestroy(&hSemGetCHNL,NULL);	
-	NMI_SemaphoreDestroy(&hSemInactiveTime,NULL);	
+	if (clients_count==1)
+		{
+		NMI_SemaphoreDestroy(&hSemHostIFthrdEnd,NULL);
+		NMI_SemaphoreDestroy(&hSemDeinitDrvHandle,NULL);
+		}
+
+	NMI_SemaphoreDestroy(&(pstrWFIDrv ->hSemTestKeyBlock),NULL);	
+	NMI_SemaphoreDestroy(&(pstrWFIDrv->hSemTestDisconnectBlock),NULL);	
+	NMI_SemaphoreDestroy(&(pstrWFIDrv->hSemGetRSSI),NULL);
+	NMI_SemaphoreDestroy(&(pstrWFIDrv->hSemGetLINKSPEED),NULL);	
+	NMI_SemaphoreDestroy(&(pstrWFIDrv->hSemGetCHNL),NULL);	
+	NMI_SemaphoreDestroy(&(pstrWFIDrv->hSemInactiveTime),NULL);	
 	NMI_SemaphoreDestroy(&hWaitResponse,NULL);
 	
-	NMI_SemaphoreAcquire(&gtOsCfgValuesSem,NULL);
-	NMI_SemaphoreDestroy(&gtOsCfgValuesSem,NULL);
+	NMI_SemaphoreAcquire(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
+	NMI_SemaphoreDestroy(&(pstrWFIDrv->gtOsCfgValuesSem),NULL);
 
 	/*Setting the gloabl driver handler with NULL*/
 	u32Intialized = 0;
-	gWFiDrvHandle = NULL;
+	//gWFiDrvHandle = NULL;
+	if(pstrWFIDrv != NMI_NULL)
+	{		
+		NMI_FREE(pstrWFIDrv);
+	    //pstrWFIDrv=NMI_NULL;
 	
+	}
 
-	
-
+	clients_count--;//Decrease number of created entities
+	terminated_handle=NMI_NULL;
 	return s32Error;
 }
 
@@ -6101,11 +7186,19 @@ NMI_Sint32 host_int_deinit(NMI_WFIDrvHandle hWFIDrv)
 void NetworkInfoReceived(NMI_Uint8* pu8Buffer, NMI_Uint32 u32Length)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;	
-	tstrHostIFmsg strHostIFmsg;	
+	tstrHostIFmsg strHostIFmsg;
+	NMI_Uint32 drvHandler;
+	tstrNMI_WFIDrv * pstrWFIDrv=NMI_NULL;
 	
-	if(gWFiDrvHandle == NMI_NULL)
-	{
-		PRINT_ER("NetworkInfo received but driver not init[%x]\n",(NMI_Uint32)gWFiDrvHandle);
+	drvHandler=((pu8Buffer[u32Length-4])|(pu8Buffer[u32Length-3]<<8)|(pu8Buffer[u32Length-2]<<16)|(pu8Buffer[u32Length-1]<<24));
+	 pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
+
+		
+
+
+	if(pstrWFIDrv== NMI_NULL||pstrWFIDrv==terminated_handle)
+		{
+		PRINT_ER("NetworkInfo received but driver not init[%x]\n",(NMI_Uint32)pstrWFIDrv);
 		return;
 	}
 	
@@ -6113,6 +7206,7 @@ void NetworkInfoReceived(NMI_Uint8* pu8Buffer, NMI_Uint32 u32Length)
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_RCVD_NTWRK_INFO;
+	strHostIFmsg.drvHandler=pstrWFIDrv;
 
 	strHostIFmsg.uniHostIFmsgBody.strRcvdNetworkInfo.u32Length = u32Length;
 	strHostIFmsg.uniHostIFmsgBody.strRcvdNetworkInfo.pu8Buffer = (NMI_Uint8*)NMI_MALLOC(u32Length); /* will be deallocated 
@@ -6128,6 +7222,7 @@ void NetworkInfoReceived(NMI_Uint8* pu8Buffer, NMI_Uint32 u32Length)
 		PRINT_ER("Error in sending network info message queue message parameters: Error(%d)\n",s32Error);
 	}
 	
+
 	return;
 }
 
@@ -6146,16 +7241,21 @@ void GnrlAsyncInfoReceived(NMI_Uint8* pu8Buffer, NMI_Uint32 u32Length)
 {	
 	NMI_Sint32 s32Error = NMI_SUCCESS;	
 	tstrHostIFmsg strHostIFmsg;
-
+	NMI_Uint32 drvHandler;
+	tstrNMI_WFIDrv * pstrWFIDrv=NMI_NULL;
+	
+	drvHandler=((pu8Buffer[u32Length-4])|(pu8Buffer[u32Length-3]<<8)|(pu8Buffer[u32Length-2]<<16)|(pu8Buffer[u32Length-1]<<24));
+	 pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 	PRINT_D(HOSTINF_DBG,"General asynchronous info packet received \n");
 	
-	if(gWFiDrvHandle == NULL)
+
+	if(pstrWFIDrv== NULL||pstrWFIDrv==terminated_handle)
 	{
 		PRINT_ER("Wifi driver handler is equal to NULL\n");
 		return;
 	}
-	
-	if(gWFiDrvHandle->strNMI_UsrConnReq.pfUserConnectResult == NMI_NULL)
+
+	if(pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult == NMI_NULL)
 	{
 		/* received mac status is not needed when there is no current Connect Request */
 		return;
@@ -6164,7 +7264,10 @@ void GnrlAsyncInfoReceived(NMI_Uint8* pu8Buffer, NMI_Uint32 u32Length)
 	/* prepare the General Asynchronous Info message */
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
+	
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_RCVD_GNRL_ASYNC_INFO;
+	strHostIFmsg.drvHandler=pstrWFIDrv;
+	
 
 	strHostIFmsg.uniHostIFmsgBody.strRcvdGnrlAsyncInfo.u32Length = u32Length;
 	strHostIFmsg.uniHostIFmsgBody.strRcvdGnrlAsyncInfo.pu8Buffer = (NMI_Uint8*)NMI_MALLOC(u32Length); /* will be deallocated 
@@ -6196,20 +7299,28 @@ void host_int_ScanCompleteReceived(NMI_Uint8* pu8Buffer, NMI_Uint32 u32Length)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;	
 	tstrHostIFmsg strHostIFmsg;
-	
-	PRINT_D(GENERIC_DBG,"Scan notification received \n");
+	NMI_Uint32 drvHandler;
+	tstrNMI_WFIDrv * pstrWFIDrv=NMI_NULL;
+	drvHandler=((pu8Buffer[u32Length-4])|(pu8Buffer[u32Length-3]<<8)|(pu8Buffer[u32Length-2]<<16)|(pu8Buffer[u32Length-1]<<24));
+	pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 
-	if(gWFiDrvHandle == NULL)
+	
+	PRINT_D(GENERIC_DBG,"Scan notification received %x\n", (NMI_Uint32)pstrWFIDrv);
+
+	if(pstrWFIDrv== NULL||pstrWFIDrv==terminated_handle)
+
 	{
 		return;
 	}
+
 	/*if there is an ongoing scan request*/	
-	if(gWFiDrvHandle->strNMI_UsrScanReq.pfUserScanResult)
+	if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
 	{
 		/* prepare theScan Done message */
 		NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 
 		strHostIFmsg.u16MsgId = HOST_IF_MSG_RCVD_SCAN_COMPLETE;
+		strHostIFmsg.drvHandler=pstrWFIDrv;
 
 
 		/* will be deallocated by the receiving thread */
@@ -6269,6 +7380,7 @@ NMI_Sint32 host_int_remain_on_channel(NMI_WFIDrvHandle hWFIDrv, NMI_Uint32 u32du
 	strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan.pRemainOnChanReady = RemainOnChanReady;
 	strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan.pVoid=pvUserArg;
 	strHostIFmsg.uniHostIFmsgBody.strHostIfRemainOnChan.u32duration=u32duration;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
@@ -6309,12 +7421,12 @@ NMI_Sint32 host_int_ListenStateExpired(NMI_WFIDrvHandle hWFIDrv)
 	}
 
 	/*Stopping remain-on-channel timer*/
-	NMI_TimerStop(&hRemainOnChannel, NMI_NULL);
+	NMI_TimerStop(&(pstrWFIDrv->hRemainOnChannel), NMI_NULL);
 	
 	/* prepare the timer fire Message */
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_LISTEN_TIMER_FIRED;
-
+	strHostIFmsg.drvHandler=hWFIDrv;
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
 	{
@@ -6367,6 +7479,7 @@ NMI_Sint32 host_int_frame_register(NMI_WFIDrvHandle hWFIDrv, NMI_Uint16 u16Frame
 	}
 	strHostIFmsg.uniHostIFmsgBody.strHostIfRegisterFrame.u16FrameType= u16FrameType;
 	strHostIFmsg.uniHostIFmsgBody.strHostIfRegisterFrame.bReg= bReg;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
@@ -6418,6 +7531,7 @@ NMI_Sint32 host_int_add_beacon(NMI_WFIDrvHandle hWFIDrv, NMI_Uint32 u32Interval,
 	
 	/* prepare the WiphyParams Message */
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_ADD_BEACON;
+	strHostIFmsg.drvHandler=hWFIDrv;
 	pstrSetBeaconParam->u32Interval = u32Interval;
 	pstrSetBeaconParam->u32DTIMPeriod= u32DTIMPeriod;
 	pstrSetBeaconParam->u32HeadLen = u32HeadLen;
@@ -6490,7 +7604,7 @@ NMI_Sint32 host_int_del_beacon(NMI_WFIDrvHandle hWFIDrv)
 	
 	/* prepare the WiphyParams Message */
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_DEL_BEACON;
-	
+	strHostIFmsg.drvHandler=hWFIDrv;
 	PRINT_D(HOSTINF_DBG,"Setting deleting beacon message queue params\n");
 	
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
@@ -6532,6 +7646,7 @@ NMI_Sint32 host_int_add_station(NMI_WFIDrvHandle hWFIDrv, tstrNMI_AddStaParam* p
 	
 	/* prepare the WiphyParams Message */
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_ADD_STATION;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	NMI_memcpy(pstrAddStationMsg , pstrStaParams, sizeof(tstrNMI_AddStaParam));
 	if(pstrAddStationMsg->u8NumRates>0)
@@ -6584,6 +7699,7 @@ NMI_Sint32 host_int_del_station(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* pu8MacAddr)
 	
 	/* prepare the WiphyParams Message */
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_DEL_STATION;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	/*BugID_4795: Handling situation of deleting all stations*/
 	if(pu8MacAddr == NMI_NULL)
@@ -6631,6 +7747,7 @@ NMI_Sint32 host_int_edit_station(NMI_WFIDrvHandle hWFIDrv, tstrNMI_AddStaParam* 
 	
 	/* prepare the WiphyParams Message */
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_EDIT_STATION;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	NMI_memcpy(pstrAddStationMsg , pstrStaParams, sizeof(tstrNMI_AddStaParam));
 	if(pstrAddStationMsg->u8NumRates>0)
@@ -6656,13 +7773,11 @@ uint32_t nmi_get_chipid(uint8_t);
 NMI_Sint32 host_int_set_power_mgmt(NMI_WFIDrvHandle hWFIDrv, NMI_Bool bIsEnabled, NMI_Uint32 u32Timeout)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
-
-/* Set power management only for platforms with RTC
-The internal clock has a bug in NMc1000CA*/
-
 	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
 	tstrHostIFmsg strHostIFmsg;
 	tstrHostIfPowerMgmtParam* pstrPowerMgmtParam = &strHostIFmsg.uniHostIFmsgBody.strPowerMgmtparam;
+
+	printk("\n\n>> Setting PS to %d << \n\n",bIsEnabled);
 
 	// Disable PS with muxed sdio for D0 for DMA version 2, cause it had a bug with DMA ver 2 with the interrupt registers that was fixed in F0
 #if (defined NMI_SDIO) && (!defined USE_DMA_VER_1) && (!defined NMI_SDIO_IRQ_GPIO)
@@ -6692,9 +7807,11 @@ The internal clock has a bug in NMc1000CA*/
 	
 	/* prepare the WiphyParams Message */
 	strHostIFmsg.u16MsgId = HOST_IF_MSG_POWER_MGMT;
+	strHostIFmsg.drvHandler=hWFIDrv;
 
 	pstrPowerMgmtParam->bIsEnabled = bIsEnabled;
 	pstrPowerMgmtParam->u32Timeout = u32Timeout;
+	
 	
 	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
 	if(s32Error)
@@ -6706,6 +7823,44 @@ The internal clock has a bug in NMc1000CA*/
 	}
 	return s32Error;
 }
+
+NMI_Sint32 host_int_setup_multicast_filter(NMI_WFIDrvHandle hWFIDrv, NMI_Bool bIsEnabled, NMI_Uint32 u32count)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
+	tstrHostIFmsg strHostIFmsg;
+	tstrHostIFSetMulti* pstrMulticastFilterParam = &strHostIFmsg.uniHostIFmsgBody.strHostIfSetMulti;
+
+
+	if(pstrWFIDrv == NMI_NULL)
+	{
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_ARGUMENT);
+	}
+
+	PRINT_D(HOSTINF_DBG,"Setting Multicast Filter params\n");
+	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	
+	
+	/* prepare the WiphyParams Message */
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_SET_MULTICAST_FILTER;
+	strHostIFmsg.drvHandler=hWFIDrv;
+
+	pstrMulticastFilterParam->bIsEnabled = bIsEnabled;
+	pstrMulticastFilterParam->u32count = u32count;
+	
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	}
+	return s32Error;
+}
+
 
 
 /*Bug4218: Parsing Join Param*/
@@ -6726,12 +7881,14 @@ static void* host_int_ParseJoinBssParam(tstrNetworkInfo* ptstrNetworkInfo)
 	NMI_Uint8* pu8IEs;
 	NMI_Uint16 u16IEsLen;
 	NMI_Uint16 index = 0;
-	NMI_Uint8 suppRatesNo;
+	NMI_Uint8 suppRatesNo = 0;
 	NMI_Uint8 extSuppRatesNo;
 	NMI_Uint16 jumpOffset;
 	NMI_Uint8 pcipherCount;
 	NMI_Uint8 authCount;
-	NMI_Uint8 i;
+	NMI_Uint8 pcipherTotalCount = 0;
+	NMI_Uint8 authTotalCount = 0;
+	NMI_Uint8 i,j;
 
 	pu8IEs = ptstrNetworkInfo->pu8IEs;
 	u16IEsLen =ptstrNetworkInfo->u16IEsLen;
@@ -6748,6 +7905,8 @@ static void* host_int_ParseJoinBssParam(tstrNetworkInfo* ptstrNetworkInfo)
 			PRINT_D(HOSTINF_DBG,"%c",pNewJoinBssParam->au8bssid[i]);*/
 		NMI_memcpy((NMI_Uint8*)pNewJoinBssParam->ssid,ptstrNetworkInfo->au8ssid,ptstrNetworkInfo->u8SsidLen+1);
 		pNewJoinBssParam->ssidLen = ptstrNetworkInfo->u8SsidLen;
+		NMI_memset(pNewJoinBssParam->rsn_pcip_policy,0xFF, 3);
+		NMI_memset(pNewJoinBssParam->rsn_auth_policy,0xFF, 3);
 		/*for(i=0; i<pNewJoinBssParam->ssidLen;i++)
 			PRINT_D(HOSTINF_DBG,"%c",pNewJoinBssParam->ssid[i]);*/
 
@@ -6819,6 +7978,46 @@ static void* host_int_ParseJoinBssParam(tstrNetworkInfo* ptstrNetworkInfo)
 				index += pu8IEs[index + 1]+2;
 		            continue;
 		      }
+			#ifdef NMI_P2P
+			else if((pu8IEs[index] == P2P_IE) && /* P2P Element ID */
+			       (pu8IEs[index+2] == 0x50) && (pu8IEs[index+3] == 0x6f) && 
+			       (pu8IEs[index+4] == 0x9a) && /* OUI */
+			       (pu8IEs[index+5] == 0x09) && (pu8IEs[index+6] == 0x0c) ) /* OUI Type     */
+		      {
+					NMI_Uint16  u16P2P_count;
+					pNewJoinBssParam->tsf = ptstrNetworkInfo->u32Tsf;
+					pNewJoinBssParam->u8NoaEnbaled = 1;
+					pNewJoinBssParam->u8Index = pu8IEs[index + 9];
+
+		            /* Check if Bit 7 is set indicating Opss capability */
+		            if(pu8IEs[index + 10] & (1 << 7))
+		            {
+					pNewJoinBssParam->u8OppEnable= 1;
+		            pNewJoinBssParam->u8CtWindow= pu8IEs[index+10];
+		            }
+				else
+					pNewJoinBssParam->u8OppEnable= 0;	
+				//HOSTINF_DBG
+				PRINT_D(GENERIC_DBG,"P2P Dump \n");
+				for(i=0;i<pu8IEs[index + 7];i++)
+					PRINT_D(GENERIC_DBG," %x \n",pu8IEs[index+9+i]);
+
+				pNewJoinBssParam->u8Count = pu8IEs[index+11];
+				u16P2P_count = index+12;		
+				
+				NMI_memcpy(pNewJoinBssParam->au8Duration,pu8IEs+u16P2P_count,4);
+				u16P2P_count+=4;
+				
+				NMI_memcpy(pNewJoinBssParam->au8Interval,pu8IEs+u16P2P_count,4);
+				u16P2P_count+=4;
+
+				NMI_memcpy(pNewJoinBssParam->au8StartTime ,pu8IEs+u16P2P_count,4);
+				
+				index += pu8IEs[index + 1]+2;
+		            continue;
+		       
+			}
+			#endif
 			else if ((pu8IEs[index]==RSN_IE)||
 				((pu8IEs[index]==WPA_IE)&&  (pu8IEs[index+2] == 0x00) && 
 				(pu8IEs[index+3] == 0x50) && (pu8IEs[index+4] == 0xF2) &&
@@ -6847,9 +8046,7 @@ static void* host_int_ParseJoinBssParam(tstrNetworkInfo* ptstrNetworkInfo)
 				rsnIndex++;
 				//PRINT_D(HOSTINF_DBG,"Group Policy: %0x \n",pNewJoinBssParam->rsn_grp_policy);
 				//initialize policies with invalid values
-				NMI_memset(pNewJoinBssParam->rsn_pcip_policy,0xFF, 3);
-				NMI_memset(pNewJoinBssParam->rsn_auth_policy,0xFF, 3);
-
+				
 				jumpOffset = pu8IEs[rsnIndex]*4; //total no.of bytes of pcipher field (count*4)
 
 				/*parsing pairwise cipher*/
@@ -6857,14 +8054,15 @@ static void* host_int_ParseJoinBssParam(tstrNetworkInfo* ptstrNetworkInfo)
 				//saving 3 pcipher max.
 				pcipherCount = (pu8IEs[rsnIndex] > 3) ? 3 :pu8IEs[rsnIndex];
 				rsnIndex+=2; //jump 2 bytes of pcipher count	
-
-				//PRINT_D(HOSTINF_DBG,"\npcipher: ");
-				for(i=1; i<=pcipherCount; i++)
+				
+				//PRINT_D(HOSTINF_DBG,"\npcipher:%d \n",pcipherCount);
+				for(i=pcipherTotalCount,j=0; i<pcipherCount+pcipherTotalCount&&i<3; i++,j++)
 				{
 					//each count corresponds to 4 bytes, only last byte is saved
-					pNewJoinBssParam->rsn_pcip_policy[i-1] = pu8IEs[rsnIndex+(i*4)-1];
-					//PRINT_D(HOSTINF_DBG,"%0x ",pNewJoinBssParam->rsn_pcip_policy[i-1]);
+					pNewJoinBssParam->rsn_pcip_policy[i] = pu8IEs[rsnIndex+((j+1)*4)-1];
+					//PRINT_D(HOSTINF_DBG,"PAIR policy = [%0x,%0x]\n",pNewJoinBssParam->rsn_pcip_policy[i],i);
 				}
+				pcipherTotalCount += pcipherCount;
 				rsnIndex+=jumpOffset;
 
 				jumpOffset = pu8IEs[rsnIndex]*4;
@@ -6875,11 +8073,12 @@ static void* host_int_ParseJoinBssParam(tstrNetworkInfo* ptstrNetworkInfo)
 				rsnIndex+=2; //jump 2 bytes of pcipher count	
 
 				//PRINT_D(HOSTINF_DBG,"\nauth policy: ");
-				for(i=1; i<=authCount; i++)
+				for(i=authTotalCount,j=0; i<authTotalCount+authCount; i++,j++)
 				{
 					//each count corresponds to 4 bytes, only last byte is saved
-					pNewJoinBssParam->rsn_auth_policy[i-1] = pu8IEs[rsnIndex+(i*4)-1];
+					pNewJoinBssParam->rsn_auth_policy[i] = pu8IEs[rsnIndex+((j+1)*4)-1];
 				}
+				authTotalCount += authCount;
 				//printk("\n");
 				rsnIndex+=jumpOffset;
 				/*pasring rsn cap. only if rsn IE*/
@@ -6922,81 +8121,166 @@ void host_int_freeJoinParams(void* pJoinParams){
 *  @author		anoureldin
 *  @date	
 *  @version		1.0**/
-#define BLOCK_ACK_REQ_SIZE 0x14
 
-static int host_int_addBASession(char* pBSSID,char TID,short int BufferSize,
-	short int SessionTimeout)
+static int host_int_addBASession(NMI_WFIDrvHandle hWFIDrv, char* pBSSID,char TID,short int BufferSize,
+	short int SessionTimeout,void * drvHandler)
 {
-	tstrWID strWID;
-	int AddbaTimeout = 100;
-	char* ptr = NULL;
-	int s32Err;
-	printk("Opening Block Ack session with\nBSSID = %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\nTID=%d\nBufferSize == %d\nSessionTimeOut = %d\n",
-			pBSSID[0],pBSSID[1],pBSSID[2],pBSSID[3],pBSSID[4],pBSSID[5],TID,BufferSize,SessionTimeout);
-
-	strWID.u16WIDid = (NMI_Uint16)WID_11E_P_ACTION_REQ;
-	strWID.enuWIDtype = WID_STR;
-	strWID.ps8WidVal = (NMI_Uint8*)NMI_MALLOC(BLOCK_ACK_REQ_SIZE);
-	strWID.s32ValueSize = BLOCK_ACK_REQ_SIZE;
-
-	ptr = strWID.ps8WidVal;
-
-	//*ptr++ = 0x14;
-	*ptr++ = 0x14;
-	*ptr++ = 0x3;
-	*ptr++ = 0x0;
-	NMI_memcpy(ptr,pBSSID, 6);
-	ptr += 6;
-	*ptr++ = TID;
-	/* BA Policy*/
-	*ptr++ = 1;
-	/* Buffer size*/
-	*ptr++ = (BufferSize & 0xFF);
-	*ptr++ = ((BufferSize>>16) & 0xFF);
-	/* BA timeout*/
-	*ptr++ = (SessionTimeout& 0xFF);
-	*ptr++ = ((SessionTimeout>>16) & 0xFF);
-	/* ADDBA timeout*/
-	*ptr++ = (AddbaTimeout& 0xFF);
-	*ptr++ = ((AddbaTimeout>>16) & 0xFF);
-	/* Group Buffer Max Frames*/
-	*ptr++ = 8;
-	/* Group Buffer Timeout */
-	*ptr++ = 0;
-
-	s32Err = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
-	if(s32Err)
-		PRINT_D(HOSTINF_DBG, "Couldn't open BA Session\n");
-
-
-	strWID.u16WIDid = (NMI_Uint16)WID_11E_P_ACTION_REQ;
-	strWID.enuWIDtype = WID_STR;
-	strWID.s32ValueSize = 15;
-
-	ptr = strWID.ps8WidVal;
-
-	//*ptr++ = 0x14;
-	*ptr++ = 15;
-	*ptr++ = 7;
-	*ptr++ = 0x2;
-	NMI_memcpy(ptr,pBSSID, 6);
-	ptr += 6;
-	/* TID*/
-	*ptr++ = TID;
-	/* Max Num MSDU */
-	*ptr++ = 8;
-	/* BA timeout*/
-	*ptr++ = (SessionTimeout& 0xFF);
-	*ptr++ = ((SessionTimeout>>16) & 0xFF);
-	/*Ack-Policy */
-	*ptr++ = 3;
-	s32Err = SendConfigPkt(SET_CFG, &strWID, 1, NMI_TRUE);
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
+	tstrHostIFmsg strHostIFmsg;
+	tstrHostIfBASessionInfo* pBASessionInfo = &strHostIFmsg.uniHostIFmsgBody.strHostIfBASessionInfo;
 	
-	return s32Err;
-
+	if(pstrWFIDrv == NMI_NULL)
+	{
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_ARGUMENT);
+	}
 	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	
+	/* prepare the WiphyParams Message */
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_ADD_BA_SESSION;
+
+	memcpy(pBASessionInfo->au8Bssid, pBSSID, ETH_ALEN);
+	pBASessionInfo->u8Ted = TID;
+	pBASessionInfo->u16BufferSize = BufferSize;
+	pBASessionInfo->u16SessionTimeout = SessionTimeout;
+	strHostIFmsg.drvHandler = hWFIDrv;
+
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	
+	}
+
+	return s32Error;		
+}
+NMI_Sint32 host_int_delBASession(NMI_WFIDrvHandle hWFIDrv, char* pBSSID,char TID,void * drvHandler)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
+	tstrHostIFmsg strHostIFmsg;
+	tstrHostIfBASessionInfo* pBASessionInfo = &strHostIFmsg.uniHostIFmsgBody.strHostIfBASessionInfo;
+	
+	if(pstrWFIDrv == NMI_NULL)
+	{
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_ARGUMENT);
+	}
+	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	
+	/* prepare the WiphyParams Message */
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_DEL_BA_SESSION;
+
+	memcpy(pBASessionInfo->au8Bssid, pBSSID, ETH_ALEN);
+	pBASessionInfo->u8Ted = TID;
+	strHostIFmsg.drvHandler = hWFIDrv;
+
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	
+	}
+
+	/*BugID_5222*/
+	NMI_SemaphoreAcquire(&hWaitResponse, NULL);
+
+	return s32Error;	
 }
 
+/**
+*  @brief           	host_int_setup_ipaddress
+*  @details 	   	setup IP in firmware
+*  @param[in]    	Handle to wifi driver
+*  @return 	    	Error code.
+*  @author		Abdelrahman Sobhy	
+*  @date	
+*  @version		1.0*/
+NMI_Sint32 host_int_setup_ipaddress(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* u16ipadd, NMI_Uint8 idx)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
+	tstrHostIFmsg strHostIFmsg;
+
+	// TODO: Enable This feature on softap firmware
+	return 0;
+	
+	if(pstrWFIDrv == NMI_NULL)
+	{
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_ARGUMENT);
+	}
+	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	
+	/* prepare the WiphyParams Message */
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_SET_IPADDRESS;
+
+	strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.au8IPAddr= u16ipadd;
+	strHostIFmsg.drvHandler=hWFIDrv;
+	strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.idx = idx;
+
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	
+	}
+
+	return s32Error;
 
 
+}
+
+/**
+*  @brief           	host_int_get_ipaddress
+*  @details 	   	Get IP from firmware
+*  @param[in]    	Handle to wifi driver
+*  @return 	    	Error code.
+*  @author		Abdelrahman Sobhy	
+*  @date	
+*  @version		1.0*/
+NMI_Sint32 host_int_get_ipaddress(NMI_WFIDrvHandle hWFIDrv, NMI_Uint8* u16ipadd, NMI_Uint8 idx)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	tstrNMI_WFIDrv * pstrWFIDrv = (tstrNMI_WFIDrv *)hWFIDrv;
+	tstrHostIFmsg strHostIFmsg;
+
+	if(pstrWFIDrv == NMI_NULL)
+	{
+		NMI_ERRORREPORT(s32Error,NMI_INVALID_ARGUMENT);
+	}
+	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	
+	/* prepare the WiphyParams Message */
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_GET_IPADDRESS;
+
+	strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.au8IPAddr= u16ipadd;
+	strHostIFmsg.drvHandler=hWFIDrv;
+	strHostIFmsg.uniHostIFmsgBody.strHostIfSetIP.idx= idx;
+
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	
+	}
+
+	return s32Error;
+
+
+}
 

@@ -33,6 +33,8 @@ struct nmi_wfi_radiotap_cb_hdr {
        // u32 channel;
 }__attribute__((packed));
 
+extern linux_wlan_t* g_linux_wlan;
+
 static struct net_device *nmi_wfi_mon = NULL; /* global monitor netdev */
 
 #ifdef SIMULATION
@@ -44,6 +46,7 @@ extern int  mac_xmit(struct sk_buff *skb, struct net_device *dev);
 
 NMI_Uint8 srcAdd[6];
 NMI_Uint8 bssid[6];
+NMI_Uint8 broadcast[] = {0xff,0xff,0xff,0xff,0xff,0xff};
 /**
 *  @brief 	NMI_WFI_monitor_rx
 *  @details 	
@@ -63,10 +66,6 @@ NMI_Uint8 bssid[6];
 
 void NMI_WFI_monitor_rx(uint8_t *buff, uint32_t size)
 {
-		
-	//NMI_Uint32 i;
-	
-	
 	uint32_t header,pkt_offset;
         struct sk_buff *skb = NULL;
         struct nmi_wfi_radiotap_hdr *hdr;
@@ -308,8 +307,8 @@ static int mon_mgmt_tx(struct net_device *dev, const u8 *buf, size_t len)
 	
 	#endif //NMI_FULLY_HOSTING_AP
 
-	//NMI_PRINTF("--IN mon_mgmt_tx: Sending MGMT Pkt to tx queue--\n");
-	nic->oup.wlan_add_mgmt_to_tx_que(mgmt_tx,mgmt_tx->buff,mgmt_tx->size,mgmt_tx_complete);
+	//printk("--IN mon_mgmt_tx: Sending MGMT Pkt to tx queue--\n");
+	g_linux_wlan->oup.wlan_add_mgmt_to_tx_que(mgmt_tx,mgmt_tx->buff,mgmt_tx->size,mgmt_tx_complete);
 
 	netif_wake_queue(dev);
 	return 0;
@@ -331,27 +330,27 @@ static netdev_tx_t NMI_WFI_mon_xmit(struct sk_buff *skb,
 	NMI_Uint32 rtap_len,i,ret=0;
 	struct NMI_WFI_mon_priv  *mon_priv ;
 
+	 struct sk_buff *skb2;
+	 struct nmi_wfi_radiotap_cb_hdr *cb_hdr;
+
+	//PRINT_D(HOSTAPD_DBG,"Monitor xmit function b4\n");
 	/* Bug 4601 */
 	if(nmi_wfi_mon == NULL)
 		return NMI_FAIL;
 		
 	//if(skb->data[3] == 0x10 || skb->data[3] == 0xb0)
-	PRINT_INFO(HOSTAPD_DBG,"Monitor xmit function\n");
+	//PRINT_D(HOSTAPD_DBG,"Monitor xmit function\n");
 
 
 	
 	mon_priv = netdev_priv(nmi_wfi_mon);
+	
 	if(mon_priv== NULL)
 	{
 	  PRINT_ER("Monitor interface private structure is NULL\n");
 	  return NMI_FAIL;
 	}	
-
-	if(INFO)
-	{
-		for(i=0; i<skb->len ; i++)
-			PRINT_INFO(HOSTAPD_DBG,"Data[%d] %02x\n",i,skb->data[i]);
-	}
+	
 	rtap_hdr = (struct ieee80211_radiotap_header *)skb->data;
 
 	rtap_len = ieee80211_get_radiotap_len(skb->data);
@@ -362,14 +361,47 @@ static netdev_tx_t NMI_WFI_mon_xmit(struct sk_buff *skb,
 	}
 	/* skip the radiotap header */
 	PRINT_INFO(HOSTAPD_DBG,"Radiotap len: %d\n", rtap_len);
+	//if(INFO)
 
 	if(INFO)
 	{
-		for(i=0; i<20 ; i++)
+		for(i=0; i<rtap_len ; i++)
 			PRINT_INFO(HOSTAPD_DBG,"Radiotap_hdr[%d] %02x\n",i,skb->data[i]);
 	}
 	/* Skip the ratio tap header */
 	skb_pull(skb, rtap_len);
+	
+	if( skb->data[0] == 0xc0 &&(!(memcmp(broadcast, &skb->data[4],6) ))  )
+	{
+		skb2 = dev_alloc_skb(skb->len+sizeof(struct nmi_wfi_radiotap_cb_hdr));
+
+		memcpy(skb_put(skb2,skb->len),skb->data, skb->len);
+
+		cb_hdr = (struct nmi_wfi_radiotap_cb_hdr *) skb_push(skb2, sizeof(*cb_hdr));
+		memset(cb_hdr, 0, sizeof(struct nmi_wfi_radiotap_cb_hdr));
+
+		 cb_hdr->hdr.it_version = 0;//PKTHDR_RADIOTAP_VERSION;
+        
+      	        cb_hdr->hdr.it_len = cpu_to_le16(sizeof(struct nmi_wfi_radiotap_cb_hdr));
+
+       	 cb_hdr->hdr.it_present = cpu_to_le32(
+                                          (1 << IEEE80211_RADIOTAP_RATE) |
+                                         (1 << IEEE80211_RADIOTAP_TX_FLAGS));
+ 
+        	cb_hdr->rate = 5;//txrate->bitrate / 5;
+        	cb_hdr->tx_flags = 0x0004;
+			
+		skb2->dev = nmi_wfi_mon;
+	        skb_set_mac_header(skb2, 0);
+	        skb2->ip_summed = CHECKSUM_UNNECESSARY;
+	        skb2->pkt_type = PACKET_OTHERHOST;
+	        skb2->protocol = htons(ETH_P_802_2);
+	        memset(skb2->cb, 0, sizeof(skb2->cb));
+			
+		netif_rx(skb2);
+		
+		return 0;
+	}
 	skb->dev = mon_priv->real_ndev;
 	
 	PRINT_INFO(HOSTAPD_DBG,"Skipping the radiotap header\n");
@@ -531,60 +563,94 @@ static void NMI_WFI_mon_setup(struct net_device *dev)
 *  @date	12 JUL 2012	
 *  @version	1.0
 */
-int NMI_WFI_init_mon_interface(char *name , struct net_device *real_dev )
-{
-	NMI_Uint32 ret = NMI_SUCCESS;
-	struct NMI_WFI_mon_priv *priv ;
-
-	nmi_wfi_mon = alloc_netdev(sizeof(struct NMI_WFI_mon_priv), name, NMI_WFI_mon_setup);
-	if (nmi_wfi_mon == NULL)
+struct net_device * NMI_WFI_init_mon_interface(char *name , struct net_device *real_dev )
 	{
-		PRINT_ER("Failed to allocate netdevice\n");
-		goto failed;
-	}
+	
 
-	//rtnl_lock();
-	PRINT_INFO(HOSTAPD_DBG,"Monitor interface name %s\n", nmi_wfi_mon->name);
+		NMI_Uint32 ret = NMI_SUCCESS;
+		struct NMI_WFI_mon_priv *priv ;
+
+		/*If monitor interface is already initialized, return it*/
+		if (nmi_wfi_mon) 
+		{
+			return nmi_wfi_mon;
+		}
+#if 0	
+		nmi_wfi_mon = alloc_netdev(sizeof(struct NMI_WFI_mon_priv), name, NMI_WFI_mon_setup);
+		if (nmi_wfi_mon == NULL)
+		{
+			PRINT_ER("Failed to allocate netdevice\n");
+			goto failed;
+		}
+	
+		//rtnl_lock();
+		PRINT_INFO(HOSTAPD_DBG,"Monitor interface name %s\n", nmi_wfi_mon->name);
+		
+		
+		ret = dev_alloc_name(nmi_wfi_mon, nmi_wfi_mon->name);
+		if (ret < 0)
+					goto failed_mon;
+		
+		
+		priv = netdev_priv(nmi_wfi_mon);
+		if(priv== NULL)
+		{
+		  PRINT_ER("private structure is NULL\n");
+		  return NMI_FAIL;
+		}	
+	
+		priv->real_ndev = real_dev;
 	
 	
-	ret = dev_alloc_name(nmi_wfi_mon, nmi_wfi_mon->name);
-	if (ret < 0)
-	            goto failed_mon;
+		ret = register_netdevice(nmi_wfi_mon);
 	
+		
+		if (ret < 0)
+		{
+			 PRINT_ER("Failed to register netdevice\n");
+			 goto failed_mon;
+		}
+		
+		
+		return NMI_SUCCESS;
+		   // rtnl_unlock();
 	
-	priv = netdev_priv(nmi_wfi_mon);
-	if(priv== NULL)
-	{
-	  PRINT_ER("private structure is NULL\n");
-	  return NMI_FAIL;
-	}	
-
-	priv->real_ndev = real_dev;
-
-
-	ret = register_netdevice(nmi_wfi_mon);
-
+	failed:
+		return ret;
 	
-	if (ret < 0)
-	{
-	     PRINT_ER("Failed to register netdevice\n");
-	     goto failed_mon;
-	}
+	failed_mon:
+		   //rtnl_unlock();
+		   free_netdev(nmi_wfi_mon);
+		   return ret;
+#endif
+
+		nmi_wfi_mon = alloc_etherdev(sizeof(struct NMI_WFI_mon_priv));
+		if (!nmi_wfi_mon) {
+			PRINT_ER("failed to allocate memory\n");
+			return NULL;
+		
+		}
 	
+		nmi_wfi_mon->type = ARPHRD_IEEE80211_RADIOTAP;
+		strncpy(nmi_wfi_mon->name, name, IFNAMSIZ);
+		nmi_wfi_mon->name[IFNAMSIZ - 1] = 0;
+		nmi_wfi_mon->netdev_ops = &nmi_wfi_netdev_ops;
 	
-	return NMI_SUCCESS;
-	   // rtnl_unlock();
-
-failed:
-	return ret;
-
-failed_mon:
-       //rtnl_unlock();
-       free_netdev(nmi_wfi_mon);
-       return ret;
-
-
-
+		ret = register_netdevice(nmi_wfi_mon);
+		if (ret) {
+			PRINT_ER(" register_netdevice failed (%d)\n", ret);
+			return NULL;
+		}
+		priv = netdev_priv(nmi_wfi_mon);
+		if(priv== NULL)
+		{
+		  PRINT_ER("private structure is NULL\n");
+		  return NULL;
+		}	
+	
+		priv->real_ndev = real_dev;
+	
+		return nmi_wfi_mon;
 }
 
 /**
