@@ -2986,6 +2986,12 @@ static void rk30_pm_power_off(void)
     if(gpio_get_value (RK30_PIN0_PB2) == GPIO_LOW || 1 == dwc_vbus_status() )
         arm_pm_restart(0, "charge");
 #endif
+#if defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
+	if(gpio_get_value (RK30_PIN0_PB2) == GPIO_LOW || 1 == dwc_vbus_status() || 2 == dwc_vbus_status())//1----usb dect to pc;2---usb dect to dc
+	{
+		arm_pm_restart(0, "charge");
+	}
+#endif
 	gpio_direction_output(POWER_ON_PIN, GPIO_LOW);
 	while (1);
 }
