@@ -158,6 +158,7 @@ void dvfs_adjust_table_lmtvolt(struct clk *clk, struct cpufreq_frequency_table *
 		}
 	}
 
+    maxvolt = maxvolt ? maxvolt : lkg_volt_table[i-1].maxvolt;
 	// limit high voltage
 	for (i = 0; table[i].frequency != CPUFREQ_TABLE_END; i++) {
 		if (table[i].index > maxvolt) {
