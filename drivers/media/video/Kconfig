@@ -1121,6 +1121,13 @@ config SOC_CAMERA_SIV121D
 	depends on SOC_CAMERA && I2C
 	help
 	  This is a SIV121D camera driver for rockchip
+
+config SOC_CAMERA_SIV120D
+        tristate "siv120d support for rockchip"
+        depends on SOC_CAMERA && I2C
+        help
+          This is a SIV120D camera driver for rockchip
+
 	  
 config SOC_CAMERA_SID130B
 	tristate "sid130b support for rockchip"

@@ -249,6 +249,7 @@
 #define RK29_CAM_SENSOR_GC2035	gc2035
 #define RK29_CAM_SENSOR_SIV120B  siv120b
 #define RK29_CAM_SENSOR_SIV121D  siv121d
+#define RK29_CAM_SENSOR_SIV120D  siv120d
 #define RK29_CAM_SENSOR_SID130B  sid130B
 #define RK29_CAM_SENSOR_HI253  hi253
 #define RK29_CAM_SENSOR_HI704  hi704
@@ -295,6 +296,7 @@
 #define RK29_CAM_SENSOR_NAME_GC0329  "gc0329"
 #define RK29_CAM_SENSOR_NAME_SIV120B "siv120b"
 #define RK29_CAM_SENSOR_NAME_SIV121D "siv121d"
+#define RK29_CAM_SENSOR_NAME_SIV120D "siv120d"
 #define RK29_CAM_SENSOR_NAME_SID130B "sid130B"
 #define RK29_CAM_SENSOR_NAME_HI253  "hi253"
 #define RK29_CAM_SENSOR_NAME_HI704  "hi704"
@@ -348,6 +350,7 @@
 #define gc2015_FULL_RESOLUTION     0x200000           // 2 megapixel
 #define siv120b_FULL_RESOLUTION     0x30000            // 0.3 megapixel
 #define siv121d_FULL_RESOLUTION     0x30000            // 0.3 megapixel
+#define siv120d_FULL_RESOLUTION     0x30000            // 0.3 megapixel
 #define sid130B_FULL_RESOLUTION     0x200000           // 2 megapixel    
 
 #if defined(CONFIG_SOC_CAMERA_HI253_INTERPOLATION_5M) 
@@ -411,6 +414,7 @@
 
 #define siv120b_I2C_ADDR             INVALID_VALUE           
 #define siv121d_I2C_ADDR             INVALID_VALUE           
+#define siv120d_I2C_ADDR             0x66
 #define sid130B_I2C_ADDR             0x37
 
 #define hi253_I2C_ADDR             0x40
@@ -469,6 +473,7 @@
 
 #define siv120b_PWRDN_ACTIVE             INVALID_VALUE           
 #define siv121d_PWRDN_ACTIVE             INVALID_VALUE           
+#define siv120d_PWRDN_ACTIVE             0x01
 #define sid130B_PWRDN_ACTIVE             0x37
 
 #define hi253_PWRDN_ACTIVE             0x01
@@ -542,6 +547,7 @@
 
 #define siv120b_PWRSEQ                   sensor_PWRSEQ_DEFAULT         
 #define siv121d_PWRSEQ                   sensor_PWRSEQ_DEFAULT         
+#define siv120d_PWRSEQ                   sensor_PWRSEQ_DEFAULT 
 #define sid130B_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 
 #define hi253_PWRSEQ                   sensor_PWRSEQ_DEFAULT

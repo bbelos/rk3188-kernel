@@ -364,7 +364,7 @@ enum {
     
     V4L2_IDENT_SIV120B = 64140,      /* ddl@rock-chips.com : siv120b support */
     V4L2_IDENT_SIV121D= 64141,      /* ddl@rock-chips.com : sid130B support */
-
+    V4L2_IDENT_SIV120D= 64142, 
 
     V4L2_IDENT_HM2057 = 64150,
     V4L2_IDENT_HM5065 = 64151,
@@ -374,8 +374,7 @@ enum {
 	V4L2_IDENT_NT99252 = 64163,    /* oyyf@rock-chips.com : nt99252 support */
 	V4L2_IDENT_NT99240 = 64164,    /* oyyf@rock-chips.com : nt99252 support */
 
-	V4L2_IDENT_MCNEX = 64165,
-
+	V4L2_IDENT_MCNEX = 64165, 
 	/* Don't just add new IDs at the end: KEEP THIS LIST ORDERED BY ID! */
 };
 
