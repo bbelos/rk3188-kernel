@@ -107,102 +107,20 @@ choice
 
 endchoice
 
-
-#caixx add begin
 menu "T-Chip Products Tool adapt IC Select"
-menu "T-Chip Products Tool adapt Camera IC Select"
-#	config TCHIP_MACH_SOC_CAMERA_GT2005
-#	    depends on SOC_CAMERA_GT2005
-#		bool "GT2005 is open"
-		
-	config TCHIP_MACH_SOC_CAMERA_GC0308
-		depends on SOC_CAMERA_GC0308
-		bool "GC0308 is open"
+choice
+        prompt "Camera Support"
+            default TCHIP_MACH_DOUBLE_CAMEAR
 
-	config TCHIP_MACH_SOC_CAMERA_GC0307
-		depends on SOC_CAMERA_GC0307
-		bool "GC0307 is open"
+       config TCHIP_MACH_SINGLE_FRONT_CAMERA
+               bool "Only support front camera"
 
-	config TCHIP_MACH_SOC_CAMERA_MT9M111
-		depends on SOC_CAMERA_MT9M111
-		bool "MT9M111 is open"
+       config TCHIP_MACH_SINGLE_BACK_CAMERA
+               bool "Only support back camera"
 
-	config TCHIP_MACH_SOC_CAMERA_MT9M112
-		depends on SOC_CAMERA_MT9M112
-		bool "MT9M112 is open"
-
-	config TCHIP_MACH_SOC_CAMERA_MT9T031
-		depends on SOC_CAMERA_MT9T031
-		bool "MT9T031 is open"	
-
-	config TCHIP_MACH_SOC_CAMERA_MT9P111
-		depends on SOC_CAMERA_MT9P111
-		bool "MT9P111 is open"
-		
-	config TCHIP_MACH_SOC_CAMERA_MT9D112
-		depends on SOC_CAMERA_MT9D112
-		bool "MT9D112 is open"
-
-	config TCHIP_MACH_SOC_CAMERA_HI704
-		depends on SOC_CAMERA_HI704
-		bool "HI704 is open"
-
-	config TCHIP_MACH_SOC_CAMERA_HI253
-		depends on SOC_CAMERA_HI253
-		bool "HI253 is open"
-		
-	config TCHIP_MACH_SOC_CAMERA_OV5640
-		depends on SOC_CAMERA_OV5640
-		bool "OV5640 is open"
-
-	config TCHIP_MACH_SOC_CAMERA_OV2640
-		depends on SOC_CAMERA_OV2640_RK
-		bool "OV2640 is open"
-
-	config TCHIP_MACH_SOC_CAMERA_OV2659_B
-		depends on SOC_CAMERA_OV2659
-		bool "OV2659 back is open"
-
-	config TCHIP_MACH_SOC_CAMERA_OV2659_F
-		depends on SOC_CAMERA_OV2659
-		bool "OV2659 front is open"
-		
-		config TCHIP_MACH_SOC_CAMERA_GT2005_B
-		depends on SOC_CAMERA_GT2005
-		bool "GT2005 back is open"
-
-	config TCHIP_MACH_SOC_CAMERA_GT2005_F
-		depends on SOC_CAMERA_GT2005
-		bool "GT2005 front is open"
-
-        config TCHIP_MACH_SOC_CAMERA_SP2518_B
-                depends on SOC_CAMERA_SP2518
-                bool "SP2518 back is open"
- 
-        config TCHIP_MACH_SOC_CAMERA_SP2518_F
-                depends on SOC_CAMERA_SP2518
-                bool "SP2518 front is open"
-
-	config TCHIP_MACH_SOC_CAMERA_OV5642
-		depends on SOC_CAMERA_OV5642
-		bool "OV5642 is open"
-
-       config TCHIP_MACH_SOC_CAMERA_GC2035_B
-               depends on SOC_CAMERA_GC2035
-               bool "GC2035 back is open"
-
-       config TCHIP_MACH_SOC_CAMERA_GC2035_F
-               depends on SOC_CAMERA_GC2035
-               bool "GC2035 front is open"
-
-       config TCHIP_MACH_SOC_CAMERA_GC0328_F
-               depends on SOC_CAMERA_GC0328
-               bool "GC0328 front is open"
-
-        config TCHIP_MACH_SOC_CAMERA_SP0838
-                depends on SOC_CAMERA_SP0838
-                bool "SP0838 front is open"
-endmenu
+        config TCHIP_MACH_DOUBLE_CAMEAR
+               bool "support double camera"
+endchoice
 
 choice
 	prompt "T-Chip Products Tool adapt Hdmi IC Select"
