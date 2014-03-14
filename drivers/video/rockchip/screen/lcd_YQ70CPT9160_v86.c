@@ -6,7 +6,7 @@
 /* Base */
 #define SCREEN_TYPE		SCREEN_RGB
 #define LVDS_FORMAT       	LVDS_8BIT_1
-#define OUT_FACE		OUT_P888
+#define OUT_FACE		OUT_D888_P666//OUT_P888
 //#define OUT_FACE	    	OUT_D888_P666
 
 #define DCLK			48000000        // 65000000
