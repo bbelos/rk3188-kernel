@@ -162,6 +162,7 @@ static struct usb_configuration android_config_driver = {
 	.bConfigurationValue = 1,
 };
 
+extern void rk28_send_wakeup_key(void);
 static void android_work(struct work_struct *data)
 {
 	struct android_dev *dev = container_of(data, struct android_dev, work);
@@ -183,6 +184,13 @@ static void android_work(struct work_struct *data)
 	if (uevent_envp) {
 		kobject_uevent_env(&dev->dev->kobj, KOBJ_CHANGE, uevent_envp);
 		pr_info("%s: sent uevent %s\n", __func__, uevent_envp[0]);
+	#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR1088)
+		 if (!strcmp(uevent_envp[0], disconnected[0]))
+		 {
+		          rk28_send_wakeup_key();
+		 }
+	#endif
+
 	} else {
 		pr_info("%s: did not send uevent (%d %d %p)\n", __func__,
 			 dev->connected, dev->sw_connected, cdev->config);
