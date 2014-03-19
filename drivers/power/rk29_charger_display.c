@@ -164,6 +164,7 @@ static int  __init start_charge_logo_display(void)
 
 #endif
 
+#if 0 //wbj @2014.03.19
 	if(val_status.intval == POWER_SUPPLY_STATUS_CHARGING)
 	{
 		if ((board_boot_mode() == BOOT_MODE_NORMAL) ||(board_boot_mode() == BOOT_MODE_CHARGE)|| (val_capacity.intval <= pwr_on_thrsd))  //do not enter power on charge mode when soft  reset
@@ -173,7 +174,13 @@ static int  __init start_charge_logo_display(void)
 			printk("power in charge mode\n");
 		}
 	}
-
+#endif
+    //@2014.03.19
+    if((val_capacity.intval < pwr_on_thrsd && val_status.intval != POWER_SUPPLY_STATUS_CHARGING) ||
+                (val_status.intval == POWER_SUPPLY_STATUS_CHARGING &&(board_boot_mode() != BOOT_MODE_REBOOT)) )
+    {
+            add_bootmode_charger_to_cmdline();
+    }
 	return 0;
 } 
 
