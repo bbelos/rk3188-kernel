@@ -250,13 +250,7 @@ static void rk_cif_power(int on)
         printk("get cif ldo failed!\n");
         if(on ==0 )
         {
-        #if defined(CONFIG_TCHIP_MACH_TR7088)
-            gpio_set_value(RK30_PIN3_PB4,GPIO_HIGH);
-        #endif
-        }
-        else
-        {
-        #if defined(CONFIG_TCHIP_MACH_TR7088)
+        #if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
             gpio_set_value(RK30_PIN3_PB4,GPIO_LOW);
         #endif
         }
