@@ -484,7 +484,7 @@ static struct platform_driver rk29_backlight_driver = {
 		.name	= "rk29_backlight",
 		.owner	= THIS_MODULE,
 	},
-#if !defined(CONFIG_TCHIP_MACH_TR7078)
+#if !defined(CONFIG_TCHIP_MACH_TR7078) && !defined(CONFIG_TCHIP_MACH_TR7888) && !defined(CONFIG_TCHIP_MACH_TR8088)
 	//.shutdown	= rk29_backlight_shutdown,
 #else
         .shutdown	= rk29_backlight_shutdown,
