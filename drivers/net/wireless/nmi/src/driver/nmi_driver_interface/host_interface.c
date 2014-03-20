@@ -5,7 +5,7 @@
 
 extern NMI_Sint32 TransportInit(void);
 extern NMI_Sint32 TransportDeInit(void);
-
+extern NMI_Uint8 connecting;
 
 extern NMI_Bool bEnablePS;
 /*BugID_5137*/
@@ -1348,7 +1348,7 @@ static NMI_Sint32 Handle_Scan(void * drvHandler,tstrHostIFscanAttr* pstrHostIFsc
 	}
 	
 	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
-	if(g_obtainingIP)
+	if(g_obtainingIP||connecting)
 	{
 		PRINT_D(GENERIC_DBG, "[handle_scan]: Don't do obss scan until IP adresss is obtained\n");			
 		NMI_ERRORREPORT(s32Error, NMI_BUSY);
@@ -1836,10 +1836,14 @@ static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHo
 		u32WidsCount++;
 
 		/*BugID_5137*/
-		gu32FlushedInfoElemAsocSize = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
-		gu8FlushedInfoElemAsoc =  NMI_MALLOC(gu32FlushedInfoElemAsocSize);
-		memcpy(gu8FlushedInfoElemAsoc, pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs,
+		if(NMI_memcmp("DIRECT-", pstrHostIFconnectAttr->pu8ssid,7))
+		{
+			PRINT_D(GENERIC_DBG,"Save connection parameters ,drv_handler=%x\n",drvHandler);
+			gu32FlushedInfoElemAsocSize = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
+			gu8FlushedInfoElemAsoc =  NMI_MALLOC(gu32FlushedInfoElemAsocSize);
+			memcpy(gu8FlushedInfoElemAsoc, pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs,
 			gu32FlushedInfoElemAsocSize);
+		}
 	}
 	strWIDList[u32WidsCount].u16WIDid = (NMI_Uint16)WID_11I_MODE;
 	strWIDList[u32WidsCount].enuWIDtype = WID_CHAR;
@@ -1848,7 +1852,8 @@ static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHo
 	u32WidsCount++;
 
 	/*BugID_5137*/
-	gu8Flushed11iMode = pstrWFIDrv->strNMI_UsrConnReq.u8security;
+	if(NMI_memcmp("DIRECT-", pstrHostIFconnectAttr->pu8ssid,7))
+		gu8Flushed11iMode = pstrWFIDrv->strNMI_UsrConnReq.u8security;
 	
 	PRINT_INFO(HOSTINF_DBG,"Encrypt Mode = %x\n",pstrWFIDrv->strNMI_UsrConnReq.u8security);
 
@@ -1860,7 +1865,8 @@ static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHo
 	u32WidsCount++;
 
 	/*BugID_5137*/
-	gu8FlushedAuthType = (NMI_Uint8)pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type;
+	if(NMI_memcmp("DIRECT-", pstrHostIFconnectAttr->pu8ssid,7))
+		gu8FlushedAuthType = (NMI_Uint8)pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type;
 	
 	PRINT_INFO(HOSTINF_DBG,"Authentication Type = %x\n",pstrWFIDrv->strNMI_UsrConnReq.tenuAuth_type);
 	/*
@@ -1922,9 +1928,11 @@ static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHo
 	strWIDList[u32WidsCount].ps8WidVal = NMI_MALLOC(strWIDList[u32WidsCount].s32ValueSize);
 
 	/*BugID_5137*/
-	gu32FlushedJoinReqSize = strWIDList[u32WidsCount].s32ValueSize;
-	gu8FlushedJoinReq = NMI_MALLOC(gu32FlushedJoinReqSize);
-
+	if(NMI_memcmp("DIRECT-", pstrHostIFconnectAttr->pu8ssid,7))
+	{
+		gu32FlushedJoinReqSize = strWIDList[u32WidsCount].s32ValueSize;
+		gu8FlushedJoinReq = NMI_MALLOC(gu32FlushedJoinReqSize);
+	}
 	if(strWIDList[u32WidsCount].ps8WidVal == NMI_NULL)
 	{
 		NMI_ERRORREPORT(s32Error,NMI_NO_MEM);
@@ -2072,9 +2080,11 @@ static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHo
 	#endif
 
 	/*BugID_5137*/
-	memcpy(gu8FlushedJoinReq, pu8CurrByte, gu32FlushedJoinReqSize);
-	gu8FlushedJoinReqDrvHandler = (NMI_Uint32)pstrWFIDrv;
-	
+	if(NMI_memcmp("DIRECT-", pstrHostIFconnectAttr->pu8ssid,7))
+	{
+		memcpy(gu8FlushedJoinReq, pu8CurrByte, gu32FlushedJoinReqSize);
+		gu8FlushedJoinReqDrvHandler = (NMI_Uint32)pstrWFIDrv;
+	}
 	s32Error = SendConfigPkt(SET_CFG, strWIDList, u32WidsCount, NMI_FALSE,(NMI_Uint32)pstrWFIDrv);
 	if(s32Error)
 	{
@@ -2333,12 +2343,12 @@ static NMI_Sint32 Handle_ConnectTimeout(void* drvHandler)
 
 	/*BugID_5213*/
 	/*Freeing flushed join request params on connect timeout*/
-	if(gu8FlushedJoinReq != NULL)
+	if(gu8FlushedJoinReq != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
 	{
 		NMI_FREE(gu8FlushedJoinReq);
 		gu8FlushedJoinReq = NULL;
 	}
-	if(gu8FlushedInfoElemAsoc != NULL)
+	if(gu8FlushedInfoElemAsoc != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
 	{
 		NMI_FREE(gu8FlushedInfoElemAsoc);
 		gu8FlushedInfoElemAsoc = NULL;
@@ -2808,12 +2818,12 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(void * drvHandler,tstrRcvdGnrlAsyncIn
 			/*BugID_5213*/
 			/*Freeing flushed join request params on receiving*/
 			/*MAC_DISCONNECTED while connected*/
-			if(gu8FlushedJoinReq != NULL)
+			if(gu8FlushedJoinReq != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
 			{
 				NMI_FREE(gu8FlushedJoinReq);
 				gu8FlushedJoinReq = NULL;
 			}
-			if(gu8FlushedInfoElemAsoc != NULL)
+			if(gu8FlushedInfoElemAsoc != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
 			{
 				NMI_FREE(gu8FlushedInfoElemAsoc);
 				gu8FlushedInfoElemAsoc = NULL;
@@ -3334,12 +3344,12 @@ static void Handle_Disconnect(void* drvHandler)
 		}			
 
 		/*BugID_5137*/
-		if(gu8FlushedJoinReq != NULL)
+		if(gu8FlushedJoinReq != NULL	&& gu8FlushedJoinReqDrvHandler==drvHandler)
 		{
 			NMI_FREE(gu8FlushedJoinReq);
 			gu8FlushedJoinReq = NULL;
 		}
-		if(gu8FlushedInfoElemAsoc != NULL)
+		if(gu8FlushedInfoElemAsoc != NULL &&  gu8FlushedJoinReqDrvHandler==drvHandler)
 		{
 			NMI_FREE(gu8FlushedInfoElemAsoc);
 			gu8FlushedInfoElemAsoc = NULL;

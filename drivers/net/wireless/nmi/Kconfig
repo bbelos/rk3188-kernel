@@ -1,11 +1,11 @@
 config NMC1XXX_WIFI_MODULE
 #        depends on AM_WIFI_SD_MMC || SD_MMC && SDIO
-    tristate "Newportmedia NMC1XXX wireless cards support"
-    select WIRELESS_EXT
-    select WEXT_PRIV
-    ---help---
-    This module adds support for wireless adapters based on
-    Broadcom NMC1000 chipset.
+        tristate "Newportmedia NMC1XXX wireless cards support"
+        select WIRELESS_EXT
+        select WEXT_PRIV
+        ---help---
+          This module adds support for wireless adapters based on
+          Broadcom NMC1000 chipset.
 
 choice
     depends on NMC1XXX_WIFI_MODULE
@@ -31,6 +31,21 @@ choice
 	    bool "communication by SPI"
 endchoice
 
+choice
+		depends on NMC1XXX_WIFI_MODULE
+		prompt "Memory Allocation"
+		default NMC1XXX_PREALLOCATE_DURING_SYSTEM_BOOT
+		
+		config NMC1XXX_PREALLOCATE_DURING_SYSTEM_BOOT
+		bool "Preallocate memory pool during system boot"
+		
+		config NMC1XXX_PREALLOCATE_AT_LOADING_DRIVER
+		bool "Preallocate memory at loading driver"
+		
+		config NMC1XXX_DYNAMICALLY_ALLOCATE_MEMROY
+		bool "Dynamically allocate memory in real time"
+endchoice
+
 config SDIO_HARD_IRQ
         depends on NMC1XXX_WIFI_MODULE && NMC1XXX_USE_SDIO
         bool "SDIO HARD IRQ"
@@ -41,16 +56,9 @@ config SDIO_HARD_IRQ
 config BK3515A_COMBO
         depends on NMC1XXX_WIFI_MODULE
         bool "Combo with bk3515"
-        default n
-        ---help---
-          combo with bk3515
-
-config NMC1XXX_WIFI_EXTERNL_MEMORY
-        depends on NMC1XXX_WIFI_MODULE
-        bool "Use externl Memory"
         default y
         ---help---
-          use externl memory
+          combo with bk3515
 
 #config NMC1XXX_WIFI_CONTROL_FUNC
 #        bool "Use NMC1XXX_wlan device"

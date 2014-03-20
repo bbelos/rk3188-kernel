@@ -202,8 +202,8 @@ ifeq ($(strip $(TARGET_PLATFORM)), TARGET_ALLWINNER_A23)
 
 # 2.
 	NMC1000_SRC_VERSION = 9.3
-	PATCHLEVEL = 0
-	NMC1000_FW_VERSION = 0
+	PATCHLEVEL = 1
+	NMC1000_FW_VERSION = 1
   
 # 3.
 	MODULE_NAME = nmi_wifi
@@ -242,8 +242,8 @@ ifeq ($(strip $(TARGET_PLATFORM)), TARGET_ALLWINNER_A31)
 
 # 2.
 	NMC1000_SRC_VERSION = 9.3
-	PATCHLEVEL = 0
-	NMC1000_FW_VERSION = 0
+	PATCHLEVEL = 1
+	NMC1000_FW_VERSION = 1
 
 # 3.
 	MODULE_NAME = nmi_wifi
@@ -269,7 +269,7 @@ ifeq ($(strip $(TARGET_PLATFORM)), TARGET_ALLWINNER_A31)
 	ifeq ($(strip $(CONFIG_NMC1XXX_ENABLE_DEBUGFS)),y)
 		EXTRA_CFLAGS += -DNMC_DEBUGFS
 	endif
-	
+
 endif
 
 ################################################################
@@ -415,6 +415,7 @@ ifeq ($(strip $(TARGET_PLATFORM)), TARGET_CLG_CLM9722)
 	endif
 
 endif
+
 ################################################################
 # Rockchip
 ################################################################
@@ -425,8 +426,8 @@ ifeq ($(strip $(TARGET_PLATFORM)), TARGET_RKXXXX)
 
 # 2.
 	NMC1000_SRC_VERSION = 9.3
-	PATCHLEVEL = 1
-	NMC1000_FW_VERSION = 1
+	PATCHLEVEL = 2
+	NMC1000_FW_VERSION = 2
 
 # 3.
 	MODULE_NAME = nmc1000
@@ -723,17 +724,34 @@ ifeq ($(findstring 9.,$(NMC1000_SRC_VERSION)), 9.)
 	#EXTRA_CFLAGS += -DTCP_ACK_FILTER
 	EXTRA_CFLAGS += -DAGING_ALG
 	EXTRA_CFLAGS += -DDISABLE_PWRSAVE_AND_SCAN_DURING_IP
-	EXTRA_CFLAGS += -DSTATIC_MACADDRESS
 	
 	#Host AP (?????)
 	#FULLY_HOSTING_AP = Y
 	#EXTRA_CFLAGS += -DNMI_FULLY_HOSTING_AP
-	
+
+	#EXTRA_CFLAGS += -DXTAL_24
+	#EXTRA_CFLAGS += -DDISABLE_NMC_UART
+
+	#[[ Add KR Team
+	EXTRA_CFLAGS += -DSTATIC_MACADDRESS
 	EXTRA_CFLAGS += -DCOMPLEMENT_BOOT
 	#EXTRA_CFLAGS += -DFW_VERSION_VERIFICATION
 
-	# to use static rx buffer
-	EXTRA_CFLAGS += -DMEMORY_STATIC
+	ifeq ($(strip $(CONFIG_NMC1XXX_PREALLOCATE_DURING_SYSTEM_BOOT)),y)
+		EXTRA_CFLAGS += -DNMC_PREALLOC_AT_BOOT
+		# for rx_buffer
+		EXTRA_CFLAGS += -DMEMORY_STATIC
+	else
+		ifeq ($(strip $(CONFIG_NMC1XXX_PREALLOCATE_AT_LOADING_DRIVER)),y)
+			EXTRA_CFLAGS += -DMEMORY_STATIC
+			EXTRA_CFLAGS += -DNMC_PREALLOC_AT_INSMOD
+		else
+			ifeq ($(strip $(CONFIG_NMC1XXX_DYNAMICALLY_ALLOCATE_MEMROY)),y)
+				EXTRA_CFLAGS += -DNMC_NORMAL_ALLOC
+			endif
+		endif
+	endif
+	#]]
 
 endif #9.X
 

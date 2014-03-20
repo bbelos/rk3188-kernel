@@ -150,6 +150,8 @@
 #define NMI_HAVE_RTC           (1 << 1)
 #define NMI_HAVE_DMA_VER_2     (1 << 2)
 #define NMI_HAVE_VCO_14_SUPPLY (1 << 3)
+#define NMI_XTAL_24 (1 << 4)
+#define NMI_DISABLE_NMC_UART (1 << 5)
 
 
 

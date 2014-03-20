@@ -597,6 +597,7 @@ static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent,
 {
 	struct NMI_WFI_priv* priv;
 	struct net_device* dev;
+	NMI_Uint8 NullBssid[ETH_ALEN] = {0};
 	connecting = 0;
 	if(enuConnDisconnEvent == CONN_DISCONN_EVENT_CONN_RESP)
 	{
@@ -617,6 +618,8 @@ static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent,
 			/* The case here is that our station was waiting for association response frame and has just received it containing status code
 			    = SUCCESSFUL_STATUSCODE, while mac status is MAC_DISCONNECTED (which means something wrong happened) */
 			u16ConnectStatus = WLAN_STATUS_UNSPECIFIED_FAILURE;
+			linux_wlan_set_bssid(priv->dev,NullBssid);
+
 			PRINT_ER("Unspecified failure: Connection status %d : MAC status = %d \n",u16ConnectStatus,u8MacStatus);
 		}
 		
@@ -630,7 +633,7 @@ static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent,
 			NMI_memcpy(priv->au8AssociatedBss, pstrConnectInfo->au8bssid, ETH_ALEN);
 
 			//set bssid in frame filter
-			linux_wlan_set_bssid(dev,pstrConnectInfo->au8bssid);
+			//linux_wlan_set_bssid(dev,pstrConnectInfo->au8bssid);
 
 			/* BugID_4209: if this network has expired in the scan results in the above nl80211 layer, refresh them here by calling 
 			    cfg80211_inform_bss() with the last Scan results before calling cfg80211_connect_result() to avoid 
@@ -686,7 +689,7 @@ static void CfgConnectResult(tenuConnDisconnEvent enuConnDisconnEvent,
 		u8P2Precvrandom=0x00;
 		bNmi_ie = NMI_FALSE;
 		NMI_memset(priv->au8AssociatedBss, 0, ETH_ALEN);
-
+		linux_wlan_set_bssid(priv->dev,NullBssid);
 		cfg80211_disconnected(dev, pstrDisconnectNotifInfo->u16reason, pstrDisconnectNotifInfo->ie, 
 						      pstrDisconnectNotifInfo->ie_len, GFP_KERNEL);
 
@@ -1187,6 +1190,9 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 		u8WLANChannel = pstrNetworkInfo->u8channel;
 		//NMI_PRINTF("STA CONNECTED CHANNEL %02x %02x\n",u8WLANChannel,pstrNetworkInfo->u8channel);
 	}
+
+	linux_wlan_set_bssid(dev,pstrNetworkInfo->au8bssid);
+
 	s32Error = host_int_set_join_req(priv->hNMIWFIDrv, pstrNetworkInfo->au8bssid, sme->ssid,
 							  	    sme->ssid_len, sme->ie, sme->ie_len,
 							  	    CfgConnectResult, (void*)priv, u8security, 
@@ -3178,18 +3184,119 @@ static int NMI_WFI_change_virt_intf(struct wiphy *wiphy,struct net_device *dev,
 		#ifdef NMI_P2P
 		interface_type = nic->iftype;
 		nic->iftype = STATION_MODE;
-		g_nmc_initialized = 0;
+			
+		if(g_linux_wlan->nmc1000_initialized)
+		{
+			g_nmc_initialized = 0;
 
-		/*BugID_5213*/
-		/*Eliminate host interface blocking state*/
-		linux_wlan_unlock((void *)&g_linux_wlan->cfg_event);
+			/*BugID_5213*/
+			/*Eliminate host interface blocking state*/
+			linux_wlan_unlock((void *)&g_linux_wlan->cfg_event);
+				
+			nmc1000_wlan_deinit(g_linux_wlan);
+			nmc1000_wlan_init(dev, nic);
+			g_nmc_initialized = 1;
+			nic->iftype = interface_type;
+
+			/*Setting interface 1 drv handler and mac address in newly downloaded FW*/
+			host_int_set_wfi_drv_handler(g_linux_wlan->strInterfaceInfo[0].drvHandler);
+			host_int_set_MacAddress((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+									g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+			host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
+
+			/*Add saved WEP keys, if any*/
+			if(g_wep_keys_saved)
+			{
+				host_int_set_WEPDefaultKeyID((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+											g_key_wep_params.key_idx);
+				host_int_add_wep_key_bss_sta((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+											g_key_wep_params.key,
+											g_key_wep_params.key_len,
+											g_key_wep_params.key_idx);
+			}
+
+			/*No matter the driver handler passed here, it will be overwriiten*/
+			/*in Handle_FlushConnect() with gu8FlushedJoinReqDrvHandler*/
+			host_int_flush_join_req(priv->hNMIWFIDrv);
+
+			/*Add saved PTK and GTK keys, if any*/
+			if(g_ptk_keys_saved && g_gtk_keys_saved)
+			{
+				PRINT_D(CFG80211_DBG,"ptk %x %x %x\n",g_key_ptk_params.key[0],
+											g_key_ptk_params.key[1],
+											g_key_ptk_params.key[2]);
+				PRINT_D(CFG80211_DBG,"gtk %x %x %x\n",g_key_gtk_params.key[0],
+											g_key_gtk_params.key[1],
+											g_key_gtk_params.key[2]);
+				NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+									g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+									g_add_ptk_key_params.key_idx,
+									#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+									g_add_ptk_key_params.pairwise,
+									#endif
+									g_add_ptk_key_params.mac_addr,
+									(struct key_params *)(&g_key_ptk_params));
+
+				NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+									g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+									g_add_gtk_key_params.key_idx,
+									#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+									g_add_gtk_key_params.pairwise,
+									#endif
+									g_add_gtk_key_params.mac_addr,
+									(struct key_params *)(&g_key_gtk_params));
+			}
+				
+			/*BugID_4847: registered frames in firmware are now*/
+			/*lost due to mac close. So re-register those frames*/
+			if(g_linux_wlan->nmc1000_initialized)
+			{
+				for(i=0; i<num_reg_frame; i++)
+				{
+					PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
+																			nic->g_struct_frame_reg[i].reg);
+					host_int_frame_register(priv->hNMIWFIDrv,
+											nic->g_struct_frame_reg[i].frame_type,
+											nic->g_struct_frame_reg[i].reg);
+				}
+			}
+
+			bEnablePS = NMI_TRUE;
+			host_int_set_power_mgmt( priv->hNMIWFIDrv, 1, 0);
+		}
+		#endif
+		#endif
+		break;
 		
+	case NL80211_IFTYPE_P2P_CLIENT:
+		bEnablePS = NMI_FALSE;
+		host_int_set_power_mgmt(priv->hNMIWFIDrv, 0, 0);
+		connecting = 0;
+		PRINT_D(HOSTAPD_DBG,"Interface type = NL80211_IFTYPE_P2P_CLIENT\n");
+		//linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+		
+		host_int_delBASession(priv->hNMIWFIDrv, g_linux_wlan->strInterfaceInfo[0].aBSSID, TID, (void *)priv->hNMIWFIDrv);
+			
+		dev->ieee80211_ptr->iftype = type;
+		priv->wdev->iftype = type;
+		nic->monitor_flag = 0;
+		nic->iftype = STATION_MODE;
+		//host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
+
+		#ifndef SIMULATION
+		//PRINT_D(HOSTAPD_DBG,"Downloading STATION firmware\n");
+
+		#ifdef NMI_P2P
+		
+		PRINT_D(HOSTAPD_DBG,"Downloading P2P_CONCURRENCY_FIRMWARE\n");
+		nic->iftype = CLIENT_MODE;
+
+		nic->iftype = CLIENT_MODE;
 		nmc1000_wlan_deinit(g_linux_wlan);
 		nmc1000_wlan_init(dev, nic);
-		g_nmc_initialized = 1;
-		nic->iftype = interface_type;
-
-		/*Setting interface 1 drv handler and mac address in newly downloaded FW*/
+		nic->iftype = STATION_MODE;
+	
+	
 		host_int_set_wfi_drv_handler(g_linux_wlan->strInterfaceInfo[0].drvHandler);
 		host_int_set_MacAddress((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
 								g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
@@ -3237,53 +3344,6 @@ static int NMI_WFI_change_virt_intf(struct wiphy *wiphy,struct net_device *dev,
 								g_add_gtk_key_params.mac_addr,
 								(struct key_params *)(&g_key_gtk_params));
 		}
-		
-		/*BugID_4847: registered frames in firmware are now*/
-		/*lost due to mac close. So re-register those frames*/
-		if(g_linux_wlan->nmc1000_initialized)
-		{
-			for(i=0; i<num_reg_frame; i++)
-			{
-				PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
-																		nic->g_struct_frame_reg[i].reg);
-				host_int_frame_register(priv->hNMIWFIDrv,
-										nic->g_struct_frame_reg[i].frame_type,
-										nic->g_struct_frame_reg[i].reg);
-			}
-		}
-
-		bEnablePS = NMI_TRUE;
-		host_int_set_power_mgmt( priv->hNMIWFIDrv, 1, 0);
-		#endif
-		#endif
-		break;
-		
-	case NL80211_IFTYPE_P2P_CLIENT:
-		bEnablePS = NMI_FALSE;
-		host_int_set_power_mgmt(priv->hNMIWFIDrv, 0, 0);
-		connecting = 0;
-		PRINT_D(HOSTAPD_DBG,"Interface type = NL80211_IFTYPE_P2P_CLIENT\n");
-		//linux_wlan_set_bssid(dev,g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
-
-		dev->ieee80211_ptr->iftype = type;
-		priv->wdev->iftype = type;
-		nic->monitor_flag = 0;
-		nic->iftype = STATION_MODE;
-		host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
-
-		#ifndef SIMULATION
-		//PRINT_D(HOSTAPD_DBG,"Downloading STATION firmware\n");
-
-		#ifdef NMI_P2P
-		
-		PRINT_D(HOSTAPD_DBG,"Downloading P2P_CONCURRENCY_FIRMWARE\n");
-		nic->iftype = CLIENT_MODE;
-
-		nic->iftype = CLIENT_MODE;
-		nmc1000_wlan_deinit(g_linux_wlan);
-		nmc1000_wlan_init(dev, nic);
-		nic->iftype = STATION_MODE;
-
 		
 		/*If nmc is running, then close-open to actually get new firmware running (serves P2P)*/
 		if(g_linux_wlan->nmc1000_initialized)

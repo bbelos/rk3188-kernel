@@ -99,12 +99,11 @@ extern atomic_t DEBUG_LEVEL;
 #define FN_IN	//PRINT_D(">>> \n")
 #define FN_OUT	//PRINT_D("<<<\n")
 
-//#define LINUX_RX_SIZE	(8*1024)
-#if defined (MEMORY_STATIC)
-//#define MEMORY_STATIC
+#ifdef MEMORY_STATIC
 #define LINUX_RX_SIZE	(96*1024)
 #endif
 #define LINUX_TX_SIZE	(64*1024)
+
 
 #define NMI_MULTICAST_TABLE_SIZE	8
 
@@ -130,8 +129,8 @@ extern atomic_t DEBUG_LEVEL;
 	#define MODALIAS 	"nmi_spi"
 	#define GPIO_NUM	139
 #elif defined (PLAT_RKXXXX)
-#define MODALIAS	"NMI_IRQ"
-#define GPIO_NUM	RK30_PIN3_PD2 //RK30_PIN3_PA1
+ #define MODALIAS	"NMI_IRQ"
+ #define GPIO_NUM	RK30_PIN3_PD2 //RK30_PIN3_PA1
 	//RK30_PIN3_PD2
 	//RK2928_PIN1_PA7
 

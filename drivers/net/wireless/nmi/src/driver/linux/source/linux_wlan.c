@@ -164,10 +164,10 @@ extern int rk29sdk_wifi_set_carddetect(int val);
 #define _linux_wlan_device_removal()           {}
 
 #else
-#define _linux_wlan_device_detection() 	{}
-#define _linux_wlan_device_removal()		{}
-#define _linux_wlan_device_power_on()		{}
-#define _linux_wlan_device_power_off()		{} 
+ #define _linux_wlan_device_detection() 	{}
+ #define _linux_wlan_device_removal()		{}
+ #define _linux_wlan_device_power_on()		{}
+ #define _linux_wlan_device_power_off()		{} 
 
 #endif
 
@@ -2110,7 +2110,7 @@ uint8_t nmc1000_prepare_11b_core(nmi_wlan_inp_t *nwi,	nmi_wlan_oup_t *nwo,linux_
 		while((core_11b_ready() && (READY_CHECK_THRESHOLD > (trials++))))
 		{
 			PRINT_D(INIT_DBG,"11b core not ready yet: %u\n",trials);
-
+			nmi_wlan_deinit(nic);
 			sdio_unregister_driver(&nmc_bus);
 
             linux_wlan_device_detection(0);
@@ -2392,19 +2392,14 @@ int mac_open(struct net_device *ndev){
 	#endif
 	
 	/*initialize platform*/
-	//if(once)
+	printk("*** re-init ***\n");
+	ret = nmc1000_wlan_init(ndev, nic);
+	if(ret < 0)
 	{
-		
-		//once++;
-		printk("*** re-init ***\n");
-		ret = nmc1000_wlan_init(ndev, nic);
-		if(ret < 0)
-		{
-			PRINT_ER("Failed to initialize nmc1000\n");
-			NMI_WFI_DeInitHostInt(ndev);
-			//linux_wlan_unlock(&close_exit_sync);
-			return  ret;
-		}
+		PRINT_ER("Failed to initialize nmc1000\n");
+		NMI_WFI_DeInitHostInt(ndev);
+		//linux_wlan_unlock(&close_exit_sync);
+		return  ret;
 	}
 	Set_machw_change_vir_if(NMI_FALSE);
 
@@ -3219,17 +3214,19 @@ static int __init init_nmc_driver(void){
 			printk("init_nmc_driver: Failed register sdio driver\n");
 		}
 	
+	return ret;
 	}
 #else	
 	PRINT_D(INIT_DBG,"Initializing netdev\n");
 	if(nmc_netdev_init()){
 		PRINT_ER("Couldn't initialize netdev\n");
 	}
-#endif
+
 	PRINT_D(INIT_DBG,"Device has been initialized successfully\n");
     return 0;
+#endif
 }
-module_init(init_nmc_driver);
+late_initcall(init_nmc_driver);
 
 static void __exit exit_nmc_driver(void)
 {

@@ -39,11 +39,15 @@ static int process_sdio_pending_irqs(struct mmc_host *host)
 	 * and we know an IRQ was signaled then call irq handler directly.
 	 * Otherwise do the full probe.
 	 */
+#if defined (CONFIG_NMC1000_WIFI_CHIP)
+
+#else
 	func = card->sdio_single_irq;
 	if (func && host->sdio_irq_pending) {
 		func->irq_handler(func);
 		return 1;
 	}
+#endif
 
 	ret = mmc_io_rw_direct(card, 0, 0, SDIO_CCCR_INTx, 0, &pending);
 	if (ret) {
@@ -259,7 +263,11 @@ int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler)
 	ret = sdio_card_irq_get(func->card);
 	if (ret)
 		func->irq_handler = NULL;
+#if defined (CONFIG_NMC1000_WIFI_CHIP)
+
+#else
 	sdio_single_irq_set(func->card);
+#endif
 
 	return ret;
 }
@@ -284,7 +292,11 @@ int sdio_release_irq(struct sdio_func *func)
 	if (func->irq_handler) {
 		func->irq_handler = NULL;
 		sdio_card_irq_put(func->card);
+#if defined (CONFIG_NMC1000_WIFI_CHIP)
+
+#else
 		sdio_single_irq_set(func->card);
+#endif
 	}
 
 	ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IENx, 0, &reg);

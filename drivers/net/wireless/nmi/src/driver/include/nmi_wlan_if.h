@@ -14,6 +14,7 @@
 /*bug 3887: [AP] Allow Management frames to be passed to the host*/
 #define NMI_AP_EXTERNAL_MLME 
 #define NMI_P2P
+//#define MEMORY_STATIC
 //#define NMI_FULLY_HOSTING_AP
 //#define USE_OLD_SPI_SW
 
