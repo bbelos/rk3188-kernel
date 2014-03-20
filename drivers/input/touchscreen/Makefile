@@ -107,6 +107,7 @@ obj-$(CONFIG_TOUCHSCREEN_GSLX680_RK3028_780)	+= rockchip_gslX680_rk3028_s741.o
 obj-$(CONFIG_TP_760_TS)                    += tp_760_ts.o
 obj-$(CONFIG_TOUCHSCREEN_ILITEK_AIMVF)	+= ilitek_aimvF.o
 obj-$(CONFIG_TOUCHSCREEN_ICN850X)      += ICN850X/
+obj-$(CONFIG_TOUCHSCREEN_ICN8503)      += ICN8503/
 obj-y += zet62xx/
 obj-y += aw5x0x/
 

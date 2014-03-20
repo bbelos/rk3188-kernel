@@ -1,0 +1,2 @@
+0x00000000	icn85xx_ts_charger_mode_disable	drivers/input/touchscreen/ICN850X/ctp_icn85xx	EXPORT_SYMBOL_GPL
+0x00000000	icn85xx_ts_charger_mode	drivers/input/touchscreen/ICN850X/ctp_icn85xx	EXPORT_SYMBOL_GPL

@@ -36,6 +36,11 @@ config TOUCHSCREEN_ICN850X
        tristate "Chipone touchscreen icn850x"
        help
          This enables support for Chipone touchscreens.
+         
+config TOUCHSCREEN_ICN8503
+       tristate "Chipone touchscreen icn8503"
+       help
+         This enables support for Chipone touchscreens.
 
 config TOUCHSCREEN_XPT2046_SPI
 	tristate "XPT2046 based touchscreens:SPI Interface"
