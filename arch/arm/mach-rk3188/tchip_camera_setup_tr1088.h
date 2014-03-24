@@ -5,7 +5,7 @@
 static struct rkcamera_platform_data new_camera[] = {
     new_camera_device_ex(RK29_CAM_SENSOR_GC2035,
                         back,
-                        0, //CONFIG_SENSOR_ORIENTATION_X
+                        90, //CONFIG_SENSOR_ORIENTATION_X
                         INVALID_VALUE, //CONFIG_SENSOR_POWER_PIN_
                         INVALID_VALUE,//CONFIG_SENSOR_POWERACTIVE_LEVEL_
                         INVALID_VALUE, //CONFIG_SENSOR_RESET_PIN
@@ -22,7 +22,7 @@ static struct rkcamera_platform_data new_camera[] = {
             24), //sensor input clock rate, 24 or 48 
     new_camera_device_ex(RK29_CAM_SENSOR_GC0309,
                         front,
-                        180,
+                        90,
                         INVALID_VALUE,
                         INVALID_VALUE,
                         INVALID_VALUE,
@@ -39,7 +39,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         24), 
 	new_camera_device_ex(RK29_CAM_SENSOR_GC0308,
                         front,
-                        0,
+                        270,
                         INVALID_VALUE,
                         INVALID_VALUE,
                         INVALID_VALUE,
