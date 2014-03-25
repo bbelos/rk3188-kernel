@@ -3149,12 +3149,15 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level1[] = {
 // ds1006h 10'
 #if defined(CONFIG_TCHIP_MACH_TR1088) ||  defined(CONFIG_TCHIP_MACH_TR7088) ||  defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
-        {.frequency = 312 * 1000,       .index = 975 * 1000},
-        {.frequency = 504 * 1000,       .index = 1000 * 1000},
+        {.frequency = 312 * 1000,       .index = 950 * 1000},
+        {.frequency = 504 * 1000,       .index = 950 * 1000},
         {.frequency = 816 * 1000,       .index = 1025 * 1000},
         {.frequency = 1008 * 1000,      .index = 1100 * 1000},
         {.frequency = 1200 * 1000,      .index = 1225 * 1000},
         {.frequency = 1416 * 1000,      .index = 1300 * 1000},
+#if !defined(CONFIG_TCHIP_MACH_TR1088) ||  !defined(CONFIG_TCHIP_MACH_TR7888) || !defined(CONFIG_TCHIP_MACH_TR8088)
+        {.frequency = 1608 * 1000,      .index = 1350 * 1000},
+#endif
         {.frequency = CPUFREQ_TABLE_END},
 };
 #else
@@ -3187,9 +3190,9 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level0[] = {
 static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {	
     {.frequency = 133 * 1000,       .index = 975 * 1000},
 	{.frequency = 200 * 1000,       .index = 1000 * 1000},
-	{.frequency = 266 * 1000,       .index = 1050 * 1000},
-	{.frequency = 300 * 1000,       .index = 1100 * 1000},
-	{.frequency = 400 * 1000,       .index = 1150 * 1000},
+	{.frequency = 266 * 1000,       .index = 1025 * 1000},
+	{.frequency = 300 * 1000,       .index = 1050 * 1000},
+	{.frequency = 400 * 1000,       .index = 1100 * 1000},
 	{.frequency = 600 * 1000,       .index = 1250 * 1000},
         {.frequency = CPUFREQ_TABLE_END},
 };
