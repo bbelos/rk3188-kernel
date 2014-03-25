@@ -27,6 +27,8 @@
 #include <asm/io.h>
 #include <mach/board.h>
 #include <plat/pwm.h>
+#include <mach/io.h>
+#include <mach/gpio.h>
 
 #define PWM_DIV              PWM_DIV2
 #define PWM_APB_PRE_DIV      1000
@@ -217,6 +219,7 @@ static int rk29_bl_update_status(struct backlight_device *bl)
 	}
 	rk_pwm_setup(id, PWM_DIV, divh, div_total);
 
+
 //BL_CORE_DRIVER1 is the flag if backlight pwm is closed.
 	if ((bl->props.state & BL_CORE_DRIVER1) && brightness ==0 ){  
 		bl->props.state &= ~BL_CORE_DRIVER1;
@@ -241,6 +244,7 @@ static int rk29_bl_update_status(struct backlight_device *bl)
     // BL_CORE_DRIVER4 is the flag if backlight have done io_init.
     // Rosolve splash screen when machine boot
     // Add by zhansb@130320
+#if !defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7088TN) || defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
     if (!(bl->props.state & BL_CORE_DRIVER4))
     {
         bl->props.state |= BL_CORE_DRIVER4;
@@ -249,7 +253,7 @@ static int rk29_bl_update_status(struct backlight_device *bl)
             rk29_bl_info->io_init();
         }
     }
-
+#endif
 	DBG("%s:line=%d,brightness = %d, div_total = %d, divh = %d state=%x \n",__FUNCTION__,__LINE__,brightness, div_total, divh,bl->props.state);
 out:
 	mutex_unlock(&backlight_mutex);
@@ -431,6 +435,10 @@ static int rk29_backlight_probe(struct platform_device *pdev)
 	register_early_suspend(&bl_early_suspend);
 #ifdef CONFIG_BATTERY_RK30_ADC_FAC
 	adc_battery_notifier_call_chain(BACKLIGHT_ON);
+#endif
+#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+    if (rk29_bl_info && rk29_bl_info->io_init)  
+		rk29_bl_info->io_init();
 #endif
 	printk("RK29 Backlight Driver Initialized.\n");
 	return ret;
