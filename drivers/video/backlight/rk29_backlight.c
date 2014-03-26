@@ -178,6 +178,7 @@ static int rk29_bl_update_status(struct backlight_device *bl)
 	u32 ref = rk29_bl_info->bl_ref;
 	int brightness = 0;
 	
+//	printk("%s\n", __func__);
 	mutex_lock(&backlight_mutex);
 	//BL_CORE_DRIVER2 is the flag if backlight is into early_suspend.
 	if (suspend_flag && (bl->props.state & BL_CORE_DRIVER2))
@@ -417,6 +418,11 @@ static int rk29_backlight_probe(struct platform_device *pdev)
 		divh = div_total;
 	}
 
+#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+    if (rk29_bl_info && rk29_bl_info->io_init)  
+		rk29_bl_info->io_init();
+	msleep(200);
+#endif
 	clk_enable(pwm_clk);
 	rk_pwm_setup(id, PWM_DIV, divh, div_total);
 
@@ -435,10 +441,6 @@ static int rk29_backlight_probe(struct platform_device *pdev)
 	register_early_suspend(&bl_early_suspend);
 #ifdef CONFIG_BATTERY_RK30_ADC_FAC
 	adc_battery_notifier_call_chain(BACKLIGHT_ON);
-#endif
-#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
-    if (rk29_bl_info && rk29_bl_info->io_init)  
-		rk29_bl_info->io_init();
 #endif
 	printk("RK29 Backlight Driver Initialized.\n");
 	return ret;

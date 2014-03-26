@@ -3022,6 +3022,10 @@ void wifi_bt_power_ctl(bool on)
 
 static void __init machine_rk30_board_init(void)
 {
+
+#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+	gpio_pull_updown(RK30_PIN3_PD6, GPIOPullDown);
+#endif
 #if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
     wifi_bt_io_init();
     wifi_bt_power_ctl(true);
