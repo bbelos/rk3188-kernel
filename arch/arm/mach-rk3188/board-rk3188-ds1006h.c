@@ -450,22 +450,29 @@ static struct spi_board_info board_spi_devices[] = {
 #endif
 
 int is_backligth_closed = 0;
+static int rk29_backlight_pwm_suspend(void);
+static int rk29_backlight_pwm_resume(void);
+
 static int rk29_backlight_io_init(void)
 {
-	int ret = 0;
-
+          int ret =0;
+#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+    rk29_backlight_pwm_suspend();
+    rk29_backlight_pwm_resume();
+#else
 	iomux_set(PWM_MODE);
+
 #ifdef  LCD_DISP_ON_PIN
 	ret = gpio_request(BL_EN_PIN, NULL);
 	if (ret != 0) {
 		gpio_free(BL_EN_PIN);
 	}
 
-	//gpio_direction_output(BL_EN_PIN, 0);
+	gpio_direction_output(BL_EN_PIN, 0);
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
 #endif
-
-	return ret;
+#endif
+            return ret;
 }
 
 static int rk29_backlight_io_deinit(void)
@@ -508,8 +515,8 @@ static int rk29_backlight_pwm_resume(void)
 	gpio_direction_output(BL_EN_PIN, 1);
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
 	msleep(200);
-    gpio_free(pwm_gpio);
-	iomux_set(PWM_MODE);
+        gpio_free(pwm_gpio);
+        iomux_set(PWM_MODE);
 #else
     gpio_free(pwm_gpio);
 	iomux_set(PWM_MODE);
@@ -968,7 +975,7 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 		else
 		{
 #ifdef LCD_CS_IOMUX
-			iomux_set(LCD_CS_IOMUX);
+		iomux_set(LCD_CS_IOMUX);
 #endif
 			gpio_direction_output(LCD_CS_PIN, LCD_CS_VALUE);
 		}
@@ -986,6 +993,9 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 		else
 		{
 			gpio_direction_output(LCD_EN_PIN, LCD_EN_VALUE);
+#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+			msleep(360);
+#endif
 		}
 	}
 	if(LCD_PWR_PIN !=INVALID_GPIO)
@@ -1030,6 +1040,7 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
         	gpio_direction_output(LCD_LVDS_STB, LCD_LVDS_STB_VALUE);
       	}
     }
+	//msleep(300);
 	return 0;
 }
 static int rk_fb_io_disable(void)
@@ -3188,12 +3199,21 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level0[] = {
 };
 //ds1006h 10'
 static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {	
-    {.frequency = 133 * 1000,       .index = 975 * 1000},
-	{.frequency = 200 * 1000,       .index = 1000 * 1000},
-	{.frequency = 266 * 1000,       .index = 1025 * 1000},
-	{.frequency = 300 * 1000,       .index = 1050 * 1000},
-	{.frequency = 400 * 1000,       .index = 1100 * 1000},
+    #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+            {.frequency = 133 * 1000,       .index = 1000 * 1000},
+            {.frequency = 200 * 1000,       .index = 1025 * 1000},
+            {.frequency = 266 * 1000,       .index = 1050 * 1000},
+            {.frequency = 300 * 1000,       .index = 1075 * 1000},
+            {.frequency = 400 * 1000,       .index = 1125 * 1000},
+    #else
+            {.frequency = 133 * 1000,       .index = 975 * 1000},
+            {.frequency = 200 * 1000,       .index = 1000 * 1000},
+            {.frequency = 266 * 1000,       .index = 1025 * 1000},
+            {.frequency = 300 * 1000,       .index = 1050 * 1000},
+            {.frequency = 400 * 1000,       .index = 1100 * 1000},
+      #endif
 	{.frequency = 600 * 1000,       .index = 1250 * 1000},
+
         {.frequency = CPUFREQ_TABLE_END},
 };
 
@@ -3201,17 +3221,29 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {
 
 /******************************** ddr dvfs frequency volt table **********************************/
 static struct cpufreq_frequency_table dvfs_ddr_table_volt_level0[] = {
-	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
-	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1050 * 1000},
-	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1125 * 1000},
+    #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
+	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1075 * 1000},
+	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1150 * 1000},
+    #else
+        {.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
+       {.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1050 * 1000},
+       {.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1125 * 1000},
         {.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,     .index = 1175 * 1000},
+    #endif
+        {.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,   .index = 1200 * 1000},
 	//{.frequency = 528 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 
 static struct cpufreq_frequency_table dvfs_ddr_table_t[] = {
-	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
-	{.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1175 * 1000},
+        #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
+	{.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
+        #else
+        {.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
+      {.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1175 * 1000},
+        #endif
 	{.frequency = CPUFREQ_TABLE_END},
 };
 #define dvfs_ddr_table dvfs_ddr_table_volt_level0
