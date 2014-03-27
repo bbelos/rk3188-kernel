@@ -505,6 +505,19 @@ INLINE NMI_Uint32 get_beacon_timestamp_lo(NMI_Uint8* data)
     return time_stamp;
 }
 
+INLINE UWORD32 get_beacon_timestamp_hi(UWORD8* data)
+{
+    UWORD32 time_stamp = 0;
+    UWORD32 index    = (MAC_HDR_LEN + 4);
+
+    time_stamp |= data[index++];
+    time_stamp |= (data[index++] << 8);
+    time_stamp |= (data[index++] << 16);
+    time_stamp |= (data[index]   << 24);
+
+    return time_stamp;
+}
+
 /* This function extracts the 'frame type' bits from the MAC header of the   */
 /* input frame.                                                              */
 /* Returns the value in the LSB of the returned value.                       */
@@ -820,6 +833,8 @@ NMI_Sint32 ParseNetworkInfo(NMI_Uint8* pu8MsgBuffer, tstrNetworkInfo** ppstrNetw
 		NMI_Uint8 *pu8IEs = 0;
 		NMI_Uint16 u16IEsLen = 0;
 		NMI_Uint8 u8index = 0;
+		NMI_Uint32 u32Tsf_Lo;
+		NMI_Uint32 u32Tsf_Hi;
 		
 		pstrNetworkInfo = (tstrNetworkInfo*)NMI_MALLOC(sizeof(tstrNetworkInfo));
 		NMI_memset((void*)(pstrNetworkInfo), 0, sizeof(tstrNetworkInfo));
@@ -836,9 +851,17 @@ NMI_Sint32 ParseNetworkInfo(NMI_Uint8* pu8MsgBuffer, tstrNetworkInfo** ppstrNetw
 		/* Get the cap_info */
 		pstrNetworkInfo->u16CapInfo = get_cap_info(pu8msa);
 		#ifdef NMI_P2P
+		/* Get time-stamp [Low only 32 bit] */
 		pstrNetworkInfo->u32Tsf = get_beacon_timestamp_lo(pu8msa);
 		PRINT_D(CORECONFIG_DBG,"TSF :%x\n",pstrNetworkInfo->u32Tsf );
-		#endif		
+		#endif
+
+		/* Get full time-stamp [Low and High 64 bit] */		
+		u32Tsf_Lo = get_beacon_timestamp_lo(pu8msa);
+		u32Tsf_Hi = get_beacon_timestamp_hi(pu8msa);
+
+		pstrNetworkInfo->u64Tsf = u32Tsf_Lo | (u32Tsf_Hi << 32);
+		
 		/* Get SSID */
 		get_ssid(pu8msa, pstrNetworkInfo->au8ssid, &(pstrNetworkInfo->u8SsidLen));
 		

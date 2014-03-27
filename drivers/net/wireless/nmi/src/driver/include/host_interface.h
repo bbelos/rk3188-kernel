@@ -774,6 +774,19 @@ NMI_Sint32 host_int_get_MacAddress(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8* pu8MacAdd
 NMI_Sint32 host_int_set_MacAddress(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8* pu8MacAddress);
 
 /**
+*  @brief 		wait until msg q is empty
+*  @details
+*  @param[in,out] 
+
+*  @return 		Error code indicating success/failure
+*  @note
+*  @author		asobhy
+*  @date		19 march 2014
+*  @version		1.0
+*/
+NMI_Sint32 host_int_wait_msg_queue_idle(void);
+
+/**
 *  @brief 		gets the site survey results
 *  @details 	  	
 *  @param[in,out] handle to the wifi driver, 

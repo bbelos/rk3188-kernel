@@ -2241,13 +2241,13 @@ int nmc1000_wlan_init(struct net_device *dev,perInterface_wlan_t* p_nic)
 		ret = wlan_initialize_threads(nic);
 		if (ret < 0) {
 			PRINT_ER("Initializing Threads FAILED\n");
-			goto _fail_irq_;
+			goto _fail_nmi_wlan_;
 		}
 	
 #if (defined NMI_SDIO) && (defined COMPLEMENT_BOOT)
 		if(nmc1000_prepare_11b_core(&nwi,&nwo,g_linux_wlan)){
 			PRINT_ER("11b Core is not ready\n");
-			goto _fail_irq_;
+			goto _fail_threads_;
 		}
 #endif
 
@@ -2255,7 +2255,7 @@ int nmc1000_wlan_init(struct net_device *dev,perInterface_wlan_t* p_nic)
 		if(init_irq(g_linux_wlan)){
 			PRINT_ER("couldn't initialize IRQ\n");
 			ret = -EIO;
-			goto _fail_locks_;
+			goto _fail_threads_;
 		}
 #endif
 
@@ -2317,11 +2317,13 @@ int nmc1000_wlan_init(struct net_device *dev,perInterface_wlan_t* p_nic)
 
 _fail_threads_:
 	wlan_deinitialize_threads(g_linux_wlan);
-_fail_irq_:
+
 #if (!defined NMI_SDIO) || (defined NMI_SDIO_IRQ_GPIO)
 		deinit_irq(g_linux_wlan);
 
 #endif
+_fail_nmi_wlan_:
+	nmi_wlan_deinit(g_linux_wlan);
 _fail_locks_:
 		wlan_deinit_locks(g_linux_wlan);
 		PRINT_ER("WLAN Iinitialization FAILED\n");
@@ -2813,12 +2815,13 @@ int mac_close(struct net_device *ndev)
 		PRINT_D(GENERIC_DBG,"Deinitializing nmc1000\n");
 		g_linux_wlan->close = 1;
 		nmc1000_wlan_deinit(g_linux_wlan);
+		#ifdef USE_WIRELESS
+		#ifdef NMI_AP_EXTERNAL_MLME
+	 	NMI_WFI_deinit_mon_interface();
+		#endif
+		#endif
 	}
-#ifdef USE_WIRELESS
-#ifdef NMI_AP_EXTERNAL_MLME
- 	NMI_WFI_deinit_mon_interface();
-#endif
-#endif
+
 	linux_wlan_unlock(&close_exit_sync);	
 	nic->mac_opened=0;
 

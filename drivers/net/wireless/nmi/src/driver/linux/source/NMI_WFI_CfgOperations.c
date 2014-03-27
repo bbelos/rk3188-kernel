@@ -208,7 +208,7 @@ void refresh_scan(void* pUserVoid,uint8_t all){
 				rssi = get_rssi_avg(pstrNetworkInfo);
 				if(NMI_memcmp("DIRECT-", pstrNetworkInfo->au8ssid, 7))
 				{
-					bss = cfg80211_inform_bss(wiphy, channel, pstrNetworkInfo->au8bssid, 0, pstrNetworkInfo->u16CapInfo,
+					bss = cfg80211_inform_bss(wiphy, channel, pstrNetworkInfo->au8bssid, pstrNetworkInfo->u64Tsf, pstrNetworkInfo->u16CapInfo,
 									pstrNetworkInfo->u16BeaconPeriod, (const u8*)pstrNetworkInfo->pu8IEs,
 									(size_t)pstrNetworkInfo->u16IEsLen, (((NMI_Sint32)rssi) * 100), GFP_KERNEL);
 					cfg80211_put_bss(bss);
@@ -342,6 +342,7 @@ void add_network_to_shadow(tstrNetworkInfo* pstrNetworkInfo,void* pUserVoid, voi
 		astrLastScannedNtwrksShadow[ap_index].u8channel = pstrNetworkInfo->u8channel;
 		
 		astrLastScannedNtwrksShadow[ap_index].u16IEsLen = pstrNetworkInfo->u16IEsLen;
+		astrLastScannedNtwrksShadow[ap_index].u64Tsf = pstrNetworkInfo->u64Tsf;
 	if(ap_found != -1)
 		NMI_FREE(astrLastScannedNtwrksShadow[ap_index].pu8IEs);
 		astrLastScannedNtwrksShadow[ap_index].pu8IEs = 
@@ -446,10 +447,10 @@ static void CfgScanResult(tenuScanEvent enuScanEvent, tstrNetworkInfo* pstrNetwo
 							if(!(NMI_memcmp("DIRECT-", pstrNetworkInfo->au8ssid, 7) ))
 							{
 
-							bss = cfg80211_inform_bss(wiphy, channel, pstrNetworkInfo->au8bssid, 0, pstrNetworkInfo->u16CapInfo,
+								bss = cfg80211_inform_bss(wiphy, channel, pstrNetworkInfo->au8bssid, pstrNetworkInfo->u64Tsf, pstrNetworkInfo->u16CapInfo,
 											pstrNetworkInfo->u16BeaconPeriod, (const u8*)pstrNetworkInfo->pu8IEs,
 											(size_t)pstrNetworkInfo->u16IEsLen, (((NMI_Sint32)pstrNetworkInfo->s8rssi) * 100), GFP_KERNEL);
-							cfg80211_put_bss(bss);
+								cfg80211_put_bss(bss);
 							}
 							
 						
@@ -747,14 +748,11 @@ static int NMI_WFI_CfgSetChannel(struct wiphy *wiphy,
 	PRINT_D(CFG80211_DBG,"Setting channel %d with frequency %d\n", channelnum, channel->center_freq );
 #endif
 
-	if(priv->u8CurrChannel != channelnum)
-	{
-		priv->u8CurrChannel = channelnum;
-		s32Error   = host_int_set_mac_chnl_num(priv->hNMIWFIDrv,channelnum);
+	priv->u8CurrChannel = channelnum;
+	s32Error   = host_int_set_mac_chnl_num(priv->hNMIWFIDrv,channelnum);
 
-		if(s32Error != NMI_SUCCESS)
-			PRINT_ER("Error in setting channel %d\n", channelnum);
-	}
+	if(s32Error != NMI_SUCCESS)
+		PRINT_ER("Error in setting channel %d\n", channelnum);
 
 	return s32Error;
 }
@@ -3187,7 +3185,8 @@ static int NMI_WFI_change_virt_intf(struct wiphy *wiphy,struct net_device *dev,
 			
 		if(g_linux_wlan->nmc1000_initialized)
 		{
-			g_nmc_initialized = 0;
+			// ensure that the message Q is empty
+			host_int_wait_msg_queue_idle();
 
 			/*BugID_5213*/
 			/*Eliminate host interface blocking state*/
@@ -3281,87 +3280,85 @@ static int NMI_WFI_change_virt_intf(struct wiphy *wiphy,struct net_device *dev,
 		priv->wdev->iftype = type;
 		nic->monitor_flag = 0;
 		nic->iftype = STATION_MODE;
-		//host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
+		
 
 		#ifndef SIMULATION
-		//PRINT_D(HOSTAPD_DBG,"Downloading STATION firmware\n");
-
 		#ifdef NMI_P2P
 		
 		PRINT_D(HOSTAPD_DBG,"Downloading P2P_CONCURRENCY_FIRMWARE\n");
 		nic->iftype = CLIENT_MODE;
 
-		nic->iftype = CLIENT_MODE;
-		nmc1000_wlan_deinit(g_linux_wlan);
-		nmc1000_wlan_init(dev, nic);
-		nic->iftype = STATION_MODE;
-	
-	
-		host_int_set_wfi_drv_handler(g_linux_wlan->strInterfaceInfo[0].drvHandler);
-		host_int_set_MacAddress((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
-								g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
-		host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
-
-		/*Add saved WEP keys, if any*/
-		if(g_wep_keys_saved)
-		{
-			host_int_set_WEPDefaultKeyID((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
-										g_key_wep_params.key_idx);
-			host_int_add_wep_key_bss_sta((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
-										g_key_wep_params.key,
-										g_key_wep_params.key_len,
-										g_key_wep_params.key_idx);
-		}
-
-		/*No matter the driver handler passed here, it will be overwriiten*/
-		/*in Handle_FlushConnect() with gu8FlushedJoinReqDrvHandler*/
-		host_int_flush_join_req(priv->hNMIWFIDrv);
-
-		/*Add saved PTK and GTK keys, if any*/
-		if(g_ptk_keys_saved && g_gtk_keys_saved)
-		{
-			PRINT_D(CFG80211_DBG,"ptk %x %x %x\n",g_key_ptk_params.key[0],
-										g_key_ptk_params.key[1],
-										g_key_ptk_params.key[2]);
-			PRINT_D(CFG80211_DBG,"gtk %x %x %x\n",g_key_gtk_params.key[0],
-										g_key_gtk_params.key[1],
-										g_key_gtk_params.key[2]);
-			NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
-								g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
-								g_add_ptk_key_params.key_idx,
-								#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
-								g_add_ptk_key_params.pairwise,
-								#endif
-								g_add_ptk_key_params.mac_addr,
-								(struct key_params *)(&g_key_ptk_params));
-
-			NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
-								g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
-								g_add_gtk_key_params.key_idx,
-								#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
-								g_add_gtk_key_params.pairwise,
-								#endif
-								g_add_gtk_key_params.mac_addr,
-								(struct key_params *)(&g_key_gtk_params));
-		}
 		
-		/*If nmc is running, then close-open to actually get new firmware running (serves P2P)*/
 		if(g_linux_wlan->nmc1000_initialized)
-		{
-			//nmc1000_wlan_deinit(g_linux_wlan);
-			//nmc1000_wlan_init(dev, g_linux_wlan);
-			//mac_close(nic->nmc_netdev);
-			//mac_open(nic->nmc_netdev);
-			//repeat_power_cycle(nic);			
-			/*BugID_4847: registered frames in firmware are now lost
-			   due to mac close. So re-register those frames */
-			for(i=0; i<num_reg_frame; i++)
+		{	
+			// ensure that the message Q is empty
+			host_int_wait_msg_queue_idle();
+			
+			nmc1000_wlan_deinit(g_linux_wlan);
+			nmc1000_wlan_init(dev, nic);
+			nic->iftype = STATION_MODE;
+			g_nmc_initialized = 1;
+	
+			host_int_set_wfi_drv_handler(g_linux_wlan->strInterfaceInfo[0].drvHandler);
+			host_int_set_MacAddress((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+									g_linux_wlan->strInterfaceInfo[0].aSrcAddress);
+			host_int_set_operation_mode(priv->hNMIWFIDrv,STATION_MODE);
+
+			/*Add saved WEP keys, if any*/
+			if(g_wep_keys_saved)
 			{
-				PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
-																		nic->g_struct_frame_reg[i].reg);
-				host_int_frame_register(priv->hNMIWFIDrv,
-										nic->g_struct_frame_reg[i].frame_type,
-										nic->g_struct_frame_reg[i].reg);
+				host_int_set_WEPDefaultKeyID((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+											g_key_wep_params.key_idx);
+				host_int_add_wep_key_bss_sta((NMI_WFIDrvHandle)(g_linux_wlan->strInterfaceInfo[0].drvHandler),
+											g_key_wep_params.key,
+											g_key_wep_params.key_len,
+											g_key_wep_params.key_idx);
+			}
+
+			/*No matter the driver handler passed here, it will be overwriiten*/
+			/*in Handle_FlushConnect() with gu8FlushedJoinReqDrvHandler*/
+			host_int_flush_join_req(priv->hNMIWFIDrv);
+
+			/*Add saved PTK and GTK keys, if any*/
+			if(g_ptk_keys_saved && g_gtk_keys_saved)
+			{
+				PRINT_D(CFG80211_DBG,"ptk %x %x %x\n",g_key_ptk_params.key[0],
+											g_key_ptk_params.key[1],
+											g_key_ptk_params.key[2]);
+				PRINT_D(CFG80211_DBG,"gtk %x %x %x\n",g_key_gtk_params.key[0],
+											g_key_gtk_params.key[1],
+											g_key_gtk_params.key[2]);
+				NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+									g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+									g_add_ptk_key_params.key_idx,
+									#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+									g_add_ptk_key_params.pairwise,
+									#endif
+									g_add_ptk_key_params.mac_addr,
+									(struct key_params *)(&g_key_ptk_params));
+
+				NMI_WFI_add_key(g_linux_wlan->strInterfaceInfo[0].nmc_netdev->ieee80211_ptr->wiphy,
+									g_linux_wlan->strInterfaceInfo[0].nmc_netdev,
+									g_add_gtk_key_params.key_idx,
+									#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,36)
+									g_add_gtk_key_params.pairwise,
+									#endif
+									g_add_gtk_key_params.mac_addr,
+									(struct key_params *)(&g_key_gtk_params));
+			}
+				
+			/*BugID_4847: registered frames in firmware are now lost
+			    due to mac close. So re-register those frames */
+			if(g_linux_wlan->nmc1000_initialized)
+			{
+				for(i=0; i<num_reg_frame; i++)
+				{
+					PRINT_D(INIT_DBG,"Frame registering Type: %x - Reg: %d\n", nic->g_struct_frame_reg[i].frame_type, 
+																			nic->g_struct_frame_reg[i].reg);
+					host_int_frame_register(priv->hNMIWFIDrv,
+											nic->g_struct_frame_reg[i].frame_type,
+											nic->g_struct_frame_reg[i].reg);
+				}
 			}
 		}
 		#endif
@@ -3445,7 +3442,10 @@ static int NMI_WFI_change_virt_intf(struct wiphy *wiphy,struct net_device *dev,
 		#if 1
 		interface_type = nic->iftype;
 		nic->iftype = GO_MODE;
-		g_nmc_initialized = 0;
+		
+		// ensure that the message Q is empty
+		host_int_wait_msg_queue_idle();
+		
 		/*while(!g_hif_thread_idle)
 		{
 			PRINT_D(GENERIC_DBG, "Wait for host IF idle\n");

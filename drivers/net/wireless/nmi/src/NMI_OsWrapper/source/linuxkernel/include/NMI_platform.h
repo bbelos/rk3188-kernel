@@ -160,9 +160,9 @@ typedef struct __Message_struct
 typedef struct __MessageQueue_struct
 {	
 	NMI_SemaphoreHandle hSem;
+	spinlock_t strCriticalSection;
 	NMI_Bool bExiting;
 	NMI_Uint32 u32ReceiversCount;
-	NMI_SemaphoreHandle strCriticalSection;
 	Message * pstrMessageList;
 } NMI_MsgQueueHandle;
 

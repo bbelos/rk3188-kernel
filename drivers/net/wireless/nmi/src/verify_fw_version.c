@@ -37,6 +37,10 @@ static struct nmc_version nmc_ver_list[] =
         { "9.3.2", STATION_MODE, "0", 143832},
         { "9.3.2", AP_MODE, "0", 111448},
         { "9.3.2", GO_MODE|CLIENT_MODE, "0", 141876},
+		
+        { "9.3.3", STATION_MODE, "0", 144012},
+        { "9.3.3", AP_MODE, "0", 112432},
+        { "9.3.3", GO_MODE|CLIENT_MODE, "0", 142084},
 };
 
 
@@ -54,6 +58,7 @@ int check_firmware_version(char iftype, char* driver_version, u32 given_firmware
         return -1;
     }
     
+	printk("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n");
     printk("[NMI] iftype = %d, driver_version = %s, given_firmware_size = %d, nmc_ver_list count = %d\n", iftype, driver_version, given_firmware_size, cnt);
 
     switch (iftype)

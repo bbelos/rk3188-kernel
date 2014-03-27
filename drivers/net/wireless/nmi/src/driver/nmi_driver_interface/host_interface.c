@@ -50,6 +50,7 @@ extern NMI_Uint8 g_nmc_initialized;
 #define HOST_IF_MSG_SET_MULTICAST_FILTER		((NMI_Uint16)32)
 #define HOST_IF_MSG_ADD_BA_SESSION		((NMI_Uint16)33)
 #define HOST_IF_MSG_DEL_BA_SESSION		((NMI_Uint16)34)
+#define HOST_IF_MSG_Q_IDLE		((NMI_Uint16)35)
 
 #define HOST_IF_MSG_EXIT					((NMI_Uint16)100)
 
@@ -1303,6 +1304,24 @@ static NMI_Sint32 Handle_CfgParam(void * drvHandler,tstrHostIFCfgParamAttr* strH
 		  return s32Error;
 }
 
+
+/**
+*  @brief Handle_wait_msg_q_empty
+*  @details 	   this should be the last msg and then the msg Q becomes idle
+*  @param[in]    tstrHostIFscanAttr* pstrHostIFscanAttr
+*  @return 	    Error code.
+*  @author	
+*  @date	
+*  @version	1.0
+*/
+static NMI_Sint32 Handle_wait_msg_q_empty(void)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+	g_nmc_initialized = 0;
+	NMI_SemaphoreRelease(&hWaitResponse, NULL);
+	return s32Error;
+}
+
 /**
 *  @brief Handle_Scan
 *  @details 	   Sending config packet to firmware to set the scan params 
@@ -1330,7 +1349,7 @@ static NMI_Sint32 Handle_Scan(void * drvHandler,tstrHostIFscanAttr* pstrHostIFsc
 	pstrWFIDrv->strNMI_UsrScanReq.u32UserScanPvoid = pstrHostIFscanAttr->pvUserArg;
 
 	#ifdef NMI_P2P
-	#if 1
+	#if 0
 	if(pstrWFIDrv->enuHostIFstate== HOST_IF_P2P_LISTEN || (pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED && pstrWFIDrv->u8P2PConnect))
 	{
 	    PRINT_INFO(GENERIC_DBG,"Busy: State: %d\n",pstrWFIDrv->enuHostIFstate);
@@ -1838,7 +1857,7 @@ static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHo
 		/*BugID_5137*/
 		if(NMI_memcmp("DIRECT-", pstrHostIFconnectAttr->pu8ssid,7))
 		{
-			PRINT_D(GENERIC_DBG,"Save connection parameters ,drv_handler=%x\n",drvHandler);
+			
 			gu32FlushedInfoElemAsocSize = pstrWFIDrv->strNMI_UsrConnReq.ConnReqIEsLen;
 			gu8FlushedInfoElemAsoc =  NMI_MALLOC(gu32FlushedInfoElemAsocSize);
 			memcpy(gu8FlushedInfoElemAsoc, pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs,
@@ -2343,12 +2362,12 @@ static NMI_Sint32 Handle_ConnectTimeout(void* drvHandler)
 
 	/*BugID_5213*/
 	/*Freeing flushed join request params on connect timeout*/
-	if(gu8FlushedJoinReq != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
+	if(gu8FlushedJoinReq != NULL && gu8FlushedJoinReqDrvHandler==(NMI_Uint32)drvHandler)
 	{
 		NMI_FREE(gu8FlushedJoinReq);
 		gu8FlushedJoinReq = NULL;
 	}
-	if(gu8FlushedInfoElemAsoc != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
+	if(gu8FlushedInfoElemAsoc != NULL && gu8FlushedJoinReqDrvHandler==(NMI_Uint32)drvHandler)
 	{
 		NMI_FREE(gu8FlushedInfoElemAsoc);
 		gu8FlushedInfoElemAsoc = NULL;
@@ -2818,12 +2837,12 @@ static NMI_Sint32 Handle_RcvdGnrlAsyncInfo(void * drvHandler,tstrRcvdGnrlAsyncIn
 			/*BugID_5213*/
 			/*Freeing flushed join request params on receiving*/
 			/*MAC_DISCONNECTED while connected*/
-			if(gu8FlushedJoinReq != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
+			if(gu8FlushedJoinReq != NULL && gu8FlushedJoinReqDrvHandler==(NMI_Uint32)drvHandler)
 			{
 				NMI_FREE(gu8FlushedJoinReq);
 				gu8FlushedJoinReq = NULL;
 			}
-			if(gu8FlushedInfoElemAsoc != NULL && gu8FlushedJoinReqDrvHandler==drvHandler)
+			if(gu8FlushedInfoElemAsoc != NULL && gu8FlushedJoinReqDrvHandler==(NMI_Uint32)drvHandler)
 			{
 				NMI_FREE(gu8FlushedInfoElemAsoc);
 				gu8FlushedInfoElemAsoc = NULL;
@@ -3343,18 +3362,18 @@ static void Handle_Disconnect(void* drvHandler)
 			pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
 		}			
 
+	
 		/*BugID_5137*/
-		if(gu8FlushedJoinReq != NULL	&& gu8FlushedJoinReqDrvHandler==drvHandler)
+		if(gu8FlushedJoinReq != NULL	&& gu8FlushedJoinReqDrvHandler==(NMI_Uint32)drvHandler)
 		{
 			NMI_FREE(gu8FlushedJoinReq);
 			gu8FlushedJoinReq = NULL;
 		}
-		if(gu8FlushedInfoElemAsoc != NULL &&  gu8FlushedJoinReqDrvHandler==drvHandler)
+		if(gu8FlushedInfoElemAsoc != NULL &&  gu8FlushedJoinReqDrvHandler==(NMI_Uint32)drvHandler)
 		{
 			NMI_FREE(gu8FlushedInfoElemAsoc);
 			gu8FlushedInfoElemAsoc = NULL;
 		}
-
 		
 	}
 
@@ -4485,11 +4504,13 @@ static void hostIFthread(void* pvArg)
 			break;
 		}
 
-		/*BugID_5137*/
-		/*Drop any configuration packet sent during nmc wlan init-deinit*/
-		if(!g_nmc_initialized)
+
+		/*Re-Queue HIF message*/
+		if((!g_nmc_initialized))
 		{
-			PRINT_D(HOSTINF_DBG, "--WAIT--");
+			PRINT_D(GENERIC_DBG, "--WAIT--");
+			NMI_Sleep(200);
+			NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);	
 			continue;
 		}
 	
@@ -4502,6 +4523,11 @@ static void hostIFthread(void* pvArg)
 		
 		switch(strHostIFmsg.u16MsgId)
 		{
+			case HOST_IF_MSG_Q_IDLE:
+			{	
+				Handle_wait_msg_q_empty();
+				break;
+			}
 			case HOST_IF_MSG_SCAN:
 			{
 				Handle_Scan(strHostIFmsg.drvHandler,&strHostIFmsg.uniHostIFmsgBody.strHostIFscanAttr);
@@ -6099,6 +6125,33 @@ NMI_Sint32 host_int_set_mac_chnl_num(NMI_WFIDrvHandle hWFIDrv,NMI_Uint8 u8ChNum)
 }
 
 
+NMI_Sint32 host_int_wait_msg_queue_idle(void)
+{
+	NMI_Sint32 s32Error = NMI_SUCCESS;
+
+	tstrHostIFmsg strHostIFmsg;
+
+	/* prepare the set driver handler message */
+	
+	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
+	strHostIFmsg.u16MsgId = HOST_IF_MSG_Q_IDLE;
+	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+	if(s32Error)
+	{
+		NMI_ERRORREPORT(s32Error, s32Error);
+	}
+	NMI_CATCH(s32Error)
+	{
+	
+	}
+
+	// wait untill MSG Q is empty
+	NMI_SemaphoreAcquire(&hWaitResponse, NULL);
+
+	return s32Error;
+	
+}
+
 NMI_Sint32 host_int_set_wfi_drv_handler(NMI_Uint32 u32address)
 {
 	NMI_Sint32 s32Error = NMI_SUCCESS;
@@ -7044,9 +7097,9 @@ NMI_Sint32 host_int_deinit(NMI_WFIDrvHandle hWFIDrv)
 	}*/
 
 	terminated_handle=pstrWFIDrv;
-PRINT_D( HOSTINF_DBG,"De-initializing host interface for client %d\n",clients_count);
-host_int_set_wfi_drv_handler((NMI_Uint32)NMI_NULL);
-NMI_SemaphoreAcquire(&hSemDeinitDrvHandle, NULL);
+	PRINT_D( HOSTINF_DBG,"De-initializing host interface for client %d\n",clients_count);
+	host_int_set_wfi_drv_handler((NMI_Uint32)NMI_NULL);
+	NMI_SemaphoreAcquire(&hSemDeinitDrvHandle, NULL);
 
 
 
@@ -7111,49 +7164,49 @@ NMI_SemaphoreAcquire(&hSemDeinitDrvHandle, NULL);
 
 
 	
-if(clients_count==1)
-{
-
-	strHostIFmsg.u16MsgId = HOST_IF_MSG_EXIT;
-	strHostIFmsg.drvHandler=hWFIDrv;
-	
-	
-	s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
-	if(s32Error != NMI_SUCCESS)
+	if(clients_count==1)
 	{
-		PRINT_ER("Error in sending deinit's message queue message function: Error(%d)\n",s32Error);
+
+		strHostIFmsg.u16MsgId = HOST_IF_MSG_EXIT;
+		strHostIFmsg.drvHandler=hWFIDrv;
+	
+	
+		s32Error = NMI_MsgQueueSend(&gMsgQHostIF, &strHostIFmsg, sizeof(tstrHostIFmsg), NMI_NULL);
+		if(s32Error != NMI_SUCCESS)
+		{
+			PRINT_ER("Error in sending deinit's message queue message function: Error(%d)\n",s32Error);
+		}
+
+		NMI_SemaphoreAcquire(&hSemHostIFthrdEnd, NULL);
+
+	
+		//PRINT_D(HOSTINF_DBG,"Thread Destroy %p\n",&HostIFthreadHandler);
+		//s32Error = NMI_ThreadDestroy(&HostIFthreadHandler, NMI_NULL);
+		//NMI_ERRORCHECK(s32Error);
 	}
 
-	NMI_SemaphoreAcquire(&hSemHostIFthrdEnd, NULL);
-
-	
-	//PRINT_D(HOSTINF_DBG,"Thread Destroy %p\n",&HostIFthreadHandler);
-	//s32Error = NMI_ThreadDestroy(&HostIFthreadHandler, NMI_NULL);
-	//NMI_ERRORCHECK(s32Error);
-}
-
 
 
 
 
 	
-/* Destroy the MSG Queue */
-if(clients_count==1)
-{
-	NMI_MsgQueueDestroy(&gMsgQHostIF, NMI_NULL);
-	msgQ_created=0;
+	/* Destroy the MSG Queue */
+	if(clients_count==1)
+	{
+		NMI_MsgQueueDestroy(&gMsgQHostIF, NMI_NULL);
+		msgQ_created=0;
 	
-}
+	}
 	
 
 
 
 	/*Destroy Semaphores*/	
 	if (clients_count==1)
-		{
+	{
 		NMI_SemaphoreDestroy(&hSemHostIFthrdEnd,NULL);
 		NMI_SemaphoreDestroy(&hSemDeinitDrvHandle,NULL);
-		}
+	}
 
 	NMI_SemaphoreDestroy(&(pstrWFIDrv ->hSemTestKeyBlock),NULL);	
 	NMI_SemaphoreDestroy(&(pstrWFIDrv->hSemTestDisconnectBlock),NULL);	
