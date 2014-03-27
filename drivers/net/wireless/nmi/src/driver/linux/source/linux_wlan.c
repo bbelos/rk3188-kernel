@@ -412,12 +412,18 @@ static int dev_state_ev_handler(struct notifier_block *this, unsigned long event
 	perInterface_wlan_t* nic;
 	NMI_Uint8 null_ip[4]={0};
 	char wlan_dev_name[5]="wlan0";
-	
+
+	#if 1 // add by ruan
+	    if( 0 != strcmp(dev_iface->ifa_label,"wlan0"))
+	    {
+	       NMI_PRINTF("dev_iface != wlan0\n");
+	       return NOTIFY_DONE;
+	    }
+	#endif
+
 	priv= wiphy_priv(dev->ieee80211_ptr->wiphy);
     pstrWFIDrv = (tstrNMI_WFIDrv *)priv->hNMIWFIDrv;
-
 	nic = netdev_priv(dev);
-
 	//printk("dev_state_ev_handler +++\n");	// tony
 
 	if(dev_iface == NULL)
