@@ -160,6 +160,9 @@ static void init_cameraVersion(void)
 #ifdef CONFIG_SOC_CAMERA_SP0838
 	(*p)++;
 #endif
+#ifdef CONFIG_SOC_CAMERA_GC0329
+	(*p)++;
+#endif
 
 	strcat(tchip_version,str);
 }
