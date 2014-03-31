@@ -1778,7 +1778,7 @@ struct rk30_adc_battery_data  *bat = container_of((work), \
 
 	}
 
-	if (rk30_battery_dbg_level){
+	if (rk30_battery_dbg_level) 
 	    rk30_adc_battery_save_data(bat);
 
 	if (rk30_battery_dbg_level){
