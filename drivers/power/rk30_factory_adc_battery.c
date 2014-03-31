@@ -1682,6 +1682,34 @@ static int rk30_adc_battery_resume(struct platform_device *dev)
 #define rk30_adc_battery_resume NULL
 #endif
 
+static void rk30_adc_battery_save_data(struct rk30_adc_battery_data  *bat)
+{
+    static int xhc_add = 0;
+    static long record_times = 1;
+    if (++xhc_add > 30) {
+            xhc_add = 0;
+            static int fd_log = -1;
+            struct tm tm;
+            char buf[256] = {0};
+            time_to_tm(get_seconds(), 0, &tm);
+
+            if(fd_log < 0){
+                fd_log = sys_open("/data/local/bat.log", O_CREAT | O_APPEND | O_RDWR, 0);
+            //  printk("fd_log = %d\n", fd_log);
+            }
+
+            if(fd_log >= 0) {
+                int ret;
+                sprintf(buf, "<%d>[%02d:%02d:%02d]Status = %d, RealAdcVal = %d, RealVol = <%d>,gBatVol = <%d>, gBatCap = %d, RealCapacity = %d, batt_dischargecnt = %d\n,  chargecnt = %d,ac_count = %d, usb_count =%d ,usb_dischargecount =%d, chageok_pin = %d\n",
+            record_times,tm.tm_hour, tm.tm_min, tm.tm_sec, bat ->bat_status, bat ->adc_val, rk_adc_voltage(bat, bat ->adc_val),
+            bat ->bat_voltage, bat ->bat_capacity, bat ->capacitytmp, bat ->gBatCapacityDisChargeCnt, bat ->gBatCapacityChargeCnt,
+            bat ->gBatCapacityacChargeCnt, bat ->gBatCapacityusbChargeCnt, bat ->gBatCapacityusbdisChargeCnt, is_charge_ok(bat));
+                ret = sys_write(fd_log, (const char __user *)buf, strlen(buf));
+                record_times++;
+            //  printk("ret = %d, len=%d\n", ret, strlen(buf));
+            }
+    }
+}
 
 unsigned long AdcTestCnt = 0;
 static void rk30_adc_battery_timer_work(struct work_struct *work)
@@ -1750,7 +1778,10 @@ struct rk30_adc_battery_data  *bat = container_of((work), \
 
 	}
 
-	//if (rk30_battery_dbg_level){
+	if (rk30_battery_dbg_level){
+	    rk30_adc_battery_save_data(bat);
+
+	if (rk30_battery_dbg_level){
 		if (++AdcTestCnt >= 2)
 			{
 			AdcTestCnt = 0;
@@ -1761,7 +1792,7 @@ struct rk30_adc_battery_data  *bat = container_of((work), \
 			bat ->gBatCapacityacChargeCnt, bat ->gBatCapacityusbChargeCnt, bat ->gBatCapacityusbdisChargeCnt);
 
 		}
-	//}
+	}
 	queue_delayed_work(bat ->wq, &bat ->delay_work, msecs_to_jiffies(TIMER_MS_COUNTS));
 
 }
