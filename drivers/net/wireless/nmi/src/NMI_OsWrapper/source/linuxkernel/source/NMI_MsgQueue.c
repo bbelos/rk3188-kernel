@@ -54,7 +54,6 @@ NMI_ErrNo NMI_MsgQueueDestroy(NMI_MsgQueueHandle* pHandle,
 
 	NMI_SemaphoreDestroy(&pHandle->hSem, NMI_NULL);
 	
-	
 	while(pHandle->pstrMessageList != NULL)
 	{
 		Message * pstrMessge = pHandle->pstrMessageList->pstrNext;
@@ -91,7 +90,6 @@ NMI_ErrNo NMI_MsgQueueSend(NMI_MsgQueueHandle* pHandle,
 
 	spin_lock_irqsave(&pHandle->strCriticalSection,flags);
 	
-	
 	/* construct a new message */
 	pstrMessage = NMI_NEW(Message, 1);
 	NMI_NULLCHECK(s32RetStatus, pstrMessage);
@@ -117,9 +115,8 @@ NMI_ErrNo NMI_MsgQueueSend(NMI_MsgQueueHandle* pHandle,
 		pstrTailMsg->pstrNext = pstrMessage;
 	}	
 	
-	
 	spin_unlock_irqrestore(&pHandle->strCriticalSection,flags);
-	
+
 	NMI_SemaphoreRelease(&pHandle->hSem, NMI_NULL);
 	
 	NMI_CATCH(s32RetStatus)
@@ -167,11 +164,10 @@ NMI_ErrNo NMI_MsgQueueRecv(NMI_MsgQueueHandle* pHandle,
 		NMI_ERRORREPORT(s32RetStatus, NMI_FAIL);
 	}
 	
-	
 	spin_lock_irqsave(&pHandle->strCriticalSection,flags);
 	pHandle->u32ReceiversCount++;
-	
 	spin_unlock_irqrestore(&pHandle->strCriticalSection,flags);
+
 	NMI_SemaphoreFillDefault(&strSemAttrs);
 	#ifdef CONFIG_NMI_MSG_QUEUE_TIMEOUT
 	if(pstrAttrs != NMI_NULL)
@@ -180,15 +176,12 @@ NMI_ErrNo NMI_MsgQueueRecv(NMI_MsgQueueHandle* pHandle,
 	}
 	#endif
 	s32RetStatus = NMI_SemaphoreAcquire(&(pHandle->hSem), &strSemAttrs);
-
 	if(s32RetStatus == NMI_TIMEOUT)
 	{
-		// timed out, just exit without consumeing the message 
-		
+		/* timed out, just exit without consumeing the message */
 		spin_lock_irqsave(&pHandle->strCriticalSection,flags);
 		pHandle->u32ReceiversCount--;
 		spin_unlock_irqrestore(&pHandle->strCriticalSection,flags);
-		
 	}
 	else
 	{
@@ -200,31 +193,23 @@ NMI_ErrNo NMI_MsgQueueRecv(NMI_MsgQueueHandle* pHandle,
 			NMI_ERRORREPORT(s32RetStatus, NMI_FAIL);
 		}
 
-	
 		spin_lock_irqsave(&pHandle->strCriticalSection,flags);
 		
 		pstrMessage = pHandle->pstrMessageList;
 		if(pstrMessage == NULL)
 		{
-
-
 		spin_unlock_irqrestore(&pHandle->strCriticalSection,flags);
-
 			NMI_ERRORREPORT(s32RetStatus, NMI_FAIL);
 		}
-
 		/* check buffer size */
 		if(u32RecvBufferSize < pstrMessage->u32Length)
-		{	
+		{
 			spin_unlock_irqrestore(&pHandle->strCriticalSection,flags);
-			
-		NMI_SemaphoreRelease(&pHandle->hSem, NMI_NULL);
-			
+			NMI_SemaphoreRelease(&pHandle->hSem, NMI_NULL);
 			NMI_ERRORREPORT(s32RetStatus, NMI_BUFFER_OVERFLOW);
 		}
 
 		/* consume the message */
-	
 		pHandle->u32ReceiversCount--;
 		NMI_memcpy(pvRecvBuffer, pstrMessage->pvBuffer, pstrMessage->u32Length);
 		*pu32ReceivedLength = pstrMessage->u32Length;
@@ -234,8 +219,8 @@ NMI_ErrNo NMI_MsgQueueRecv(NMI_MsgQueueHandle* pHandle,
 		NMI_FREE(pstrMessage->pvBuffer);
 		NMI_FREE(pstrMessage);	
 		
-		
 		spin_unlock_irqrestore(&pHandle->strCriticalSection,flags);
+
 	}
 
 	NMI_CATCH(s32RetStatus)

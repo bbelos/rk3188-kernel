@@ -1609,7 +1609,7 @@ static NMI_Sint32 Handle_Connect(void * drvHandler,tstrHostIFconnectAttr* pstrHo
 	
 	#endif	
 	
-	PRINT_D(HOSTINF_DBG,"Handling connect request\n");	
+	PRINT_D(GENERIC_DBG,"Handling connect request\n");	
 
 	#ifndef CONNECT_DIRECT
 	NMI_memset(gapu8RcvdSurveyResults[0], 0, MAX_SURVEY_RESULT_FRAG_SIZE);
@@ -3362,7 +3362,6 @@ static void Handle_Disconnect(void* drvHandler)
 			pstrWFIDrv->strNMI_UsrConnReq.pu8ConnReqIEs = NULL;
 		}			
 
-	
 		/*BugID_5137*/
 		if(gu8FlushedJoinReq != NULL	&& gu8FlushedJoinReqDrvHandler==(NMI_Uint32)drvHandler)
 		{
@@ -3395,7 +3394,7 @@ void resolve_disconnect_aberration(void* drvHandler)
 	pstrWFIDrv = (tstrNMI_WFIDrv *)drvHandler;
 		if (pstrWFIDrv  == NMI_NULL)
 		return;
-	if(pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTED)
+	if((pstrWFIDrv->enuHostIFstate == HOST_IF_WAITING_CONN_RESP)||(pstrWFIDrv->enuHostIFstate == HOST_IF_CONNECTING))
 		{
 			printk("\n\n<< correcting Supplicant state machine >>\n\n");
 			host_int_disconnect((NMI_WFIDrvHandle)pstrWFIDrv, 1);
@@ -4048,7 +4047,18 @@ static int Handle_RemainOnChan(void* drvHandler,tstrHostIfRemainOnChan* pstrHost
 		NMI_ERRORREPORT(s32Error, NMI_BUSY);
 		
 	}
-	PRINT_D(HOSTINF_DBG,"Setting channel :%d\n",pstrHostIfRemainOnChan->u16Channel);
+	
+	#ifdef DISABLE_PWRSAVE_AND_SCAN_DURING_IP
+	printk("g_obtainingIP= %d, connecting = %d \n ",g_obtainingIP,connecting);
+	if(g_obtainingIP||connecting)
+	{
+		PRINT_D(GENERIC_DBG, "[handle_scan]: Don't do obss scan until IP adresss is obtained\n");			
+		NMI_ERRORREPORT(s32Error, NMI_BUSY);
+	}
+	#endif
+	
+	PRINT_D(GENERIC_DBG,"Setting channel :%d\n",pstrHostIfRemainOnChan->u16Channel);
+	
 	
 	/*prepare configuration packet*/
 	strWIDList[0].u16WIDid = (NMI_Uint16)WID_CURRENT_CHANNEL;
@@ -7101,15 +7111,6 @@ NMI_Sint32 host_int_deinit(NMI_WFIDrvHandle hWFIDrv)
 	host_int_set_wfi_drv_handler((NMI_Uint32)NMI_NULL);
 	NMI_SemaphoreAcquire(&hSemDeinitDrvHandle, NULL);
 
-
-
-	
-
-	
-	
-
-
-
 	/*Calling the CFG80211 scan done function with the abort flag set to true*/
 	if(pstrWFIDrv->strNMI_UsrScanReq.pfUserScanResult)
        {                       
@@ -7154,16 +7155,6 @@ NMI_Sint32 host_int_deinit(NMI_WFIDrvHandle hWFIDrv)
 
 	NMI_memset(&strHostIFmsg, 0, sizeof(tstrHostIFmsg));
 	
-       
-
-	
-	
-
-	
-
-
-
-	
 	if(clients_count==1)
 	{
 
@@ -7184,10 +7175,6 @@ NMI_Sint32 host_int_deinit(NMI_WFIDrvHandle hWFIDrv)
 		//s32Error = NMI_ThreadDestroy(&HostIFthreadHandler, NMI_NULL);
 		//NMI_ERRORCHECK(s32Error);
 	}
-
-
-
-
 
 	
 	/* Destroy the MSG Queue */
@@ -7321,6 +7308,7 @@ void GnrlAsyncInfoReceived(NMI_Uint8* pu8Buffer, NMI_Uint32 u32Length)
 	if(pstrWFIDrv->strNMI_UsrConnReq.pfUserConnectResult == NMI_NULL)
 	{
 		/* received mac status is not needed when there is no current Connect Request */
+		PRINT_ER("Received mac status is not needed when there is no current Connect Reques\n");
 		return;
 	}
 

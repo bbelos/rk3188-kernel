@@ -992,7 +992,8 @@ static int NMI_WFI_CfgConnect(struct wiphy *wiphy, struct net_device *dev,
 
 		goto done;
 	}	
-	
+
+	pstrWFIDrv->enuHostIFstate = HOST_IF_CONNECTING;
 	priv->NMI_WFI_wep_default = 0;
 	NMI_memset(priv->NMI_WFI_wep_key, 0, sizeof(priv->NMI_WFI_wep_key));
 	NMI_memset(priv->NMI_WFI_wep_key_len, 0, sizeof(priv->NMI_WFI_wep_key_len));	

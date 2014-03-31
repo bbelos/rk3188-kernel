@@ -1412,7 +1412,7 @@ static int linux_wlan_init_test_config(struct net_device *dev, linux_wlan_t* p_n
 
 	unsigned char c_val[64];
 	#ifndef STATIC_MACADDRESS
-	unsigned char mac_add[] = {0x00, 0x80, 0xC2, 0x5E, 0xa2, 0xab};
+	unsigned char mac_add[] = {0x00, 0x80, 0xC2, 0x5E, 0xa2, 0xff};
 	#endif
 	unsigned int chipid = 0;
 
