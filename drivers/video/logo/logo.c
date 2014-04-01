@@ -161,6 +161,10 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 			logo = &logo_android_bmp;
 			#endif
 			
+			#ifdef CONFIG_LOGO_LINUX_BMP_ANDROID_TR7888_KNC
+			logo = &tr7888_knc_logo_android_bmp;
+			#endif
+			
 			#endif	
 		}
 		else
