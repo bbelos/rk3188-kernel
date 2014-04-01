@@ -20,6 +20,7 @@
  --*/
 
 #include "icn85xx.h"
+#include <mach/board.h>
 
 #if COMPILE_FW_WITH_DRIVER
 
@@ -2312,6 +2313,27 @@ static int icn85xx_ts_probe(struct i2c_client *client, const struct i2c_device_i
         icn85xx_trace("fwVersion : 0x%x\n", fwVersion); 
         icn85xx_trace("current version: 0x%x\n", curVersion);  
 
+    if(board_boot_mode() == BOOT_MODE_RECOVERY)
+    {
+        printk("BOOT_MODE_RECOVERY !  force update fw\n");
+        retry = 5;
+        while(retry > 0)
+        {
+		    if(icn85xx_goto_progmode() != 0)
+		    {
+				printk("icn85xx_goto_progmode() != 0 error\n");
+		        return -1; 
+		    } 
+        	icn85xx_read_flashid();
+            printk("begin to update\n");
+            if(R_OK == icn85xx_fw_update(firmware))
+            {
+                break;
+            }
+            retry--;
+            icn85xx_error("icn85xx_fw_update failed.\n");        
+        }
+    }
 
 #if FORCE_UPDATA_FW
         retry = 5;
