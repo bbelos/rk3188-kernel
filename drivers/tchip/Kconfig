@@ -47,6 +47,14 @@ choice
     config TCHIP_MACH_TR7078
 		bool "TR7078, Public 7' Machine"
     
+    config TCHIP_MACH_TR7078IPS_SAMSUNG
+		depends on TCHIP_MACH_TR7078
+		bool "TR7078, Public 7' SAMSUNG IPS Screen Machine"
+    
+    config TCHIP_MACH_TR7078IPS_BOE
+		depends on TCHIP_MACH_TR7078
+		bool "TR7078, Public 7' BOE IPS Screen Machine"
+    
     config TCHIP_MACH_TR7088
 		bool "TR7088, Public 7' Machine"
 
