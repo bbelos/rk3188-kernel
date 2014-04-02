@@ -53,7 +53,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         INVALID_VALUE,
                         INVALID_VALUE,
                         INVALID_VALUE,
-                        RK30_PIN3_PB5,
+                        RK30_PIN3_PB4,
                         (CONS(RK29_CAM_SENSOR_OV5640,_PWRDN_ACTIVE)&0x10)|0x01,
                         0,
                         CONS(RK29_CAM_SENSOR_OV5640,_FULL_RESOLUTION),
@@ -70,7 +70,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         INVALID_VALUE,
                         INVALID_VALUE,
                         INVALID_VALUE,
-                        RK30_PIN3_PB5,
+                        RK30_PIN3_PB4,
                         (CONS(RK29_CAM_SENSOR_OV5642,_PWRDN_ACTIVE)&0x10)|0x01,
                         0,
                         CONS(RK29_CAM_SENSOR_OV5642,_FULL_RESOLUTION),
@@ -87,7 +87,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         INVALID_VALUE,//CONFIG_SENSOR_POWERACTIVE_LEVEL_
                         INVALID_VALUE, //CONFIG_SENSOR_RESET_PIN
                         INVALID_VALUE,//CONFIG_SENSOR_RESETACTIVE_LEVEL
-                        RK30_PIN3_PB4,//CONFIG_SENSOR_POWERDN_PIN
+                        RK30_PIN3_PB5,//CONFIG_SENSOR_POWERDN_PIN
                         1,//CONFIG_SENSOR_POWERDNACTIVE_LEVEL_X
                         0,//flash led 
                         sp2518_FULL_RESOLUTION,// resolution ,define use gc0329_FULL_RESOLUTION  in arch/arm/plat-rk/include/plat/rk_camera.h
@@ -110,7 +110,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         INVALID_VALUE,
                         INVALID_VALUE,
                         INVALID_VALUE,
-                        RK30_PIN3_PB4,
+                        RK30_PIN3_PB5,
                         (CONS(RK29_CAM_SENSOR_GC0308,_PWRDN_ACTIVE)&0x10)|0x01,
                         0,
                         CONS(RK29_CAM_SENSOR_GC0308,_FULL_RESOLUTION),
@@ -127,7 +127,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         INVALID_VALUE,
                         INVALID_VALUE,
                         INVALID_VALUE,
-                        RK30_PIN3_PB4,
+                        RK30_PIN3_PB5,
                         (CONS(RK29_CAM_SENSOR_GC2035,_PWRDN_ACTIVE)&0x10)|0x01,
                         0,
                         CONS(RK29_CAM_SENSOR_GC2035,_FULL_RESOLUTION),
