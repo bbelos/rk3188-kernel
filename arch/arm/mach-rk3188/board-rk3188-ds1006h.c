@@ -3173,8 +3173,8 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level1[] = {
 // ds1006h 10'
 #if defined(CONFIG_TCHIP_MACH_TR1088) ||  defined(CONFIG_TCHIP_MACH_TR7088) ||  defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
-        {.frequency = 312 * 1000,       .index = 950 * 1000},
-        {.frequency = 504 * 1000,       .index = 950 * 1000},
+        {.frequency = 312 * 1000,       .index = 975 * 1000},
+        {.frequency = 504 * 1000,       .index = 1000 * 1000},
         {.frequency = 816 * 1000,       .index = 1025 * 1000},
         {.frequency = 1008 * 1000,      .index = 1100 * 1000},
         {.frequency = 1200 * 1000,      .index = 1225 * 1000},
@@ -3212,19 +3212,11 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level0[] = {
 };
 //ds1006h 10'
 static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {	
-    #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
             {.frequency = 133 * 1000,       .index = 1000 * 1000},
             {.frequency = 200 * 1000,       .index = 1025 * 1000},
             {.frequency = 266 * 1000,       .index = 1050 * 1000},
             {.frequency = 300 * 1000,       .index = 1075 * 1000},
             {.frequency = 400 * 1000,       .index = 1125 * 1000},
-    #else
-            {.frequency = 133 * 1000,       .index = 975 * 1000},
-            {.frequency = 200 * 1000,       .index = 1000 * 1000},
-            {.frequency = 266 * 1000,       .index = 1025 * 1000},
-            {.frequency = 300 * 1000,       .index = 1050 * 1000},
-            {.frequency = 400 * 1000,       .index = 1100 * 1000},
-      #endif
 	{.frequency = 600 * 1000,       .index = 1250 * 1000},
 
         {.frequency = CPUFREQ_TABLE_END},
@@ -3250,13 +3242,8 @@ static struct cpufreq_frequency_table dvfs_ddr_table_volt_level0[] = {
 };
 
 static struct cpufreq_frequency_table dvfs_ddr_table_t[] = {
-        #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
 	{.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
-        #else
-        {.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1000 * 1000},
-      {.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1175 * 1000},
-        #endif
 	{.frequency = CPUFREQ_TABLE_END},
 };
 #define dvfs_ddr_table dvfs_ddr_table_volt_level0
