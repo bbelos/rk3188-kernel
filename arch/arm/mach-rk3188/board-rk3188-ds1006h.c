@@ -932,6 +932,19 @@ static struct sensor_platform_data cm3217_info = {
 #define LCD_TCON_EN_VALUE	GPIO_LOW
 #define LCD_LVDS_STB		INVALID_GPIO
 #define LCD_LVDS_STB_VALUE	GPIO_HIGH
+#elif defined (CONFIG_TCHIP_MACH_TR785)
+#define LCD_CS_PIN         RK30_PIN1_PB5
+#define LCD_CS_IOMUX       GPIO1_B5
+#define LCD_CS_VALUE       GPIO_HIGH
+#define LCD_PWR_PIN        INVALID_GPIO
+#define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_PWR_VALUE      GPIO_HIGH
+#define LCD_EN_PIN         RK30_PIN0_PB0
+#define LCD_EN_VALUE       GPIO_LOW
+#define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #else
 #define LCD_CS_PIN         RK30_PIN1_PB5
 #define LCD_CS_IOMUX       GPIO1_B5
