@@ -2753,7 +2753,11 @@ static void __init machine_rk30_board_init(void)
 	spi_register_board_info(board_spi_devices, ARRAY_SIZE(board_spi_devices));
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	rk_platform_add_display_devices();
-	//board_usb_detect_init(RK30_PIN0_PA7);
+#if  defined(CONFIG_TCHIP_MACH_TR7078)
+	board_usb_detect_init(RK30_PIN0_PA7);
+#else
+        //board_usb_detect_init(RK30_PIN0_PA7);
+#endif
 
 #ifdef CONFIG_WIFI_CONTROL_FUNC
 	rk29sdk_wifi_bt_gpio_control_init();
@@ -2866,7 +2870,7 @@ static struct cpufreq_frequency_table dvfs_gpu_table[] = {
 
 static struct cpufreq_frequency_table dvfs_ddr_table[] = {
 #if !defined(CONFIG_TCHIP_MACH_TR7078) 
-    //7078È¥µô 200M
+    //7078È¥\B5\F4 200M
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1075 * 1000},
 	{.frequency = 240 * 1000 + DDR_FREQ_VIDEO,      .index = 1075 * 1000},
 #endif
