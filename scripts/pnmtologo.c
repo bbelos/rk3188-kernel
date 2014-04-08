@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
+#include "../include/generated/autoconf.h"
 
 static const char *programname;
 static const char *filename;
