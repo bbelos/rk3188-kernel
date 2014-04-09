@@ -28,9 +28,11 @@
 
 typedef uint32_t uint32;
 
-#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088) || defined(CONFIG_TCHIP_MACH_TR7078)
-#define USE_LPDDR2
-#endif
+// move to ddr.h  wengbj@2014 4 8
+
+//#if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088) || defined(CONFIG_TCHIP_MACH_TR7078)
+//#define USE_LPDDR2
+//#endif
 
 //#define ENABLE_DDR_CLCOK_GPLL_PATH  //for RK3188
 #ifdef USE_LPDDR2
@@ -1668,8 +1670,12 @@ uint32_t __sramlocalfunc ddr_set_pll_rk3066b(uint32_t nMHz, uint32_t set)
     {
         dpllvaluel = ddr_get_pll_freq(DPLL);
         gpllvaluel = ddr_get_pll_freq(GPLL);
-
-        if(ddr_rk3188_dpll_is_good == false)    //if rk3188 DPLL is bad,use GPLL
+#ifdef USE_LPDDR2
+        if ((ddr_rk3188_dpll_is_good == false)   
+            &&(!((*(volatile uint32_t *)(SDRAMC_BASE_ADDR+0x144))&8))) //if rk3188 DPLL is bad,use GPLL
+#else
+        if(ddr_rk3188_dpll_is_good == false) 
+#endif
         {
             if( (gpllvaluel < 200) ||(gpllvaluel > 2000))
             {
@@ -1783,6 +1789,16 @@ uint32_t __sramlocalfunc ddr_set_pll_rk3066b(uint32_t nMHz, uint32_t set)
     
             pCRU_Reg->CRU_PLL_CON[pll_id][3] = PLL_RESET_RK3066B;
     	     ddr_delayus(1);
+            #ifdef USE_LPDDR2
+            if((*(volatile uint32_t *)(SDRAMC_BASE_ADDR+0x144))&8)
+            {
+                pCRU_Reg->CRU_PLL_CON[pll_id][3] = 0x18000000|(0x2<<11);
+            }
+            else
+            {
+                pCRU_Reg->CRU_PLL_CON[pll_id][3] = 0x18000000|(0x0<<11);
+            }
+            #endif
             pCRU_Reg->CRU_PLL_CON[pll_id][0] = NR_RK3066B(clkr) | NO_RK3066B(clkod);
             pCRU_Reg->CRU_PLL_CON[pll_id][1] = NF_RK3066B(clkf);
             //     pCRU_Reg->CRU_PLL_CON[pll_id][2] = NB(clkf>>1);
@@ -2305,10 +2321,12 @@ uint32_t ddr_get_parameter(uint32_t nMHz)
          * tMRR, 0 tCK
          */
         p_pctl_timing->tmrr = 0;
+        #ifndef USE_LPDDR2
         /*
          * tDPD, 0
          */
         p_pctl_timing->tdpd = 0;
+        #endif
 
         /**************************************************
          * PHY Timing
@@ -2365,7 +2383,7 @@ uint32_t ddr_get_parameter(uint32_t nMHz)
         #define LPDDR2_tXP           (7)  //ns
         #define LPDDR2_tXPDLL        (0)
         #define LPDDR2_tZQCS         (90) //ns
-        #define LPDDR2_tZQCSI        (0)
+        #define LPDDR2_tZQCSI        (10000)
         #define LPDDR2_tDQS          (1)
         #define LPDDR2_tCKSRE        (1)  //tCK
         #define LPDDR2_tCKSRX        (2)  //tCK
@@ -2679,10 +2697,12 @@ uint32_t ddr_get_parameter(uint32_t nMHz)
             tmp = 3;
         }
         p_pctl_timing->tckesr = tmp&0xF;
+        #ifndef USE_LPDDR2
         /*
          * tDPD, 500us
          */
         p_pctl_timing->tdpd = LPDDR2_tDPD_US;
+        #endif
 
         /**************************************************
          * PHY Timing
@@ -2753,7 +2773,13 @@ uint32_t __sramlocalfunc ddr_update_timing(void)
     {
         bl_tmp = ((p_publ_timing->mr[0] & 0x3) == DDR3_BL8) ? ddr2_ddr3_bl_8 : ddr2_ddr3_bl_4;
         pDDR_Reg->MCFG = (pDDR_Reg->MCFG & (~(0x1|(0x3<<18)|(0x1<<17)|(0x1<<16)))) | bl_tmp | tfaw_cfg(5)|pd_exit_slow|pd_type(1);
+#ifdef USE_LPDDR2
+        if((ddr_freq <= DDR3_DDR2_ODT_DLL_DISABLE_FREQ)
+            && (ddr_soc_is_rk3188_plus 
+                ||(!((*(volatile uint32_t *)(SDRAMC_BASE_ADDR+0x144))&8))))
+#else
         if((ddr_freq <= DDR3_DDR2_ODT_DLL_DISABLE_FREQ) && ddr_soc_is_rk3188_plus)
+#endif
         {
             pDDR_Reg->DFITRDDATAEN   = pDDR_Reg->TCL-3;
         }
@@ -2783,11 +2809,19 @@ uint32_t __sramlocalfunc ddr_update_timing(void)
         }
         else
         {
+#ifdef USE_LPDDR2
+            pDDR_Reg->MCFG = (pDDR_Reg->MCFG & (~((0x3<<20)|(0x3<<18)|(0x1<<17)|(0x1<<16)))) | bl_tmp | tfaw_cfg(6)|pd_exit_fast|pd_type(1);
+#else
             pDDR_Reg->MCFG = (pDDR_Reg->MCFG & (~((0x3<<20)|(0x3<<18)|(0x1<<17)|(0x1<<16)))) | mddr_lpddr2_bl_8 | tfaw_cfg(6)|pd_exit_fast|pd_type(1);
+#endif
         }
         i = ((pPHY_Reg->DTPR[1] >> 27) & 0x7) - ((pPHY_Reg->DTPR[1] >> 24) & 0x7);
         pPHY_Reg->DSGCR = (pPHY_Reg->DSGCR & (~(0x3F<<5))) | (i<<5) | (i<<8);  //tDQSCKmax-tDQSCK
+#ifdef USE_LPDDR2
+        pDDR_Reg->DFITRDDATAEN   = pDDR_Reg->TCL-(((*(volatile uint32_t *)(SDRAMC_BASE_ADDR+0x144))>>3)&1);
+#else
         pDDR_Reg->DFITRDDATAEN   = pDDR_Reg->TCL-1;
+#endif
         pDDR_Reg->DFITPHYWRLAT   = pDDR_Reg->TCWL;
     }
     
@@ -2880,7 +2914,7 @@ void __sramlocalfunc ddr_update_odt(void)
         }
     }
 #ifdef USE_LPDDR2
-    tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0x1b<<5) | 0x1b;
+    tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0x19<<5) | 0x19;
 #else
     tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0xb<<5) | 0xb;  //DS=34ohm,ODT=171ohm
 #endif
@@ -2951,6 +2985,8 @@ __sramfunc void ddr_adjust_config(uint32_t dram_type)
         pPHY_Reg->DATX8[2].DXDLLCR |= 0x80000000;  //disable DLL
         pPHY_Reg->DATX8[3].DXDLLCR |= 0x80000000;
     }
+
+    ddr_reg.pctl.pctl_timing.tdpd = pDDR_Reg->TDPD;
 
     ddr_update_odt();
 
@@ -3624,8 +3660,11 @@ int ddr_init(uint32_t dram_speed_bin, uint32_t freq)
     volatile uint32_t value = 0;
     uint32_t die=1;
     uint32_t gsr,dqstr;
-
+#ifdef USE_LPDDR2
+    ddr_print("version 1.00 20131106 LPDDR2 \n");
+#else
     ddr_print("version 1.00 20131106 \n");
+#endif
 
     mem_type = pPHY_Reg->DCR.b.DDRMD;
     ddr_speed_bin = dram_speed_bin;
