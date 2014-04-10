@@ -1852,7 +1852,12 @@ uint32_t __sramlocalfunc ddr_set_pll_rk3188_plus(uint32_t nMHz, uint32_t set)
         dpllvaluel = ddr_get_pll_freq(DPLL);
         gpllvaluel = ddr_get_pll_freq(GPLL);
 
+#ifdef USE_LPDDR2
+        if((ddr_rk3188_dpll_is_good == false) 
+            &&(!((*(volatile uint32_t *)(SDRAMC_BASE_ADDR+0x144))&8)))//if rk3188 DPLL is bad,use GPLL
+#else
         if(ddr_rk3188_dpll_is_good == false)    //if rk3188 DPLL is bad,use GPLL
+#endif
         {
             if( (gpllvaluel < 200) ||(gpllvaluel > 2000))
             {
@@ -1962,6 +1967,16 @@ uint32_t __sramlocalfunc ddr_set_pll_rk3188_plus(uint32_t nMHz, uint32_t set)
     
             pCRU_Reg->CRU_PLL_CON[pll_id][3] = PLL_RESET;
              ddr_delayus(1);
+#ifdef USE_LPDDR2
+            if((*(volatile uint32_t *)(SDRAMC_BASE_ADDR+0x144))&8)
+            {
+                pCRU_Reg->CRU_PLL_CON[pll_id][3] = 0x18000000|(0x2<<11);
+            }
+            else
+            {
+                pCRU_Reg->CRU_PLL_CON[pll_id][3] = 0x18000000|(0x0<<11);
+            }
+#endif
             pCRU_Reg->CRU_PLL_CON[pll_id][0] = NR(clkr) | NO(clkod);
             pCRU_Reg->CRU_PLL_CON[pll_id][1] = NF(clkf);
             pCRU_Reg->CRU_PLL_CON[pll_id][2] = NB(clkf>>1);
