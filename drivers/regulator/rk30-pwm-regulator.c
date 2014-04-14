@@ -69,11 +69,7 @@ static int pwm_set_rate(struct pwm_platform_data *pdata,int nHz,u32 rate)
 	
 	DBG("%s:id=%d,rate=%d,clkrate=%d\n",__func__,id,rate,clkrate); 
 	
-#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
 	if (pdata->pwm_id == 1&& rate<22)
-#else
-	if (pdata->pwm_id == 1&& rate==21)
-#endif
 	{
 	    rate = 0;
 	}

@@ -588,7 +588,7 @@ static struct rk29_bl_info rk29_bl_info = {
 	.pwm_resume = rk29_backlight_pwm_resume,
 #elif defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
         .min_brightness = 45,
-        .max_brightness = 164,
+        .max_brightness = 154,
         .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
 	.pre_div = 10 * 1000,  // pwm output clk: 30k;
 	.pwm_id = PWM_ID,
@@ -3227,9 +3227,9 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {
 /******************************** ddr dvfs frequency volt table **********************************/
 static struct cpufreq_frequency_table dvfs_ddr_table_volt_level0[] = {
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
-	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1075 * 1000},
-	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1150 * 1000},
-    {.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,   .index = 1200 * 1000},
+	//{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1075 * 1000},
+	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
+    //{.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,   .index = 1200 * 1000},
 	//{.frequency = 528 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
@@ -3276,7 +3276,7 @@ void __init board_clock_init(void)
 	//dvfs_set_arm_logic_volt(dvfs_cpu_logic_table, cpu_dvfs_table, dep_cpu2core_table);	
 	dvfs_set_freq_volt_table(clk_get(NULL, "cpu"), dvfs_arm_table);
 	dvfs_set_freq_volt_table(clk_get(NULL, "gpu"), dvfs_gpu_table);
-#if defined(USE_LPDDR2)
+#if defined(CONFIG_TCHIP_MACH_TR7088)
     dvfs_set_freq_volt_table(clk_get(NULL, "ddr"), dvfs_ddr_table);
 #elif defined(CONFIG_ARCH_RK3188)
 	if (rk_pll_flag() == 0)

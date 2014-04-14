@@ -472,7 +472,7 @@ static int rk3188_cpufreq_init_cpu0(struct cpufreq_policy *policy)
 
 	clk_enable_dvfs(gpu_clk);
 	if (gpu_is_mali400)
-	#if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+	#if defined(CONFIG_TCHIP_MACH_TR7088)
 		dvfs_clk_enable_limit(gpu_clk, 133000000, 400000000);
 	#else
 		 dvfs_clk_enable_limit(gpu_clk, 133000000, 600000000);
