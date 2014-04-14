@@ -28,7 +28,9 @@
 #include "../include/linux/tchip_sysinf.h"
 //#include "../arch/arm/mach-rk30/include/mach/rk29_sensor.h"
 //#include "../drivers/media/video/rk29_sensor.c"
-
+#ifdef CONFIG_ARCH_RK3188
+#include "../arch/arm/mach-rk3188/include/mach/ddr_lpddr2.h"
+#endif
 #include "tchip_devices.c"
 //char hardwareStr[200];
 #ifndef ARRAYSIZE
@@ -714,7 +716,14 @@ int main(int argc, char *argv[])
 		rk29_init_Version();
 		printf("  %-8s%s\n", "Orig Version:", tchip_version, stderr);
 		printf("  %-8s%s\n", "Omit Version:", tchip_version, stderr);
-		goto out;
+	    /*
+         * Patch:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+         * Data :2014 4 14  wbj
+         */
+        #if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
+		printf("  %-8s%s\n", "Loader:", "AndroidTool_Release_v2.1_LPDDR2.rar", stderr);
+        #endif
+        goto out;
 	}
 
 	write_Inf();
