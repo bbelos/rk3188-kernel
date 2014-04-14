@@ -1354,7 +1354,11 @@ static int ddr_clk_set_rate(struct clk *c, unsigned long rate)
 static long ddr_clk_round_rate(struct clk *clk, unsigned long rate)
 {
 	CLKDATA_DBG("%s do nothing for ddr round rate\n", __func__);
-#ifdef USE_LPDDR2
+/*
+ * Patch:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+ * Data :2014 4 14  wbj
+ */
+#if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
     return ddr_set_pll(rate / MHZ, 0) * MHZ;
 #else
 	return ddr_set_pll_rk3066b(rate / MHZ, 0) * MHZ;
@@ -3610,7 +3614,11 @@ void __init _rk30_clock_data_init(unsigned long gpll, unsigned long cpll, int fl
 	}
 
 	rk_efuse_init();
-#ifdef USE_LPDDR2
+/*
+ * Patch:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+ * Data :2014 4 14  wbj
+ */
+#if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
     pll_flag= (*(volatile uint32_t *)(RK30_DDR_PCTL_BASE+0x144))&4;
 #else
 	pll_flag = rk_pll_flag();

@@ -3227,9 +3227,9 @@ static struct cpufreq_frequency_table dvfs_gpu_table_volt_level1[] = {
 /******************************** ddr dvfs frequency volt table **********************************/
 static struct cpufreq_frequency_table dvfs_ddr_table_volt_level0[] = {
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
-	//{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1075 * 1000},
-	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
-    //{.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,   .index = 1200 * 1000},
+	{.frequency = 300 * 1000 + DDR_FREQ_VIDEO,      .index = 1075 * 1000},
+	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1150 * 1000},
+    {.frequency = 460 * 1000 + DDR_FREQ_DUALVIEW,   .index = 1200 * 1000},
 	//{.frequency = 528 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
@@ -3239,8 +3239,21 @@ static struct cpufreq_frequency_table dvfs_ddr_table_t[] = {
 	{.frequency = 460 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
-#define dvfs_ddr_table dvfs_ddr_table_volt_level0
 
+static struct cpufreq_frequency_table dvfs_ddr_table_lpddr2[] = {
+	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
+	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
+	{.frequency = CPUFREQ_TABLE_END},
+};
+/*
+ * Path:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+ * Data:2014 4 14  wbj
+ */
+#if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
+    #define dvfs_ddr_table dvfs_ddr_table_lpddr2
+#else
+    #define dvfs_ddr_table dvfs_ddr_table_volt_level0
+#endif
 /******************************** arm dvfs frequency volt table end **********************************/
 
 
@@ -3276,7 +3289,11 @@ void __init board_clock_init(void)
 	//dvfs_set_arm_logic_volt(dvfs_cpu_logic_table, cpu_dvfs_table, dep_cpu2core_table);	
 	dvfs_set_freq_volt_table(clk_get(NULL, "cpu"), dvfs_arm_table);
 	dvfs_set_freq_volt_table(clk_get(NULL, "gpu"), dvfs_gpu_table);
-#if defined(CONFIG_TCHIP_MACH_TR7088)
+/*
+ * Path:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+ * Data:2014 4 14  wbj
+ */
+#if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
     dvfs_set_freq_volt_table(clk_get(NULL, "ddr"), dvfs_ddr_table);
 #elif defined(CONFIG_ARCH_RK3188)
 	if (rk_pll_flag() == 0)
