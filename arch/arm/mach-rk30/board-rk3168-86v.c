@@ -457,12 +457,12 @@ static struct rk29_bl_info rk29_bl_info = {
 	.pwm_suspend = rk29_backlight_pwm_suspend,
 	.pwm_resume = rk29_backlight_pwm_resume,
 #elif defined(CONFIG_TCHIP_MACH_TR7078IPS_BOE)
-        .min_brightness = 45,
-        .max_brightness = 164,
+        .min_brightness = 30,
+        .max_brightness = 135,
         .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
 	.pre_div = 30 * 1000,  // pwm output clk: 30k;
 	.pwm_id = PWM_ID,
-	.bl_ref = !PWM_EFFECT_VALUE,
+	.bl_ref = PWM_EFFECT_VALUE,
 	.io_init = rk29_backlight_io_init,
 	.io_deinit = rk29_backlight_io_deinit,
 	.pwm_suspend = rk29_backlight_pwm_suspend,
