@@ -422,8 +422,16 @@ static int rk29_backlight_pwm_resume(void)
 {
 	int pwm_gpio = iomux_mode_to_gpio(PWM_MODE);
 
+#if defined(CONFIG_TCHIP_MACH_TR7078IPS_BOE)
+    gpio_direction_output(BL_EN_PIN, 1);
+    gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
+    msleep(200);
+    gpio_free(pwm_gpio);
+    iomux_set(PWM_MODE);
+#else
 	gpio_free(pwm_gpio);
 	iomux_set(PWM_MODE);
+#endif
 #ifdef  LCD_DISP_ON_PIN
 	msleep(150);
 	gpio_direction_output(BL_EN_PIN, 1);
