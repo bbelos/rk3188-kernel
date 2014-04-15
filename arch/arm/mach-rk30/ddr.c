@@ -2501,7 +2501,7 @@ uint32_t ddr_get_parameter(uint32_t nMHz)
             cwl = 4;
             p_publ_timing->mr[2] = LPDDR2_RL8_WL4;
         }
-        p_publ_timing->mr[3] = LPDDR2_DS_34;
+        p_publ_timing->mr[3] = LPDDR2_DS_40;
         p_publ_timing->mr[0] = 0;
         /**************************************************
          * PCTL Timing
