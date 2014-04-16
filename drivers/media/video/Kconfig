@@ -1083,6 +1083,18 @@ config SOC_CAMERA_GC0309
 	depends on SOC_CAMERA && I2C
 	help
 	  This is a GC0309 camera driver for rockchip
+	  
+config SOC_CAMERA_BF3920
+        tristate "BF3920 support for rockchip"
+        depends on SOC_CAMERA && I2C
+        help
+          This is a BF3920 camera driver for rockchip
+
+config SOC_CAMERA_BF3703
+        tristate "BF3703 support for rockchip"
+        depends on SOC_CAMERA && I2C
+        help
+          This is a BF3703 camera driver for rockchip	  
 
 config SOC_CAMERA_GC2015
 	tristate "GC2015 support for rockchip"

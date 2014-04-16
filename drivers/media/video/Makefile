@@ -118,6 +118,8 @@ else
 obj-$(CONFIG_SOC_CAMERA_GC2035)         += gc2035.o
 obj-$(CONFIG_SOC_CAMERA_GC0329)			+= gc0329.o
 endif
+obj-$(CONFIG_SOC_CAMERA_BF3920)         += bf3920.o
+obj-$(CONFIG_SOC_CAMERA_BF3703)         += bf3703.o
 obj-$(CONFIG_SOC_CAMERA_SIV120B)	+= siv120b.o
 obj-$(CONFIG_SOC_CAMERA_SIV121D)	+= siv121d.o
 obj-$(CONFIG_SOC_CAMERA_SIV120D)        += siv120d.o

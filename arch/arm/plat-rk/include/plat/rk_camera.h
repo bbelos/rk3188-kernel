@@ -247,6 +247,8 @@
 #define RK29_CAM_SENSOR_GC0328  gc0328
 #define RK29_CAM_SENSOR_GC0329  gc0329
 #define RK29_CAM_SENSOR_GC2035	gc2035
+#define RK29_CAM_SENSOR_BF3920  bf3920
+#define RK29_CAM_SENSOR_BF3703  bf3703
 #define RK29_CAM_SENSOR_SIV120B  siv120b
 #define RK29_CAM_SENSOR_SIV121D  siv121d
 #define RK29_CAM_SENSOR_SIV120D  siv120d
@@ -294,6 +296,8 @@
 #define RK29_CAM_SENSOR_NAME_GC0328  "gc0328"
 #define RK29_CAM_SENSOR_NAME_GC2035  "gc2035"
 #define RK29_CAM_SENSOR_NAME_GC0329  "gc0329"
+#define RK29_CAM_SENSOR_NAME_BF3920  "bf3920"
+#define RK29_CAM_SENSOR_NAME_BF3703  "bf3703"
 #define RK29_CAM_SENSOR_NAME_SIV120B "siv120b"
 #define RK29_CAM_SENSOR_NAME_SIV121D "siv121d"
 #define RK29_CAM_SENSOR_NAME_SIV120D "siv120d"
@@ -367,6 +371,8 @@
 #define sp0838_FULL_RESOLUTION      0x30000            // 0.3 megapixel
 #define sp2518_FULL_RESOLUTION      0x200000            // 2 megapixel
 #define gc0329_FULL_RESOLUTION      0x30000            // 0.3 megapixel
+#define bf3703_FULL_RESOLUTION      0x30000            // 0.3 megapixel
+#define bf3920_FULL_RESOLUTION      0x200000            // 2 megapixel
 #define s5k5ca_FULL_RESOLUTION      0x300000            // 3 megapixel
 #define mtk9335isp_FULL_RESOLUTION  0x500000   		//5 megapixel
 #define gc2035_FULL_RESOLUTION      0x200000            // 2 megapixel
@@ -410,7 +416,9 @@
 #define gc0309_I2C_ADDR             0x42
 #define gc0329_I2C_ADDR             0x62           
 #define gc2015_I2C_ADDR             0x60
-#define gc2035_I2C_ADDR             0x78            
+#define gc2035_I2C_ADDR             0x78     
+#define bf3703_I2C_ADDR             0xdc
+#define bf3920_I2C_ADDR             0xde       
 
 #define siv120b_I2C_ADDR             INVALID_VALUE           
 #define siv121d_I2C_ADDR             INVALID_VALUE           
@@ -469,7 +477,9 @@
 #define gc0309_PWRDN_ACTIVE             0x01
 #define gc0329_PWRDN_ACTIVE             0x01           
 #define gc2015_PWRDN_ACTIVE             0x01
-#define gc2035_PWRDN_ACTIVE             0x01            
+#define gc2035_PWRDN_ACTIVE             0x01  
+#define bf3703_PWRDN_ACTIVE             0x01
+#define bf3920_PWRDN_ACTIVE             0x01          
 
 #define siv120b_PWRDN_ACTIVE             INVALID_VALUE           
 #define siv121d_PWRDN_ACTIVE             INVALID_VALUE           
@@ -544,6 +554,9 @@
 #define gc0329_PWRSEQ                   sensor_PWRSEQ_DEFAULT          
 #define gc2015_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 #define gc2035_PWRSEQ                   sensor_PWRSEQ_DEFAULT            
+
+#define bf3703_PWRSEQ                   sensor_PWRSEQ_DEFAULT
+#define bf3920_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 
 #define siv120b_PWRSEQ                   sensor_PWRSEQ_DEFAULT         
 #define siv121d_PWRSEQ                   sensor_PWRSEQ_DEFAULT         
