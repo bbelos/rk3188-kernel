@@ -367,10 +367,17 @@ static struct spi_board_info board_spi_devices[] = {
 #endif
 
 int is_backligth_closed = 0;
+static int rk29_backlight_pwm_suspend(void);
+static int rk29_backlight_pwm_resume(void);
+
 static int rk29_backlight_io_init(void)
 {
 	int ret = 0;
 
+#if defined(CONFIG_TCHIP_MACH_TR7078IPS_BOE)
+    rk29_backlight_pwm_suspend();
+    rk29_backlight_pwm_resume();
+#else
 	iomux_set(PWM_MODE);
 	msleep(100);
 #ifdef  LCD_DISP_ON_PIN
@@ -381,6 +388,7 @@ static int rk29_backlight_io_init(void)
 
 	gpio_direction_output(BL_EN_PIN, 0);
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
+#endif
 #endif
 
 	return ret;
@@ -431,11 +439,12 @@ static int rk29_backlight_pwm_resume(void)
 #else
 	gpio_free(pwm_gpio);
 	iomux_set(PWM_MODE);
-#endif
+
 #ifdef  LCD_DISP_ON_PIN
 	msleep(150);
 	gpio_direction_output(BL_EN_PIN, 1);
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
+#endif
 #endif
 	is_backligth_closed = 0;
 	return 0;
@@ -805,7 +814,7 @@ static int rk_fb_io_init(struct rk29_fb_setting_info *fb_setting)
 		else
 		{
 			gpio_direction_output(LCD_EN_PIN, LCD_EN_VALUE);
-			
+
 		}
 	}
 	if(LCD_PWR_PIN !=INVALID_GPIO)
@@ -2748,6 +2757,7 @@ static void __init machine_rk30_board_init(void)
     wifi_bt_io_init();
     wifi_bt_power_ctl(true);
 #endif
+
 	//avs_init();
 	gpio_request(POWER_ON_PIN, "poweronpin");
 	gpio_direction_output(POWER_ON_PIN, GPIO_HIGH);
