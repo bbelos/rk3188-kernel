@@ -3242,7 +3242,7 @@ static struct cpufreq_frequency_table dvfs_ddr_table_t[] = {
 
 static struct cpufreq_frequency_table dvfs_ddr_table_lpddr2[] = {
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
-	{.frequency = 396 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
+	{.frequency = 336 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 /*
