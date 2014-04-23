@@ -495,7 +495,6 @@ static int rk3188_cpufreq_init_cpu0(struct cpufreq_policy *policy)
 	}
 	low_battery_freq = get_freq_from_table(low_battery_freq);
 	clk_enable_dvfs(cpu_clk);
-#if !defined(CONFIG_TCHIP_MACH_TR1088) && !defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7888)  && !defined(CONFIG_TCHIP_MACH_TR8088) 
 	if(rk_tflag()){
 #define RK3188_T_LIMIT_FREQ	(1416 * 1000)
 		dvfs_clk_enable_limit(cpu_clk, 0, RK3188_T_LIMIT_FREQ * 1000);
@@ -506,7 +505,6 @@ static int rk3188_cpufreq_init_cpu0(struct cpufreq_policy *policy)
 			}
 		}
 	}
-#endif
 	freq_wq = alloc_workqueue("rk3188_cpufreqd", WQ_NON_REENTRANT | WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_FREEZABLE, 1);
 	rk3188_cpufreq_temp_limit_init(policy);
 #ifdef CPU_FREQ_DVFS_TST
