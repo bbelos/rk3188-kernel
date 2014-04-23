@@ -1113,6 +1113,18 @@ static struct rk616_platform_data rk616_pdata = {
 	.hp_ctl_gpio = RK30_PIN0_PC7,//RK30_PIN0_PC1,
     //.phone_ctl_gpio = RK30_PIN0_PC7,
 };
+#elif defined(CONFIG_TCHIP_MACH_TR838)
+static struct rk616_platform_data rk616_pdata = {
+    .power_init = rk616_power_on_init,
+    .scl_rate   = RK616_SCL_RATE,
+    .lcd0_func = INPUT,             //port lcd0 as input
+    .lcd1_func = INPUT,             //port lcd1 as input
+    .lvds_ch_nr = 0,                //the number of used lvds channel  
+    .hdmi_irq = INVALID_GPIO,
+    .spk_ctl_gpio = RK30_PIN2_PD7,
+    .hp_ctl_gpio = INVALID_GPIO,
+    //.phone_ctl_gpio = INVALID_GPIO,
+ };
 #else
 static struct rk616_platform_data rk616_pdata = {
 	.power_init = rk616_power_on_init,

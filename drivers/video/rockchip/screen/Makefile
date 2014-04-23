@@ -74,6 +74,7 @@ obj-$(CONFIG_LCD_LSL070NL01_LVDS)   += lcd_lsl070nl01.o
 obj-$(CONFIG_LCD_HV070WSA_LVDS)   += lcd_hv070wsa.o
 obj-$(CONFIG_LCD_JB0780)   += lcd_jb0780.o
 obj-$(CONFIG_LCD_KD079D1_MIPI)   += lcd_KD079D1_mipi.o
+obj-$(CONFIG_LCD_K080WL2_MIPI)   += lcd_K080WL2_MIPI.o
 
 quiet_cmd_gen = GEN     $@
       cmd_gen = cmp -s $< $@ || cp $< $@

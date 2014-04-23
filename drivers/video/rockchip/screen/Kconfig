@@ -14,6 +14,9 @@ config LCD_LG_LP097X02
 
 config LCD_KD079D1_MIPI
        bool "mipi dsi lcd KD079D1 1024x785"
+       
+config LCD_K080WL2_MIPI
+       bool "mipi dsi lcd K080WL2 800x1280"
 
 config LCD_TD043MGEA1
 	bool "RGB TD043MGEA1"
