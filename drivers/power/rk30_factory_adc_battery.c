@@ -101,12 +101,7 @@ char gDischargeFlag[4] = {"on "};
 #define BATT_ZERO_VOL_VALUE                            3400//3500              	//power down voltage
 #define BATT_NOMAL_VOL_VALUE                         3800            
 #if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
-static int batt_table[2*BATT_NUM+6] =
-{
-	0x4B434F52,0x7461625F,0x79726574,0,200,120,
-	3400, 3612, 3679, 3734, 3769, 3801, 3840, 3884, 3922, 3949, 4156,  //discharge
-	3743, 3896, 3970, 4009, 4046, 4099, 4141, 4166, 4171, 4174, 4179 	  //charge
-};
+#include "tr7088_battery_parameter.h"
 #else
 static int batt_table[2*BATT_NUM+6] =
 {
