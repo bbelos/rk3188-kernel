@@ -38,6 +38,7 @@
 #include <mach/ddr.h>
 #include <mach/dvfs.h>
 #include <plat/efuse.h>
+#include "tr7088_tchip_cpufreq.h"
 
 #define VERSION "2.2"
 
@@ -495,8 +496,9 @@ static int rk3188_cpufreq_init_cpu0(struct cpufreq_policy *policy)
 	}
 	low_battery_freq = get_freq_from_table(low_battery_freq);
 	clk_enable_dvfs(cpu_clk);
+#ifndef FAKE_RK3188_1600M
 	if(rk_tflag()){
-#define RK3188_T_LIMIT_FREQ	(1416 * 1000)
+    #define RK3188_T_LIMIT_FREQ	(1416 * 1000)
 		dvfs_clk_enable_limit(cpu_clk, 0, RK3188_T_LIMIT_FREQ * 1000);
 		for (i = 0; freq_table[i].frequency != CPUFREQ_TABLE_END; i++) {
 			if (freq_table[i].frequency > RK3188_T_LIMIT_FREQ) {
@@ -505,6 +507,7 @@ static int rk3188_cpufreq_init_cpu0(struct cpufreq_policy *policy)
 			}
 		}
 	}
+#endif
 	freq_wq = alloc_workqueue("rk3188_cpufreqd", WQ_NON_REENTRANT | WQ_MEM_RECLAIM | WQ_HIGHPRI | WQ_FREEZABLE, 1);
 	rk3188_cpufreq_temp_limit_init(policy);
 #ifdef CPU_FREQ_DVFS_TST
@@ -658,7 +661,8 @@ static int rk3188_cpufreq_target(struct cpufreq_policy *policy, unsigned int tar
 	unsigned int i, new_freq = target_freq, new_rate, cur_rate;
 	int ret = 0;
 	bool is_private;
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
+//#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
+#ifdef FAKE_RK3188_1600M
     if(target_freq > RK3188T_LIMIT_FREQ){
         target_freq=RK3188T_LIMIT_FREQ;
     }
