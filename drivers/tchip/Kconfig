@@ -77,6 +77,9 @@ choice
 	config TCHIP_MACH_TR785_V20
 		depends on TCHIP_MACH_TR785
 		bool "v01 for tr785"
+		
+    config TCHIP_MACH_TR838
+		bool "TR838, 8' Machine for KangGuan"
        
 	config TCHIP_MACH_TRQ7
 		bool "TRQ7, PLDT product, and select the follow Customer"
