@@ -7,6 +7,7 @@ obj-$(CONFIG_LOGO_LINUX_CLUT224_TR785)	+= tr785_logo_linux_clut224.o
 obj-$(CONFIG_LOGO_LINUX_CLUT224_TR7088)	+= tr7088_logo_linux_clut224.o
 obj-$(CONFIG_LOGO_LINUX_CLUT224_TR7078)	+= tr7078_logo_linux_clut224.o
 obj-$(CONFIG_LOGO_LINUX_CLUT224_TR7088TN)	+= tr7088tn_logo_linux_clut224.o
+obj-$(CONFIG_LOGO_LINUX_CLUT224_TR838)	+= tr838_logo_linux_clut224.o
 obj-$(CONFIG_LOGO_LINUX_CLUT224)	+= logo_linux_clut224.o
 obj-$(CONFIG_LOGO_PIPO_CLUT224)	    += logo_pipo_clut224.o
 obj-$(CONFIG_LOGO_BLACKFIN_CLUT224)	+= logo_blackfin_clut224.o

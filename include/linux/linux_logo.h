@@ -63,6 +63,7 @@ extern const struct linux_logo logo_sunset_bmp;
 extern const struct linux_logo logo_android_bmp;
 extern const struct linux_logo tr7888_knc_logo_android_bmp;
 extern const struct linux_logo logo_linux_800x480_clut224;
+extern struct linux_logo tr838_logo_linux_clut224;
 
 extern const struct linux_logo *fb_find_logo(int depth);
 #ifdef CONFIG_FB_LOGO_EXTRA
