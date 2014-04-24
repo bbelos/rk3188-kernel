@@ -223,6 +223,11 @@ static int gsensor_direct_x = 1;
 static int gsensor_direct_y = 1;
 static int gsensor_direct_z = 1;
 static int gsensor_xy_revert = 1;
+#elif defined(CONFIG_TCHIP_MACH_TR838)
+static int gsensor_direct_x = 1;
+static int gsensor_direct_y = 1;
+static int gsensor_direct_z = 0;
+static int gsensor_xy_revert = 0;
 #else
 static int gsensor_direct_x = 0;
 static int gsensor_direct_y = 0;
