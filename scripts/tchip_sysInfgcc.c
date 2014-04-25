@@ -165,6 +165,12 @@ static void init_cameraVersion(void)
 #ifdef CONFIG_SOC_CAMERA_GC0329
 	(*p)++;
 #endif
+#ifdef CONFIG_SOC_CAMERA_BF3920
+	(*p)++;
+#endif
+#ifdef CONFIG_SOC_CAMERA_BF3703
+	(*p)++;
+#endif
 
 	strcat(tchip_version,str);
 }
@@ -277,7 +283,7 @@ static void rk29_init_Version(void)
 	 */
 	strcat(tchip_version, "(");
 	init_boardVersion();
-	init_encryptVersion();
+	//init_encryptVersion();
 	init_rk61x();
 	init_toolscreen();
 	init_codecVersion();
