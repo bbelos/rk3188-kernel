@@ -33,6 +33,9 @@
 #define DBG(x...)
 #endif
 
+//add by yyz
+static DEFINE_MUTEX(pwm_set_voltage_mutex);
+
 struct rk_pwm_dcdc {
         char name[16];
         struct regulator_desc desc;
@@ -153,21 +156,29 @@ static int pwm_regulator_get_voltage(struct regulator_dev *dev)
 
 	return (dcdc->pdata->pwm_voltage);
 }
-
+#include <linux/sched.h>
 static int pwm_regulator_set_voltage(struct regulator_dev *dev,
 		int min_uV, int max_uV, unsigned *selector)
 {	   
-	struct rk_pwm_dcdc *dcdc = rdev_get_drvdata(dev);
-	const int *voltage_map = dcdc->pdata->pwm_voltage_map;
-	int max = dcdc->pdata->max_uV;
-	int coefficient = dcdc->pdata->coefficient;
-	u32 size = dcdc->desc.n_voltages, i, vol,pwm_value;
-
+	struct rk_pwm_dcdc *dcdc = NULL;
+	int *voltage_map = NULL;
+	int max = 0;
+	int coefficient = 0;
+	u32 size, i, vol,pwm_value;
 	DBG("%s:  min_uV = %d, max_uV = %d\n",__FUNCTION__, min_uV,max_uV);
+
+    mutex_lock(&pwm_set_voltage_mutex);
+
+    dcdc=rdev_get_drvdata(dev);
+    voltage_map=dcdc->pdata->pwm_voltage_map;
+    max = dcdc->pdata->max_uV;
+    coefficient = dcdc->pdata->coefficient;
+    size = dcdc->desc.n_voltages;
 
 	if (min_uV < voltage_map[0] ||max_uV > voltage_map[size-1])
 	{
 		printk("%s:voltage is out of table\n",__func__);
+        mutex_unlock(&pwm_set_voltage_mutex);
 		return -EINVAL;
 	}
 
@@ -188,14 +199,14 @@ static int pwm_regulator_set_voltage(struct regulator_dev *dev,
 	if (pwm_set_rate(dcdc->pdata,1000*1000,pwm_value)!=0)
 	{
 		printk("%s:fail to set pwm rate,pwm_value=%d\n",__func__,pwm_value);
+        mutex_unlock(&pwm_set_voltage_mutex);
 		return -1;
 
 	}
 
 	*selector = i;
-
+    mutex_unlock(&pwm_set_voltage_mutex);
 	DBG("%s:ok,vol=%d,pwm_value=%d\n",__FUNCTION__,vol,pwm_value);
-
 	return 0;
 
 }

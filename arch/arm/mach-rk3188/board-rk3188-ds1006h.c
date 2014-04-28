@@ -3173,15 +3173,27 @@ static struct cpufreq_frequency_table dvfs_arm_table_volt_level1[] = {
 // ds1006h 10'
 #if defined(CONFIG_TCHIP_MACH_TR1088) ||  defined(CONFIG_TCHIP_MACH_TR7088) ||  defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_TR8088)
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
-        {.frequency = 312 * 1000,       .index = 925 * 1000},
-        {.frequency = 504 * 1000,       .index = 950 * 1000},
-        {.frequency = 816 * 1000,       .index = 975 * 1000},
+        {.frequency = 312 * 1000,       .index = 950 * 1000},
+        {.frequency = 504 * 1000,       .index = 975 * 1000},
+        {.frequency = 816 * 1000,       .index = 1050 * 1000},
         {.frequency = 1008 * 1000,      .index = 1100 * 1000},
-        {.frequency = 1200 * 1000,      .index = 1225 * 1000},
+        {.frequency = 1200 * 1000,      .index = 1200 * 1000},
+        {.frequency = 1416 * 1000,      .index = 1250 * 1000},
+        {.frequency = 1608 * 1000,      .index = 1350 * 1000},
+        {.frequency = CPUFREQ_TABLE_END},
+};
+
+static struct cpufreq_frequency_table dvfs_arm_table_volt_level3[] = {
+        {.frequency = 312 * 1000,       .index = 975  * 1000},
+        {.frequency = 504 * 1000,       .index = 1000 * 1000},
+        {.frequency = 816 * 1000,       .index = 1075 * 1000},
+        {.frequency = 1008 * 1000,      .index = 1100 * 1000},
+        {.frequency = 1200 * 1000,      .index = 1250 * 1000},
         {.frequency = 1416 * 1000,      .index = 1300 * 1000},
         {.frequency = 1608 * 1000,      .index = 1350 * 1000},
         {.frequency = CPUFREQ_TABLE_END},
 };
+
 #else
 static struct cpufreq_frequency_table dvfs_arm_table_volt_level2[] = {
         {.frequency = 312 * 1000,       .index = 950 * 1000},
@@ -3239,7 +3251,7 @@ static struct cpufreq_frequency_table dvfs_ddr_table_t[] = {
 
 static struct cpufreq_frequency_table dvfs_ddr_table_lpddr2[] = {
 	{.frequency = 200 * 1000 + DDR_FREQ_SUSPEND,    .index = 1025 * 1000},
-	{.frequency = 360 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
+	{.frequency = 384 * 1000 + DDR_FREQ_NORMAL,     .index = 1200 * 1000},
 	{.frequency = CPUFREQ_TABLE_END},
 };
 /*
@@ -3274,6 +3286,7 @@ int get_max_freq(struct cpufreq_frequency_table *table)
 void __init board_clock_init(void)
 {
 	u32 flags=RK30_CLOCKS_DEFAULT_FLAGS;
+    int leakage_val=0;
 #if !defined(CONFIG_ARCH_RK3188)
 	if(get_max_freq(dvfs_gpu_table)<=(400*1000))
 	{	
@@ -3284,14 +3297,24 @@ void __init board_clock_init(void)
 #endif	
 	rk30_clock_data_init(periph_pll_default, codec_pll_default, flags);
 	//dvfs_set_arm_logic_volt(dvfs_cpu_logic_table, cpu_dvfs_table, dep_cpu2core_table);	
+#if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
+     //add by yyz@rock-chips.com
+     leakage_val=rk_leakage_val();
+     printk("board init leakage_val is %d\n",leakage_val);
+     if(leakage_val<=15000)
+        dvfs_set_freq_volt_table(clk_get(NULL, "cpu"),dvfs_arm_table_volt_level3);
+     else
+        dvfs_set_freq_volt_table(clk_get(NULL, "cpu"),dvfs_arm_table);
+#else
 	dvfs_set_freq_volt_table(clk_get(NULL, "cpu"), dvfs_arm_table);
+#endif
 	dvfs_set_freq_volt_table(clk_get(NULL, "gpu"), dvfs_gpu_table);
 /*
  * Path:rk3188T-lpddr2²¹¶¡_V1.1_20140409
  * Data:2014 4 14  wbj
  */
 #if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
-    dvfs_set_freq_volt_table(clk_get(NULL, "ddr"), dvfs_ddr_table);
+       dvfs_set_freq_volt_table(clk_get(NULL, "ddr"), dvfs_ddr_table);
 #elif defined(CONFIG_ARCH_RK3188)
 	if (rk_pll_flag() == 0)
 		dvfs_set_freq_volt_table(clk_get(NULL, "ddr"), dvfs_ddr_table);

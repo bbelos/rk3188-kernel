@@ -2057,7 +2057,7 @@ uint32_t ddr_get_parameter(uint32_t nMHz)
             goto out;
         }
 
-        #define DDR3_tREFI_7_8_us    (78)  //unit 100ns
+        #define DDR3_tREFI_7_8_us    (56)  //unit 100ns
         #define DDR3_tMRD            (4)   //tCK
         #define DDR3_tRFC_512Mb      (90)  //ns
         #define DDR3_tRFC_1Gb        (110) //ns
@@ -2981,7 +2981,7 @@ void __sramlocalfunc ddr_update_odt(void)
  * Data :2014 4 14  wbj
  */
 #if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
-    tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0x19<<5) | 0x1b;
+    tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0x19<<5) | 0x19;
 #else
     tmp = (0x1<<28) | (0x2<<15) | (0x2<<10) | (0xb<<5) | 0xb;  //DS=34ohm,ODT=171ohm
 #endif
