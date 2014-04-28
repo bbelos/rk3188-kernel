@@ -1135,6 +1135,7 @@ static int _rk_sensor_io_init_(struct rk29camera_gpio_res *gpio_res)
 
 	if (camera_powerdown != INVALID_GPIO) {
         ret = gpio_request(camera_powerdown, "camera powerdown");
+        ret = gpio_pull_updown(camera_powerdown, GPIO_HIGH);
         if (ret) {
             io_requested_in_camera = false;
             for (i=0; i<RK_CAM_NUM; i++) {
