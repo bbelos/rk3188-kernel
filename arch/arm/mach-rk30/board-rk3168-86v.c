@@ -893,7 +893,7 @@ struct rk29fb_info lcdc0_screen_info = {
 	.io_init   = NULL,
 	.io_disable = NULL,
 	.io_enable = NULL,
-	.set_screen_info = NULL,
+	.set_screen_info = hdmi_init_lcdc,
 };
 #endif
 
