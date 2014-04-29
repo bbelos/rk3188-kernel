@@ -65,6 +65,10 @@
 #include <linux/goodix_touch_82x.h>
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_GT928_IIC
+#include <linux/gt9110.h>
+#endif
+
 #if defined(CONFIG_RK_HDMI)
 	#include "../../../drivers/video/rockchip/hdmi/rk_hdmi.h"
 #endif
@@ -2476,6 +2480,14 @@ static struct i2c_board_info __initdata i2c2_info[] = {
         .flags         = 0,
         .irq           = RK30_PIN1_PB7,
     },
+#endif
+#if defined(CONFIG_TOUCHSCREEN_GT928_IIC)
+    {
+        .type          = "Goodix-TS",
+        .addr          = 0x5d,
+        .flags         = 0,
+        .irq           = RK30_PIN1_PB7,
+    }, 
 #endif
 #if defined (CONFIG_CT36X_TS)
 	{

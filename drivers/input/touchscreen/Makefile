@@ -110,6 +110,7 @@ obj-$(CONFIG_TOUCHSCREEN_ICN850X)      += ICN850X/
 obj-$(CONFIG_TOUCHSCREEN_ICN8503)      += ICN8503/
 obj-y += zet62xx/
 obj-y += aw5x0x/
+obj-$(CONFIG_TOUCHSCREEN_GT928_IIC)	+= gt9xx.o goodix_tool.o gt9xx_update.o
 
 obj-y += gsl_point_id.o
 obj-$(CONFIG_TOUCHSCREEN_MELFAS) += melfas_ts.o mms100_ISP_download.o

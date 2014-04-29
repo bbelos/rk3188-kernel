@@ -1041,6 +1041,8 @@ config TOUCHSCREEN_GT819
 	tristate "GT819 based touchscreens"
 	depends on I2C2_RK29
 
+config TOUCHSCREEN_GT928_IIC
+	tristate "GT9xx based touchscreens"
 
 config TOUCHSCREEN_GT8110
         tristate "GT8110 based touchscreens"
