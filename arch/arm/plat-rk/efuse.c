@@ -113,7 +113,11 @@ int rk_pll_flag(void)
 }
 int rk_tflag(void)
 {
+#if defined(CONFIG_ARCH_RK3188) && defined(CONFIG_ARCH_RK3188T)
+    return 1;
+#else
 	return efuse_buf[22] & (0x1 << 3);
+#endif
 }
 
 int efuse_version_val(void)
