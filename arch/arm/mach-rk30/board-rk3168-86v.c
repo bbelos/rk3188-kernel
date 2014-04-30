@@ -522,6 +522,18 @@ static struct rk29_bl_info rk29_bl_info = {
 		.io_deinit = rk29_backlight_io_deinit,
 		.pwm_suspend = rk29_backlight_pwm_suspend,
 		.pwm_resume = rk29_backlight_pwm_resume,
+#elif defined(CONFIG_TCHIP_MACH_TR838)
+        .min_brightness = 40,
+        .max_brightness = 220,
+		.brightness_mode = BRIGHTNESS_MODE_ELONGATION,
+		.pre_div = 30 * 1000,  // pwm output clk: 30k;
+		.pre_div = 10 * 1000,  // pwm output clk: 30k;
+		.pwm_id = PWM_ID,
+		.bl_ref = !PWM_EFFECT_VALUE,
+		.io_init = rk29_backlight_io_init,
+		.io_deinit = rk29_backlight_io_deinit,
+		.pwm_suspend = rk29_backlight_pwm_suspend,
+		.pwm_resume = rk29_backlight_pwm_resume,
 #else
         .min_brightness = 65,
         .max_brightness = 150,
