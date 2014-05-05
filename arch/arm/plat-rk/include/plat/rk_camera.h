@@ -259,6 +259,7 @@
 #define RK29_CAM_SENSOR_SP0718  sp0718
 #define RK29_CAM_SENSOR_SP0838  sp0838
 #define RK29_CAM_SENSOR_SP2518  sp2518
+#define RK29_CAM_SENSOR_SP0A19  sp0a19
 #define RK29_CAM_SENSOR_S5K5CA  s5k5ca
 #define RK29_CAM_ISP_MTK9335	mtk9335isp
 #define RK29_CAM_SENSOR_HM2057  hm2057
@@ -308,6 +309,7 @@
 #define RK29_CAM_SENSOR_NAME_SP0718  "sp0718"
 #define RK29_CAM_SENSOR_NAME_SP0838  "sp0838"
 #define RK29_CAM_SENSOR_NAME_SP2518  "sp2518"
+#define RK29_CAM_SENSOR_NAME_SP0A19  "sp0a19"
 #define RK29_CAM_SENSOR_NAME_S5K5CA  "s5k5ca"
 #define RK29_CAM_ISP_NAME_MTK9335ISP "mtk9335isp"
 #define RK29_CAM_SENSOR_NAME_HM2057  "hm2057"
@@ -370,6 +372,7 @@
 #define sp0718_FULL_RESOLUTION      0x30000            // 0.3 megapixel
 #define sp0838_FULL_RESOLUTION      0x30000            // 0.3 megapixel
 #define sp2518_FULL_RESOLUTION      0x200000            // 2 megapixel
+#define sp0a19_FULL_RESOLUTION      0x30000
 #define gc0329_FULL_RESOLUTION      0x30000            // 0.3 megapixel
 #define bf3703_FULL_RESOLUTION      0x30000            // 0.3 megapixel
 #define bf3920_FULL_RESOLUTION      0x200000            // 2 megapixel
@@ -436,7 +439,7 @@
 
 #define sp0718_I2C_ADDR             0x42
 #define sp0838_I2C_ADDR             0x30//INVALID_VALUE  
-#define sp0a19_I2C_ADDR             0x7a
+#define sp0a19_I2C_ADDR             0x42
 #define sp1628_I2C_ADDR             0x78
 #define sp2518_I2C_ADDR             0x60 
 #define mtk9335isp_I2C_ADDR         0x50 

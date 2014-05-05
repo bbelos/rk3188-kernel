@@ -1208,7 +1208,13 @@ config SOC_CAMERA_SP2518
 	depends on SOC_CAMERA && I2C
 	help
 	  This is a sp2518 camera driver for rockchip
-	  
+	 
+config SOC_CAMERA_SP0A19
+    tristate "SP0a19 support for rockchip"
+    depends on SOC_CAMERA && I2C
+    help
+        This is a SP0a19 camera driver for rockchip
+
 config SOC_CAMERA_HM2057
 	tristate "hm2057 camera support for rockchip"
 	depends on SOC_CAMERA && I2C
