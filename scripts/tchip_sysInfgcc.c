@@ -171,6 +171,9 @@ static void init_cameraVersion(void)
 #ifdef CONFIG_SOC_CAMERA_BF3703
 	(*p)++;
 #endif
+#ifdef CONFIG_SOC_CAMERA_SP0A19
+    (*p)++;
+#endif
 
 	strcat(tchip_version,str);
 }
