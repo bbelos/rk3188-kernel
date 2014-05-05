@@ -354,7 +354,8 @@ enum {
     V4L2_IDENT_GC0329 = 64115,      /* ddl@rock-chips.com : GC0329 support */
     V4L2_IDENT_GC2035= 64116,      /* ddl@rock-chips.com : GC0329 support */
     V4L2_IDENT_GC0328 = 64117,
-    
+    V4L2_IDENT_GC0311 = 64118,
+
     V4L2_IDENT_SP0838 = 64120,      /* ddl@rock-chips.com : SP0838 support */
     V4L2_IDENT_SP2518 = 64121,      /* ddl@rock-chips.com : SP2518 support */	      
     V4L2_IDENT_SP0718 = 64122,      /* ddl@rock-chips.com : SP0718 support */
