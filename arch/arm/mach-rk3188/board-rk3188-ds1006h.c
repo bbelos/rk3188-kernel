@@ -2795,6 +2795,14 @@ static struct i2c_board_info __initdata i2c2_info[] = {
         .platform_data =&gslx680_info,
     },
 #endif
+#if defined(CONFIG_TOUCHSCREEN_GT928_IIC)
+    {
+        .type          = "Goodix-TS",
+        .addr          = 0x5d,
+        .flags         = 0,
+        .irq           = RK30_PIN1_PB7,
+    }, 
+#endif
 #if defined (CONFIG_TOUCHSCREEN_ICN83XX)
 	{
 		.type          = "chipone-ts",
@@ -3255,7 +3263,7 @@ static struct cpufreq_frequency_table dvfs_ddr_table_lpddr2[] = {
 	{.frequency = CPUFREQ_TABLE_END},
 };
 /*
- * Path:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+ * Path:rk3188T-lpddr2\B2\B9\B6\A1_V1.1_20140409
  * Data:2014 4 14  wbj
  */
 #if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
@@ -3310,7 +3318,7 @@ void __init board_clock_init(void)
 #endif
 	dvfs_set_freq_volt_table(clk_get(NULL, "gpu"), dvfs_gpu_table);
 /*
- * Path:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+ * Path:rk3188T-lpddr2\B2\B9\B6\A1_V1.1_20140409
  * Data:2014 4 14  wbj
  */
 #if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
