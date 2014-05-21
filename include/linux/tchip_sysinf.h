@@ -147,6 +147,9 @@ typedef enum
 #ifdef CONFIG_RK903
 	TCSI_WIFI_RK903,
 #endif
+#ifdef CONFIG_AP6210
+	TCSI_WIFI_AP6210,
+#endif
 #ifdef CONFIG_NMC1000_WIFI_CHIP
 	TCSI_WIFI_NMC1000,
 #endif

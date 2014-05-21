@@ -78,6 +78,11 @@ static void init_boardVersion(void)
                add2versionex(tchip_version, cur, "");
 }
 
+static void init_pmuVersion(void)
+{
+	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_pmus);
+}
+
 static void init_codecVersion(void)
 {
 	SET_ALL_ACTIVE_DEVICE_VERSION(tchip_codecs);
@@ -172,6 +177,9 @@ static void init_cameraVersion(void)
 	(*p)++;
 #endif
 #ifdef CONFIG_SOC_CAMERA_SP0A19
+    (*p)++;
+#endif
+#ifdef CONFIG_SOC_CAMERA_OV5640
     (*p)++;
 #endif
 
@@ -287,6 +295,7 @@ static void rk29_init_Version(void)
 	strcat(tchip_version, "(");
 	init_boardVersion();
 	//init_encryptVersion();
+	init_pmuVersion();
 	init_rk61x();
 	init_toolscreen();
 	init_codecVersion();
@@ -726,7 +735,7 @@ int main(int argc, char *argv[])
 		printf("  %-8s%s\n", "Orig Version:", tchip_version, stderr);
 		printf("  %-8s%s\n", "Omit Version:", tchip_version, stderr);
 	    /*
-         * Patch:rk3188T-lpddr2²¹¶¡_V1.1_20140409
+         * Patch:rk3188T-lpddr2\B2\B9\B6\A1_V1.1_20140409
          * Data :2014 4 14  wbj
          */
         #if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)

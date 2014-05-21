@@ -522,7 +522,7 @@ static struct rk29_bl_info rk29_bl_info = {
 		.io_deinit = rk29_backlight_io_deinit,
 		.pwm_suspend = rk29_backlight_pwm_suspend,
 		.pwm_resume = rk29_backlight_pwm_resume,
-#elif defined(CONFIG_TCHIP_MACH_TR838)
+#elif defined(CONFIG_TCHIP_MACH_TR838D)
         .min_brightness = 40,
         .max_brightness = 220,
 		.brightness_mode = BRIGHTNESS_MODE_ELONGATION,
@@ -1129,7 +1129,7 @@ static struct rk616_platform_data rk616_pdata = {
 	.hp_ctl_gpio = RK30_PIN0_PC7,//RK30_PIN0_PC1,
     //.phone_ctl_gpio = RK30_PIN0_PC7,
 };
-#elif defined(CONFIG_TCHIP_MACH_TR838)
+#elif defined(CONFIG_TCHIP_MACH_TR838D)
 static struct rk616_platform_data rk616_pdata = {
     .power_init = rk616_power_on_init,
     .scl_rate   = RK616_SCL_RATE,

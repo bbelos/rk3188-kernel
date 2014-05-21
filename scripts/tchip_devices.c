@@ -103,8 +103,8 @@ static const struct tchip_device tchip_boards[] =
         { .name = "TR7078IPS_BOE", .active = 1 },
 #elif defined(CONFIG_TCHIP_MACH_TR7078)
         { .name = "TR7078", .active = 1 },
-#elif defined(CONFIG_TCHIP_MACH_TR838)
-        { .name = "TR838", .active = 1 },        
+#elif defined(CONFIG_TCHIP_MACH_TR838D)
+        { .name = "TR838D", .active = 1 },        
 #elif defined(CONFIG_TCHIP_MACH_TR7028)
 	{ .name = "TR7028", .active = 1 },
 #elif defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
@@ -135,6 +135,9 @@ static const struct tchip_device tchip_touchs[] =
 #endif
 #ifdef  CONFIG_TOUCHSCREEN_ICN850X
 	{.name = "ICN850X",.active = 1},
+#endif
+#ifdef  CONFIG_TOUCHSCREEN_GT928_IIC
+	{.name = "GT9XX",.active = 1},
 #endif
 };
 
@@ -332,6 +335,13 @@ static const struct tchip_device tchip_wifis[] =
 	[TCSI_GET_WIFI_INDEX(TCSI_WIFI_RK903)] =
 	{
 		.name = "RK903",
+		.active = 1,
+	},
+#endif
+#ifdef	CONFIG_AP6210
+	[TCSI_GET_WIFI_INDEX(TCSI_WIFI_AP6210)] =
+	{
+		.name = "AP6210",
 		.active = 1,
 	},
 #endif

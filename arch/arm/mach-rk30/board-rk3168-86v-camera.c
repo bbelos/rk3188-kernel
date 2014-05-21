@@ -36,7 +36,7 @@ Comprehensive camera device registration:
 
 #if defined(CONFIG_TCHIP_MACH_TR7078)
 #include "../mach-rk3188/tchip_camera_setup_tr7088.h"
-#elif defined(CONFIG_TCHIP_MACH_TR838)
+#elif defined(CONFIG_TCHIP_MACH_TR838D)
 #include "../mach-rk3188/tchip_camera_setup_tr838.h"
 #else
 static struct rkcamera_platform_data new_camera[] = {
