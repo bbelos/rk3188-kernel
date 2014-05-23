@@ -79,7 +79,10 @@ choice
 		bool "v01 for tr785"
 		
     config TCHIP_MACH_TR838D
-		bool "TR838, 8' Machine for KangGuan"
+		bool "TR838(3168), 8' Machine for KangGuan"
+
+    config TCHIP_MACH_TR838
+		bool "TR838(3188), 8' Machine for KangGuan"
        
 	config TCHIP_MACH_TRQ7
 		bool "TRQ7, PLDT product, and select the follow Customer"
