@@ -521,7 +521,11 @@ static int rk29_backlight_pwm_resume(void)
     gpio_free(pwm_gpio);
 	iomux_set(PWM_MODE);
 #ifdef  LCD_DISP_ON_PIN
-	msleep(30);
+#if defined(CONFIG_TCHIP_MACH_TR7088)
+	msleep(70);
+#else
+    msleep(30);
+#endif
 	gpio_direction_output(BL_EN_PIN, 1);
 	gpio_set_value(BL_EN_PIN, BL_EN_VALUE);
 #endif
