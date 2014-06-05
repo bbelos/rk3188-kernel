@@ -457,6 +457,11 @@ static int rk29_backlight_io_init(void)
 {
           int ret =0;
 #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+	gpio_free(BL_EN_PIN);
+    ret = gpio_request(BL_EN_PIN, NULL);
+	if (ret != 0) {
+		gpio_free(BL_EN_PIN);
+	}
     rk29_backlight_pwm_suspend();
     rk29_backlight_pwm_resume();
 #else
@@ -3089,7 +3094,8 @@ static void __init machine_rk30_board_init(void)
 {
 
 #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
-	gpio_pull_updown(RK30_PIN3_PD6, GPIOPullDown);
+	gpio_request(RK30_PIN3_PD6,NULL);
+    gpio_pull_updown(RK30_PIN3_PD6, GPIOPullDown);
 #endif
 #if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
     wifi_bt_io_init();
