@@ -496,6 +496,11 @@ int rk29sdk_wifi_power(int on)
 					port_output_on(wifi_pwr);
 			#else
                 gpio_set_value(rk_platform_wifi_gpio.power_n.io, rk_platform_wifi_gpio.power_n.enable);
+                #if defined(CONFIG_TCHIP_MACH_TR7088)|| defined(CONFIG_TCHIP_MACH_TR7078) 
+                    // WIFI VCCIO_WL ON
+                    gpio_direction_output(RK30_PIN1_PB4, GPIO_LOW);
+                    pr_info("RK30_PIN1_PB4 ------> LOW");
+                #endif
 			#endif
                 mdelay(50);
 
@@ -517,6 +522,11 @@ int rk29sdk_wifi_power(int on)
 						if(wifi_pwr!=-1)
 							port_output_off(wifi_pwr);
 				#else
+                #if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
+                    // WIFI VCCIO_WL ON
+                    gpio_direction_output(RK30_PIN1_PB4, GPIO_HIGH);
+                    pr_info("RK30_PIN1_PB4 ------> HIGH");
+                #endif
 						gpio_set_value(rk_platform_wifi_gpio.power_n.io, !(rk_platform_wifi_gpio.power_n.enable));
 				#endif
                         #if defined(CONFIG_USE_SDMMC0_FOR_WIFI_DEVELOP_BOARD)

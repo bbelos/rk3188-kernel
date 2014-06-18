@@ -3064,31 +3064,35 @@ static void rk30_pm_power_off(void)
 }
 
 #if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
-#define WL_PWR     RK30_PIN1_PB4 
-#define WL_IO_PWR  RK30_PIN1_PB3
-#define BT_RST     RK30_PIN3_PD1
+#define WL_PWR       RK30_PIN1_PB4 
+#define WL_PWR_VALUE GPIO_LOW
+#else
+#define WL_PWR       INVALID_GPIO
+#define WL_PWR_VALUE GPIO_LOW
+#endif
 void wifi_bt_io_init()
-{ 
-    gpio_free(RK30_PIN1_PB4);
-    gpio_request(RK30_PIN1_PB4, "wifi");//RK30_PIN3_PD0
-    //gpio_free(RK30_PIN3_PD0);
-    //gpio_request(RK30_PIN3_PD0, "wifi2");//RK30_PIN3_PD0
+{
+    if(WL_PWR != INVALID_GPIO)
+    {
+        gpio_free(RK30_PIN1_PB4);
+        gpio_request(RK30_PIN1_PB4, "wifi");//RK30_PIN3_PD0
+    }
 }
 
 void wifi_bt_power_ctl(bool on)
 {
-    if(on)
+    if(WL_PWR != INVALID_GPIO)
     {
-        gpio_direction_output(RK30_PIN1_PB4, GPIO_LOW);
-        //gpio_direction_output(RK30_PIN3_PD0, GPIO_HIGH);
-    }
-    else
-    {
-        gpio_direction_output(RK30_PIN1_PB4, GPIO_HIGH);
-        //gpio_direction_output(RK30_PIN3_PD0, GPIO_LOW);
+        if(on)
+        {
+            gpio_direction_output(WL_PWR, WL_PWR_VALUE);
+        }
+        else
+        {
+            gpio_direction_output(WL_PWR, !WL_PWR_VALUE);
+        }
     }
 }
-#endif
 
 static void __init machine_rk30_board_init(void)
 {
@@ -3099,7 +3103,7 @@ static void __init machine_rk30_board_init(void)
 #endif
 #if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088)
     wifi_bt_io_init();
-    wifi_bt_power_ctl(true);
+    wifi_bt_power_ctl(false);
 #endif
 	//avs_init();
 	gpio_request(POWER_ON_PIN, "poweronpin");
