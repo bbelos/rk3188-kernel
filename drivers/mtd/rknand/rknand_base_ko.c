@@ -300,9 +300,11 @@ char GetSNSectorInfo(char * pbuf)
 {
     if(gpNandInfo->GetSNSectorInfo)
 	   return( gpNandInfo->GetSNSectorInfo( pbuf));
-    else
-       return GetSNSectorInfoBeforeNandInit(pbuf);
+	else
+	   return GetSNSectorInfoBeforeNandInit(pbuf);
+    return 0;
 }
+
 
 char GetVendor0InfoBeforeNandInit(char * pbuf)
 {
@@ -317,12 +319,6 @@ char GetChipSectorInfo(char * pbuf)
 {
     if(gpNandInfo->GetChipSectorInfo)
 	   return( gpNandInfo->GetChipSectorInfo( pbuf));
-	else
-	{
-        char * sn_addr = ioremap(0x10501600,0x200);
-        memcpy(pbuf,sn_addr,0x200);
-        iounmap(sn_addr);
-	}
     return 0;
 }
 
