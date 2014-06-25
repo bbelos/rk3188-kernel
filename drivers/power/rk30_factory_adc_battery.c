@@ -102,6 +102,8 @@ char gDischargeFlag[4] = {"on "};
 #define BATT_NOMAL_VOL_VALUE                         3800            
 #if defined(CONFIG_TCHIP_MACH_TR7088) || defined(CONFIG_TCHIP_MACH_TR7078)
 #include "tr7088_battery_parameter.h"
+#elif defined(CONFIG_TCHIP_MACH_TR838)
+#include "tr838_battery_parameter.h"
 #else
 static int batt_table[2*BATT_NUM+6] =
 {
