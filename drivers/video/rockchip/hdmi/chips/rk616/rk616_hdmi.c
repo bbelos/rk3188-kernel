@@ -425,8 +425,12 @@ static int __devexit rk616_hdmi_remove(struct platform_device *pdev)
 	return 0;
 }
 
+extern void rk29_backlight_shutdown_extern(void);
 static void rk616_hdmi_shutdown(struct platform_device *pdev)
 {
+#if defined(CONFIG_TCHIP_MACH_TR7088_CUBE) || defined(CONFIG_TCHIP_MACH_TR7078IPS_SAMSUNG) 
+    rk29_backlight_shutdown_extern();
+#endif
 	if(hdmi) {
 #ifdef CONFIG_HAS_EARLYSUSPEND
 		unregister_early_suspend(&hdmi->early_suspend);

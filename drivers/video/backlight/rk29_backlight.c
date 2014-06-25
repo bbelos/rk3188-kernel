@@ -501,6 +501,16 @@ static struct platform_driver rk29_backlight_driver = {
 #endif
 };
 
+void rk29_backlight_shutdown_extern(void)
+{
+    struct rk29_bl_info *rk29_bl_info = bl_get_data(rk29_bl);
+    unregister_early_suspend(&bl_early_suspend);
+    rk29_bl->props.brightness = 0;
+    rk29_bl_update_status(rk29_bl);
+    if (rk29_bl_info && rk29_bl_info->io_deinit)
+        rk29_bl_info->io_deinit();
+}
+
 static int __init rk29_backlight_init(void)
 {
 	platform_driver_register(&rk29_backlight_driver);
