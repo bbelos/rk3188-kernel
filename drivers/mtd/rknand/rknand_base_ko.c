@@ -27,6 +27,7 @@
 #include <linux/cpufreq.h>
 
 #define DRIVER_NAME	"rk29xxnand"
+#define RKNAND_SECTOR_SIZE 0x200
 
 const char rknand_base_version[] = "rknand_base.c version: 4.40 20130420";
 #define NAND_DEBUG_LEVEL0 0
@@ -504,6 +505,47 @@ int get_rknand_device(struct rknand_info ** prknand_Info)
 
 EXPORT_SYMBOL(get_rknand_device);
 
+static struct proc_dir_entry *sector_proc_entry;
+static int rkNand_sector_proc_read(char *page,
+               char **start,
+               off_t offset, int count, int *eof, void *data)
+{
+    char *buf = page;
+    char *sector_buf = data;
+    int step = offset;
+    int ret = 0;
+
+    *(int *) start = 1;
+
+
+    if (step == 0 && sector_buf)
+    {
+        memcpy(buf, sector_buf, RKNAND_SECTOR_SIZE);
+        //print_hex_dump(KERN_WARNING, "sn:", DUMP_PREFIX_NONE, 16,1, &buf[2], buf[0], 0);
+        buf += RKNAND_SECTOR_SIZE;
+        *eof = 1;
+    }
+
+    ret = buf - page < count ? buf - page : count;
+    return ret;
+}
+
+static void rknand_create_sector_procfs(void)
+{
+    /* Install the proc_fs entry */
+    sector_proc_entry = create_proc_entry("rknand_sector",
+                           S_IRUGO | S_IFREG,
+                           NANDPROC_ROOT);
+
+    if (sector_proc_entry) {
+        sector_proc_entry->write_proc = NULL;
+        sector_proc_entry->read_proc = rkNand_sector_proc_read;
+        sector_proc_entry->data = kzalloc(RKNAND_SECTOR_SIZE, GFP_KERNEL);
+        if(sector_proc_entry->data)
+            GetSNSectorInfoBeforeNandInit(sector_proc_entry->data);
+    }
+}
+
 static int rknand_probe(struct platform_device *pdev)
 {
 	struct rknand_info *nand_info;
@@ -539,6 +581,8 @@ static int rknand_probe(struct platform_device *pdev)
 	nand_info->get_rknand_device = get_rknand_device;
 
 	rknand_create_procfs();
+	rknand_create_sector_procfs();
+	
 	return 0;
 
 exit_free:
