@@ -3027,6 +3027,49 @@ static void __init rk30_i2c_register_board_info(void)
 
 #define POWER_ON_PIN RK30_PIN0_PA0   //power_hold
 extern int dwc_vbus_status();
+
+static void rk30_tr838_shutdown(void)
+{
+    int power_press_cnt = 0;
+    extern int power_supply_is_system_supplied(void);
+    
+    printk("%s-%d: Enter\n", __FUNCTION__, __LINE__);
+    while(1)
+    {
+        // if have not power supply, just return(shutdown)
+#ifdef CONFIG_BATTERY_RK30_USB_CHARGE
+        if((power_supply_is_system_supplied() == 0)&&(0== dwc_vbus_status() ))
+        {
+            printk("%s-%d: no power supply, shutdown\n", __FUNCTION__, __LINE__);
+            break;
+        }
+        else
+        {
+            //if have power supply and press power key, restart
+            if(gpio_get_value(RK30_PIN0_PA4) == GPIO_LOW)
+            {
+                power_press_cnt++;
+                printk("%s-%d: press pwr_ker cnt=%d\n", __FUNCTION__, __LINE__, power_press_cnt);
+                msleep(100);
+                if(power_press_cnt > 4)
+                {
+                    printk("%s-%d: restart\n", __FUNCTION__, __LINE__);
+                    arm_pm_restart(0, NULL);
+                    break;
+                }
+            }
+            else if (0 != dwc_vbus_status())
+			{
+	    		printk("%s-%d: usb charge restart\n", __FUNCTION__, __LINE__);
+                arm_pm_restart(0, "charge");
+			}
+	    else
+                power_press_cnt=0;
+        }
+#endif  
+    }
+}
+
 static void rk30_pm_power_off(void)
 {
 	printk(KERN_ERR "rk30_pm_power_off start...\n");
@@ -3039,12 +3082,16 @@ static void rk30_pm_power_off(void)
     act8846_device_shutdown();
 #else
        if (pmic_is_act8846()) {
+#if defined(CONFIG_TCHIP_MACH_TR838)
+       rk30_tr838_shutdown();
+#else
                printk("enter dcdet===========\n");
                if(gpio_get_value (RK30_PIN0_PB2) == GPIO_LOW)
                {
                        printk("enter restart===========\n");
                        arm_pm_restart(0, "charge");
                }
+#endif
 		/** code here may cause tablet cannot boot when shutdown without charger pluged in
 		  * and then plug in charger. -- Cody Xie
                else
