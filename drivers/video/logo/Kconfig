@@ -47,6 +47,10 @@ config LOGO_LINUX_CLUT224_TR7088TN
 	bool "Standard 224-color Linux logo for TR7088 TN Screen"
 	default n
 
+config LOGO_LINUX_CLUT224_XBT_3188
+	bool "Standard 224-color Linux logo for XBT_3188"
+	default n
+
 config LOGO_PIPO_CLUT224
 	bool "Standard 224-pipo Linux logo"
 	default n
