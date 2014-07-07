@@ -3165,6 +3165,18 @@ static void __init machine_rk30_board_init(void)
     wifi_bt_io_init();
     wifi_bt_power_ctl(false);
 #endif
+
+#if defined (CONFIG_TCHIP_MACH_XBT_3188)  
+	#define WIFI_PWN  RK30_PIN0_PC5
+#else
+	#define WIFI_PWN  INVALID_GPIO
+#endif
+    if(WIFI_PWN != INVALID_GPIO)
+	{
+      gpio_request(WIFI_PWN, "wifi_pwr");
+      gpio_direction_output(WIFI_PWN, GPIO_HIGH);
+	}
+	
 	//avs_init();
 	gpio_request(POWER_ON_PIN, "poweronpin");
 	gpio_direction_output(POWER_ON_PIN, GPIO_HIGH);
