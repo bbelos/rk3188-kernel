@@ -148,9 +148,10 @@ static void init_cameraVersion(void)
 	}
 #endif
 
+#if 0
 	char str[10] = "_CAMx";
 	char *p = &str[strlen(str)];
-
+    
 	*p = 0x30;
 #ifdef CONFIG_SOC_CAMERA_SP2518
 	(*p)++;
@@ -182,7 +183,6 @@ static void init_cameraVersion(void)
 #ifdef CONFIG_SOC_CAMERA_OV5640
     (*p)++;
 #endif
-
 	strcat(tchip_version,str);
 }
 
@@ -196,7 +196,22 @@ static void init_encryptVersion(void)
     strcpy(str,"_NOAT");
 #endif
 
-        strcat(tchip_version, str);
+#endif
+	char str[10] = "_CAM+ALL";
+    strcat(tchip_version, str);
+}
+
+static void init_LcdVersion(void)
+{
+    struct tchip_device * cur = GET_CUR_DEVICE(tchip_screen);
+    if(0 != cur)
+        add2version(tchip_version, cur);
+}
+
+static void init_customer(void)
+{
+	char str[10] = "_PUBLIC";
+    strcat(tchip_version, str);
 }
 
 static void init_tpType(void)
@@ -295,24 +310,26 @@ static void rk29_init_Version(void)
 	strcat(tchip_version, "(");
 	init_boardVersion();
 	//init_encryptVersion();
-	init_pmuVersion();
-	init_rk61x();
-	init_toolscreen();
-	init_codecVersion();
-	init_touchVersion();
-	init_gsensorVersion();
+	//init_pmuVersion();
+	//init_rk61x();
+	//init_toolscreen();
+	//init_codecVersion();
 	init_wifiVersion();
 	init_btVersion();
-	init_batteryVersion();
+	init_touchVersion();
+	//init_batteryVersion();
 	init_cameraVersion();
-	//init_gsensor();
-	init_hdmiVersion();
-	init_gpsVersion();
-	init_modemVersion();
-	init_tpType();
-	init_tr920dtouch_version();
-	init_otgType();
-	init_JogballType();
+	init_LcdVersion();
+	init_gsensorVersion();
+    init_customer();
+    //init_gsensor();
+	//init_hdmiVersion();
+	//init_gpsVersion();
+	//init_modemVersion();
+	//init_tpType();
+	//init_tr920dtouch_version();
+	//init_otgType();
+	//init_JogballType();
 	init_curTime();
 	strcat(tchip_version, ")");
 }
@@ -732,15 +749,7 @@ int main(int argc, char *argv[])
 	{
 		// æå°çæ¬å·
 		rk29_init_Version();
-		printf("  %-8s%s\n", "Orig Version:", tchip_version, stderr);
-		printf("  %-8s%s\n", "Omit Version:", tchip_version, stderr);
-	    /*
-         * Patch:rk3188T-lpddr2\B2\B9\B6\A1_V1.1_20140409
-         * Data :2014 4 14  wbj
-         */
-        #if defined(USE_LPDDR2) && defined(CONFIG_ARCH_RK3188)
-		printf("  %-8s%s\n", "Loader:", "AndroidTool_Release_v2.1_LPDDR2.rar", stderr);
-        #endif
+		printf("  %-8s%s\n", "Version:", tchip_version, stderr);
         goto out;
 	}
 

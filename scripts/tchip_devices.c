@@ -91,16 +91,18 @@ static const struct tchip_device tchip_boards[] =
         { .name = "TR7888", .active = 1 },
 #elif defined(CONFIG_TCHIP_MACH_TR8088)
         { .name = "TR8088", .active = 1 },
-#elif defined(CONFIG_TCHIP_MACH_TR7088TN)
-        { .name = "TR7088TN", .active = 1 },
-#elif defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
-        { .name = "TR7088IPS_SAMSUNG", .active = 1 },
+//#elif defined(CONFIG_TCHIP_MACH_TR7088TN)
+//        { .name = "TR7088TN", .active = 1 },
+//#elif defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+//        { .name = "TR7088IPS_SAMSUNG", .active = 1 },
+//#elif defined(CONFIG_TCHIP_MACH_TR7088)
+//        { .name = "TR7088IPS_BOE", .active = 1 },
+//#elif defined(CONFIG_TCHIP_MACH_TR7078IPS_SAMSUNG)
+//        { .name = "TR7078IPS_SAMSUNG", .active = 1 },
+//#elif defined(CONFIG_TCHIP_MACH_TR7078IPS_BOE)
+//        { .name = "TR7078IPS_BOE", .active = 1 },
 #elif defined(CONFIG_TCHIP_MACH_TR7088)
-        { .name = "TR7088IPS_BOE", .active = 1 },
-#elif defined(CONFIG_TCHIP_MACH_TR7078IPS_SAMSUNG)
-        { .name = "TR7078IPS_SAMSUNG", .active = 1 },
-#elif defined(CONFIG_TCHIP_MACH_TR7078IPS_BOE)
-        { .name = "TR7078IPS_BOE", .active = 1 },
+        { .name = "TR7088", .active = 1 },
 #elif defined(CONFIG_TCHIP_MACH_TR7078)
         { .name = "TR7078", .active = 1 },
 #elif defined(CONFIG_TCHIP_MACH_TR838D)
@@ -136,7 +138,11 @@ static const struct tchip_device tchip_touchs[] =
 	{.name = "ICN83XX",.active = 1},
 #endif
 #ifdef  CONFIG_TOUCHSCREEN_ICN850X
-	{.name = "ICN850X",.active = 1},
+    #ifdef CONFIG_TOUCHSCREEN_ICN850X_GST
+	    {.name = "ICN850X@GST",.active = 1},
+    #else
+        {.name = "ICN850X@FC",.active = 1},
+    #endif
 #endif
 #ifdef  CONFIG_TOUCHSCREEN_GT928_IIC
 	{.name = "GT9XX",.active = 1},
@@ -486,7 +492,25 @@ static const struct tchip_device tchip_codecs[] =
 #endif
 };
 
-
+//wbj
+static const struct tchip_device tchip_screen[] =
+{
+#ifdef CONFIG_TCHIP_MACH_TR7088TN
+    { .name = "TN", .active = 1,},
+#elif defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
+    { .name = "SAMSUNG", .active = 1,},
+#elif defined(CONFIG_TCHIP_MACH_TR7088)
+    { .name = "BOE", .active = 1,},
+#elif defined(CONFIG_TCHIP_MACH_TR7078IPS_SAMSUNG)
+    { .name = "SAMSUNG", .active = 1,},
+#elif defined(CONFIG_TCHIP_MACH_TR7078IPS_BOE)
+    { .name = "BOE", .active = 1,},
+#elif defined(CONFIG_TCHIP_MACH_TR7078)
+    { .name = "TN", .active = 1,},
+#else
+    { .name = "UNKNOWLCD", .active = 1,},
+#endif
+};
 
 struct tchip_device *get_cur_device(struct tchip_device *devices, int size)
 {
