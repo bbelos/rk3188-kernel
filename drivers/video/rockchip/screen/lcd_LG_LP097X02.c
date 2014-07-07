@@ -21,7 +21,12 @@
 #define LCD_WIDTH   196// 142  // 202
 #define LCD_HEIGHT  147 //106//  152
 /* Other */
+#if defined(CONFIG_TCHIP_MACH_XBT_3188)
+#define DCLK_POL		0 // 
+#else
 #define DCLK_POL		1 // 
+#endif
+
 #define DEN_POL		0
 #define VSYNC_POL	0
 #define HSYNC_POL	0
