@@ -115,6 +115,8 @@ static const struct tchip_device tchip_boards[] =
 	{ .name = "TRQ7_LJ", .active = 1 },
 #elif defined(CONFIG_TCHIP_MACH_TRQ7_AR)
 	{ .name = "TRQ7_AR", .active = 1 },
+#elif defined(CONFIG_TCHIP_MACH_XBT_3188)
+	{ .name = "XBT_3188", .active = 1 },
 #endif
 };
 

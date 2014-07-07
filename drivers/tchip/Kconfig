@@ -86,6 +86,9 @@ choice
        
 	config TCHIP_MACH_TRQ7
 		bool "TRQ7, PLDT product, and select the follow Customer"
+		
+    config TCHIP_MACH_XBT_3188
+		bool "XBT(3188), 9'76 Machine for XBT"
 
 endchoice
 
