@@ -161,7 +161,7 @@ static struct rk29_keys_button key_button[] = {
     {
         .desc   = "vol+",
         .code   = KEY_VOLUMEUP,
-#if defined(CONFIG_TCHIP_MACH_TR785)
+#if defined(CONFIG_TCHIP_MACH_TR785) || defined(CONFIG_TCHIP_MACH_XBT_3188)
         .adc_value      = 171,
 #else
         .adc_value      = 1,
@@ -172,7 +172,7 @@ static struct rk29_keys_button key_button[] = {
     {
         .desc   = "vol-",
         .code   = KEY_VOLUMEDOWN,
-#if !defined(CONFIG_TCHIP_MACH_TR785)
+#if !defined(CONFIG_TCHIP_MACH_TR785) && !defined(CONFIG_TCHIP_MACH_XBT_3188)
         .adc_value      = 171,
 #else
         .adc_value      = 1,
