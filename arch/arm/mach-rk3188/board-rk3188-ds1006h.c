@@ -1773,6 +1773,35 @@ struct rk29_sdmmc_platform_data default_sdmmc2_data = {
 **************************************************************************************************/
 
 #ifdef CONFIG_BATTERY_RK30_ADC_FAC
+
+#if defined(CONFIG_TCHIP_MACH_XBT_3188)
+static int batt_table[2*11+6] =
+{
+    0x4B434F52,0x7461625F,0x79726574,1,470,100,
+    6863, 7287, 7394, 7479, 7544, 7644, 7731, 7867, 7989, 8129, 8304,//discharge
+    7370, 7590, 7705, 7787, 7885, 8005, 8155, 8300, 8336, 8341 , 8344,//charge
+};
+
+static struct rk30_adc_battery_platform_data rk30_adc_battery_platdata = {
+        .dc_det_pin      = RK30_PIN0_PB2,
+        .batt_low_pin    = INVALID_GPIO, 
+        .charge_set_pin  = INVALID_GPIO,
+        .charge_ok_pin   = RK30_PIN0_PA6,
+        .usb_det_pin = INVALID_GPIO,
+        .dc_det_level    = GPIO_LOW,
+        .charge_ok_level = GPIO_HIGH,
+
+        .reference_voltage = 1800, // the rK2928 is 3300;RK3066 and rk29 are 2500;rk3066B is 1800;
+        .pull_up_res = 470,     //divider resistance ,  pull-up resistor
+        .pull_down_res = 100, //divider resistance , pull-down resistor
+
+        .is_reboot_charging = 1,
+        .save_capacity   = 1 ,
+        .use_board_table = 1,
+        //.low_voltage_protection = 3600,
+        .board_batt_table = batt_table,
+};   
+#else    
 static struct rk30_adc_battery_platform_data rk30_adc_battery_platdata = {
         .dc_det_pin      = RK30_PIN0_PB2,
         .batt_low_pin    = INVALID_GPIO, 
@@ -1790,6 +1819,7 @@ static struct rk30_adc_battery_platform_data rk30_adc_battery_platdata = {
         .save_capacity   = 1 ,
         .low_voltage_protection = 3600,    
 };
+#endif
 
 static struct platform_device rk30_device_adc_battery = {
         .name   = "rk30-battery",
