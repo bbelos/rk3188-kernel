@@ -13,7 +13,8 @@
 #define LVDS_FORMAT         0//mipi lcd don't need it, so 0 would be ok.
 #define OUT_FACE	    	OUT_P888
 
-#define DCLK	          	80*1000000//60*1000000//150*1000000
+#define DCLK_RK3188_T	    80*1000000//60*1000000//150*1000000
+#define DCLK_RK3188         75*1000000
 #define LCDC_ACLK         	300000000           //29 lcdc axi DMA ÆµÂÊ
 
 /* Timing */

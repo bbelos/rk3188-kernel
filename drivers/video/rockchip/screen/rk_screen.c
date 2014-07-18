@@ -9,6 +9,8 @@
 extern uint lcd_param[LCD_PARAM_MAX];
 #endif
 
+#include <plat/efuse.h>
+
 #if defined (CONFIG_TCHIP_MIX_HDMD)
 int tchip_resolution = 1; //0: 800X480   1: 1024X600
 void tchip_resolution_setup(char *str)
@@ -257,7 +259,14 @@ void set_lcd_info(struct rk29fb_screen *screen, struct rk29lcd_info *lcd_info )
 
     
 	screen->lcdc_aclk = LCDC_ACLK; // Timing 
-	screen->pixclock = DCLK;
+	#ifdef CONFIG_LCD_K080WL2_MIPI
+        if(rk_pll_flag())
+          screen->pixclock = DCLK_RK3188_T;
+        else
+          screen->pixclock = DCLK_RK3188;
+    #else 
+ 	    screen->pixclock = DCLK;
+    #endif
 	screen->left_margin = H_BP;
 	screen->right_margin = H_FP;
 	screen->hsync_len = H_PW;
