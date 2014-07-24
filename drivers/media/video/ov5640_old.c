@@ -70,7 +70,7 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define CONFIG_SENSOR_Focus         1
 #define CONFIG_SENSOR_FocusCenterInCapture    0
 #define CONFIG_SENSOR_FocusContinues          0
-#include "ov5640_af_firmware.c"
+#include "ov5640_af_firmware_old.c"
 #else
 #define CONFIG_SENSOR_Focus         0
 #endif
