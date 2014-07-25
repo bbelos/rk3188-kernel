@@ -713,6 +713,7 @@ static struct sensor_platform_data mma8452_info = {
 
 };
 #endif
+
 #if defined (CONFIG_GS_LIS3DH)
 #define LIS3DH_INT_PIN   RK30_PIN0_PB7
 
@@ -915,6 +916,15 @@ static struct sensor_platform_data cm3217_info = {
 };
 
 #endif
+
+#ifdef CONFIG_LS_CM3232
+static struct sensor_platform_data cm3232_info = {
+	.type = SENSOR_TYPE_LIGHT,
+	.irq_enable = 0,
+	.poll_delay_ms = 500,
+};
+#endif
+
 
 #ifdef CONFIG_FB_ROCKCHIP
 
@@ -2947,6 +2957,14 @@ static struct i2c_board_info __initdata i2c2_info[] = {
 		.addr          = 0x10,
 		.flags         = 0,
 		.platform_data = &cm3217_info,
+	},
+#endif
+#if defined (CONFIG_LS_CM3232)
+	{
+		.type          = "light_cm3232",
+		.addr          = 0x10,
+		.flags         = 0,
+		.platform_data = &cm3232_info,
 	},
 #endif
 #if defined (CONFIG_LS_US5151)

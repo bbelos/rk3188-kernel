@@ -181,6 +181,10 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #define StepFocus_Spec_Tag       0x10
 #endif
 
+#ifdef CONFIG_CAMERA_AUTO_FLASH
+extern int sensor_light_status(); 
+#endif
+
 //flash off in fixed time to prevent from too hot , zyc
 struct  flash_timer{
     struct soc_camera_device *icd;
@@ -2876,7 +2880,11 @@ static int sensor_s_fmt(struct v4l2_subdev *sd,struct v4l2_mbus_framefmt *mf)
 				sensor_af_pause2capture(client);
 		#endif
 		#if CONFIG_SENSOR_Flash
-            if ((sensor->info_priv.flash == 1) || (sensor->info_priv.flash == 2)) {
+            #ifdef CONFIG_CAMERA_AUTO_FLASH
+            if (((sensor->info_priv.flash == 1) && sensor_light_status() )|| (sensor->info_priv.flash == 2)) {
+            #else
+            if ((sensor->info_priv.flash == 1))|| (sensor->info_priv.flash == 2)) {
+            #endif
                 sensor_ioctrl(icd, Sensor_Flash, Flash_On);
                 SENSOR_DG("%s flash on in capture!\n", SENSOR_NAME_STRING());
             }

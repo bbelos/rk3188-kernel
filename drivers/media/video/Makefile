@@ -22,6 +22,8 @@ endif
 
 obj-$(CONFIG_VIDEO_V4L2_COMMON) += v4l2-common.o
 
+obj-$(CONFIG_CAMERA_AUTO_FLASH)	+= auto_flash.o
+
 # All i2c modules must come first:
 
 obj-$(CONFIG_VIDEO_TUNER) += tuner.o
