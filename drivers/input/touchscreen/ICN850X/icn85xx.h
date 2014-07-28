@@ -187,6 +187,7 @@ extern int sprd_3rdparty_tp_ldo_level;
 #define MD25D40_ID2                      0xC84013
 #define MD25D20_ID1                      0x514012
 #define MD25D20_ID2                      0xC84012
+#define MD25D10_ID1                      0x514011
 #define GD25Q10_ID                       0xC84011
 #define MX25L512E_ID                     0xC22010
 
