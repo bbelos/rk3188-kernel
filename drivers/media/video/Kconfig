@@ -1030,6 +1030,34 @@ config OV5642_FIXEDFOCUS
 	bool "OV5642 fixed focus"
 endchoice
 
+config SOC_CAMERA_OV5647
+	tristate "ov5647 support for rockchip --- raw sensor"
+	depends on SOC_CAMERA && I2C && VIDEO_RK29 && VIDEO_RKCIF_SWISP_ON
+	default n
+	help
+	  This is a ov5647 camera driver for rockchip
+choice
+	prompt "OV5647 Module Focus select"
+	depends on SOC_CAMERA_OV5647
+	default OV5647_AUTOFOCUS
+	---help---
+
+config OV5647_AUTOFOCUS
+	bool "OV5647 auto focus"
+
+config OV5647_FIXEDFOCUS
+	bool "OV5647 fixed focus"
+endchoice
+choice
+	prompt "OV5647 Module VCM Driver IC"
+	depends on SOC_CAMERA_OV5647 && OV5647_AUTOFOCUS
+	default OV5647_VCM_DRIVER_A3907
+	---help---
+
+config OV5647_VCM_DRIVER_A3907
+	bool "A3907"
+endchoice
+
 config SOC_CAMERA_OV5640
 	tristate "ov5640 camera support for rockchip"
 	depends on SOC_CAMERA && I2C && VIDEO_RK29
@@ -1113,6 +1141,18 @@ config SOC_CAMERA_GC2015
 	depends on SOC_CAMERA && I2C
 	help
 	  This is a GC2015 camera driver for rockchip
+
+config SOC_CAMERA_GC2145
+	tristate "GC2145 support for rockchip"
+	depends on SOC_CAMERA && I2C
+	help
+	  This is a GC2145 camera driver for rockchip
+
+config SOC_CAMERA_GC2155
+	tristate "GC2155 support for rockchip"
+	depends on SOC_CAMERA && I2C
+	help
+	  This is a GC2155 camera driver for rockchip
 
 config SOC_CAMERA_GC2035
         tristate "GC2035 support for rockchip"
@@ -1329,6 +1369,25 @@ config VIDEO_RKCIF_WORK_SIMUL_ON
 config VIDEO_RKCIF_WORK_SIMUL_OFF
 	bool "Two cif controller cann't work sumultaneity"
 endchoice
+choice
+	prompt "RKXX CIF support SW ISP"
+	depends on VIDEO_RK29 
+	default VIDEO_RKCIF_SWISP_ON
+	---help---
+  CIF driver include isp function 
+config VIDEO_RKCIF_SWISP_ON
+	bool "CIF driver is support isp function"
+  
+config VIDEO_RKCIF_SWISP_OFF
+	bool "CIF driver is not support isp function"
+endchoice
+
+config VIDEO_RKCIF_SWISP
+	tristate "Rockchip software ISP"
+	depends on VIDEO_RK29
+	default m
+	---help---
+	  This is a software isp driver for the rockchip cif driver
 endmenu
 
 

@@ -25,6 +25,9 @@
 #include <linux/videodev2.h>
 #include <media/soc_camera.h>
 #include <linux/i2c.h>
+#ifdef CONFIG_VIDEO_RKCIF_SWISP_ON
+#include "../../../../drivers/media/video/rk_swisp/rk_swisp.h"
+#endif
 
 #define RK29_CAM_PLATFORM_DEV_ID 33
 #define RK_CAM_PLATFORM_DEV_ID_0 RK29_CAM_PLATFORM_DEV_ID
@@ -233,6 +236,7 @@
 #define RK29_CAM_SENSOR_OV3640 ov3640
 #define RK29_CAM_SENSOR_OV3660 ov3660
 #define RK29_CAM_SENSOR_OV5640 ov5640
+#define RK29_CAM_SENSOR_OV5647 ov5647
 #define RK29_CAM_SENSOR_OV5642 ov5642
 #define RK29_CAM_SENSOR_S5K6AA s5k6aa
 #define RK29_CAM_SENSOR_MT9D112 mt9d112
@@ -248,6 +252,8 @@
 #define RK29_CAM_SENSOR_GC0328  gc0328
 #define RK29_CAM_SENSOR_GC0329  gc0329
 #define RK29_CAM_SENSOR_GC2035	gc2035
+#define RK29_CAM_SENSOR_GC2145	gc2145
+#define RK29_CAM_SENSOR_GC2155	gc2155
 #define RK29_CAM_SENSOR_BF3920  bf3920
 #define RK29_CAM_SENSOR_BF3703  bf3703
 #define RK29_CAM_SENSOR_SIV120B  siv120b
@@ -284,6 +290,7 @@
 #define RK29_CAM_SENSOR_NAME_OV3640 "ov3640"
 #define RK29_CAM_SENSOR_NAME_OV3660 "ov3660"
 #define RK29_CAM_SENSOR_NAME_OV5640 "ov5640"
+#define RK29_CAM_SENSOR_NAME_OV5647 "ov5647"
 #define RK29_CAM_SENSOR_NAME_OV5642 "ov5642"
 #define RK29_CAM_SENSOR_NAME_S5K6AA "s5k6aa"
 #define RK29_CAM_SENSOR_NAME_MT9D112 "mt9d112"
@@ -298,6 +305,8 @@
 #define RK29_CAM_SENSOR_NAME_GC2015  "gc2015"
 #define RK29_CAM_SENSOR_NAME_GC0328  "gc0328"
 #define RK29_CAM_SENSOR_NAME_GC2035  "gc2035"
+#define RK29_CAM_SENSOR_NAME_GC2145  "gc2145"
+#define RK29_CAM_SENSOR_NAME_GC2155  "gc2155"
 #define RK29_CAM_SENSOR_NAME_GC0329  "gc0329"
 #define RK29_CAM_SENSOR_NAME_BF3920  "bf3920"
 #define RK29_CAM_SENSOR_NAME_BF3703  "bf3703"
@@ -322,6 +331,7 @@
 #define RK29_CAM_ISP_NAME_ICATCH7002_OV2720 "icatchov2720" //zyt
 #define RK29_CAM_SENSOR_NAME_MCNEX   "MCNEX"
 
+
 //Sensor full resolution define
 #define ov7675_FULL_RESOLUTION     0x30000            // 0.3 megapixel
 #define ov9650_FULL_RESOLUTION     0x130000           // 1.3 megapixel   
@@ -337,6 +347,7 @@
 #else	
     #define ov5642_FULL_RESOLUTION     0x500000           // 5 megapixel
 #endif
+#define ov5647_FULL_RESOLUTION     0x500000           // 5 megapixel
 #define s5k6aa_FULL_RESOLUTION     0x130000           // 1.3 megapixel
 #define mt9d112_FULL_RESOLUTION    0x200000           // 2 megapixel
 #define mt9d113_FULL_RESOLUTION    0x200000           // 2 megapixel
@@ -357,6 +368,8 @@
 #define gc0309_FULL_RESOLUTION     0x30000            // 0.3 megapixel
 #define gc0311_FULL_RESOLUTION      0x30000
 #define gc2015_FULL_RESOLUTION     0x200000           // 2 megapixel
+#define gc2235_FULL_RESOLUTION      0x200000            // 2 megapixel
+#define gc5004_FULL_RESOLUTION      0x500000            // 5 megapixel
 #define siv120b_FULL_RESOLUTION     0x30000            // 0.3 megapixel
 #define siv121d_FULL_RESOLUTION     0x30000            // 0.3 megapixel
 #define siv120d_FULL_RESOLUTION     0x30000            // 0.3 megapixel
@@ -382,6 +395,8 @@
 #define s5k5ca_FULL_RESOLUTION      0x300000            // 3 megapixel
 #define mtk9335isp_FULL_RESOLUTION  0x500000   		//5 megapixel
 #define gc2035_FULL_RESOLUTION      0x200000            // 2 megapixel
+#define gc2155_FULL_RESOLUTION      0x200000            // 2 megapixel
+#define gc2145_FULL_RESOLUTION      0x200000            // 2 megapixel
 #define hm2057_FULL_RESOLUTION      0x200000            // 2 megapixel
 #define hm5065_FULL_RESOLUTION      0x500000            // 5 megapixel
 #define nt99160_FULL_RESOLUTION     0x100000           // oyyf@rock-chips.com:  1 megapixel 1280*720    
@@ -406,6 +421,7 @@
 #define ov3660_I2C_ADDR             0x78
 #define ov5640_I2C_ADDR             0x78
 #define ov5642_I2C_ADDR             0x78
+#define ov5647_I2C_ADDR             0x6c
 
 #define s5k6aa_I2C_ADDR             0x78           //0x5a
 #define s5k5ca_I2C_ADDR             0x78           //0x5a
@@ -424,8 +440,12 @@
 #define gc0329_I2C_ADDR             0x62           
 #define gc2015_I2C_ADDR             0x60
 #define gc2035_I2C_ADDR             0x78     
+#define gc2145_I2C_ADDR             0x78     
+#define gc2155_I2C_ADDR             0x78     
 #define bf3703_I2C_ADDR             0xdc
 #define bf3920_I2C_ADDR             0xde       
+#define gc2235_I2C_ADDR             0x78  
+#define gc5004_I2C_ADDR             0x6d
 
 #define siv120b_I2C_ADDR             INVALID_VALUE           
 #define siv121d_I2C_ADDR             INVALID_VALUE           
@@ -456,7 +476,6 @@
 #define MCNEX_I2C_ADDR              0x5A
 #define end_I2C_ADDR                INVALID_VALUE
 
-
 //Sensor power down active level define
 #define ov7675_PWRDN_ACTIVE             0x01            
 #define ov9650_PWRDN_ACTIVE             0x01           
@@ -468,6 +487,7 @@
 #define ov3660_PWRDN_ACTIVE             0x01
 #define ov5640_PWRDN_ACTIVE             0x01
 #define ov5642_PWRDN_ACTIVE             0x01
+#define ov5647_PWRDN_ACTIVE             0x01
 
 #define s5k6aa_PWRDN_ACTIVE             0x00           
 #define s5k5ca_PWRDN_ACTIVE             0x00           
@@ -486,8 +506,13 @@
 #define gc0329_PWRDN_ACTIVE             0x01           
 #define gc2015_PWRDN_ACTIVE             0x01
 #define gc2035_PWRDN_ACTIVE             0x01  
+#define gc2145_PWRDN_ACTIVE             0x01  
+#define gc2155_PWRDN_ACTIVE             0x01  
 #define bf3703_PWRDN_ACTIVE             0x01
 #define bf3920_PWRDN_ACTIVE             0x01          
+#define gc2035_PWRDN_ACTIVE             0x01            
+#define gc2235_PWRDN_ACTIVE             0x01
+#define gc5004_PWRDN_ACTIVE             0x01
 
 #define siv120b_PWRDN_ACTIVE             INVALID_VALUE           
 #define siv121d_PWRDN_ACTIVE             INVALID_VALUE           
@@ -545,6 +570,7 @@
 #define ov3660_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 #define ov5640_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 #define ov5642_PWRSEQ                   sensor_PWRSEQ_DEFAULT
+#define ov5647_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 
 #define s5k6aa_PWRSEQ                   sensor_PWRSEQ_DEFAULT         
 #define s5k5ca_PWRSEQ                   sensor_PWRSEQ_DEFAULT          
@@ -563,9 +589,13 @@
 #define gc0329_PWRSEQ                   sensor_PWRSEQ_DEFAULT          
 #define gc2015_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 #define gc2035_PWRSEQ                   sensor_PWRSEQ_DEFAULT            
+#define gc2145_PWRSEQ                   sensor_PWRSEQ_DEFAULT            
+#define gc2155_PWRSEQ                   sensor_PWRSEQ_DEFAULT            
 
 #define bf3703_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 #define bf3920_PWRSEQ                   sensor_PWRSEQ_DEFAULT
+#define gc2235_PWRSEQ                   sensor_PWRSEQ_DEFAULT
+#define gc5004_PWRSEQ                   sensor_PWRSEQ_DEFAULT
 
 #define siv120b_PWRSEQ                   sensor_PWRSEQ_DEFAULT         
 #define siv121d_PWRSEQ                   sensor_PWRSEQ_DEFAULT         
@@ -643,7 +673,6 @@
 #define RK29_CAM_AFACTIVE_L  (0x00<<RK29_CAM_AFACTIVE_BITPOS)
 
 
-
 #define RK_CAM_SCALE_CROP_ARM      0
 #define RK_CAM_SCALE_CROP_IPP      1
 #define RK_CAM_SCALE_CROP_RGA      2
@@ -658,6 +687,32 @@
 #define RK29_CAM_SUBDEV_DEACTIVATE          0x01
 #define RK29_CAM_SUBDEV_IOREQUEST			0x02
 #define RK29_CAM_SUBDEV_CB_REGISTER         0x03
+#define RK29_CAM_SUBDEV_CALIBRATION_IMG     0x04
+#define RK29_CAM_SUBDEV_AE                  0x05
+#define RK29_CAM_SUBDEV_AF                  0x06
+#define RK29_CAM_SUBDEV_AWB                 0x07
+#define RK29_CAM_SUBDEV_GAMMA				0x08
+#define RK29_CAM_SUBDEV_COLOR_CORRECTION	0x09
+#define RK29_CAM_SUBDEV_LENS_CORRECTION		0x0a
+#define RK29_CAM_SUBDEV_AF_ZONE             0x0b
+
+/* ov5647 Step Focus Commands */
+#define StepFocus_Near_Tag       0x01
+#define StepFocus_Far_Tag        0x02
+#define StepFocus_Furthest_Tag   0x03
+#define StepFocus_Nearest_Tag    0x04
+#define StepFocus_Init_Tag	 	 0x05
+#define StepFocus_Sleep_Tag      0x06
+#define StepFocus_Work_Tag       0x07
+#define StepFocus_Write_Tag      0x08
+#define StepFocus_Read_Tag	 	 0x09
+#define StepFocus_Set_Current_Tag	 0x10
+#define StepFocus_Set_CurrentStep_Tag  0x11
+#define StepFocus_Set_TimeMode_Tag	 0x12
+#define StepFocus_Get_Current_Tag 0x13
+#define StepFocus_Single_Tag    0x14
+#define StepFocus_Continues_Tag 0x15
+
 
 #define Sensor_HasBeen_PwrOff(a)            (a&0x01)
 #define Sensor_Support_DirectResume(a)      ((a&0x10)==0x10)
@@ -747,9 +802,13 @@ typedef struct rk_camera_device_register_info {
     struct platform_device device_info;
 }rk_camera_device_register_info_t;
 
+
+
 struct rkcamera_platform_data {
     rk_camera_device_register_info_t dev;
     char dev_name[32];
+
+    
     struct rk29camera_gpio_res io;
     int orientation;
     int resolution;   
@@ -794,6 +853,9 @@ struct rk29camera_platform_data {
 	struct rk29camera_gpio_res gpio_res[RK_CAM_NUM];
 	struct rk29camera_mem_res meminfo;
 	struct rk29camera_mem_res meminfo_cif1;
+#ifdef CONFIG_VIDEO_RKCIF_SWISP_ON	
+    rk_camera_isp_mem_t meminfo_isp;
+#endif    
 	struct rk29camera_info info[RK_CAM_NUM];
     rk_camera_device_register_info_t register_dev[RK_CAM_NUM];
     struct rkcamera_platform_data *register_dev_new;
@@ -810,6 +872,15 @@ struct rk29camera_platform_ioctl_cb {
 typedef struct rk29_camera_sensor_cb {
     int (*sensor_cb)(void *arg); 
     int (*scale_crop_cb)(struct work_struct *work);
+
+
+#ifdef CONFIG_VIDEO_RKCIF_SWISP_ON    
+	rk_callback_t gamma;
+	rk_callback_t color_correction;
+	unsigned char *gamma_table;
+	rk_callback_t af_zone_update;
+#endif
+
 }rk29_camera_sensor_cb_s;
 #endif /* __ASM_ARCH_CAMERA_H_ */
 

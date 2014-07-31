@@ -104,6 +104,8 @@ obj-$(CONFIG_SOC_CAMERA_OV5640)		+= ov5640_old.o
 else
 obj-$(CONFIG_SOC_CAMERA_OV5640)		+= ov5640.o
 endif
+obj-$(CONFIG_SOC_CAMERA_OV5647)		+= ov5647.o
+obj-$(CONFIG_OV5647_VCM_DRIVER_A3907)		+= a3907.o
 obj-$(CONFIG_SOC_CAMERA_MCNEX)		+= lsi_4ec.o
 obj-$(CONFIG_SOC_CAMERA_OV5640_FOR_TD8801)		+= ov5640_for_td8801.o
 obj-$(CONFIG_SOC_CAMERA_OV5642)		+= ov5642.o
@@ -115,6 +117,8 @@ obj-$(CONFIG_SOC_CAMERA_GC0328)     += gc0328.o
 obj-$(CONFIG_SOC_CAMERA_GC0309)		+= gc0309.o
 obj-$(CONFIG_SOC_CAMERA_GC0311)     += gc0311.o
 obj-$(CONFIG_SOC_CAMERA_GC2015)		+= gc2015.o
+obj-$(CONFIG_SOC_CAMERA_GC2145)		+= gc2145.o
+obj-$(CONFIG_SOC_CAMERA_OV2155)		+= gc2155.o
 ifeq ($(CONFIG_TCHIP_MACH_TR7888),y)
 obj-$(CONFIG_SOC_CAMERA_GC2035)         += gc2035_old_tr7888.o
 obj-$(CONFIG_SOC_CAMERA_GC0329)			+= gc0329_old_tr7888.o
@@ -250,6 +254,7 @@ obj-$(CONFIG_VIDEO_RKCIF_WORK_PINGPONG)	+= rk29_camera_pingpang.o
 endif
 obj-$(CONFIG_VIDEO_RKCIF_WORK_ONEFRAME)  += generic_sensor.o
 obj-$(CONFIG_VIDEO_RKCIF_WORK_PINGPONG)  += generic_sensor.o
+obj-$(CONFIG_VIDEO_RKCIF_SWISP) += rk_swisp/
 
 obj-$(CONFIG_VIDEO_RK29XX_VOUT)		+= rk29xx/
 obj-$(CONFIG_VIDEO_SH_MOBILE_CSI2)	+= sh_mobile_csi2.o

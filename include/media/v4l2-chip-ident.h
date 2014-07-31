@@ -84,7 +84,7 @@ enum {
 	V4L2_IDENT_OV9740 = 266,
 	V4L2_IDENT_OV7690 = 267,
 	V4L2_IDENT_OV3660 = 268,
-
+    V4L2_IDENT_OV5647 = 269,
 	/* module saa7146: reserved range 300-309 */
 	V4L2_IDENT_SAA7146 = 300,
 
@@ -355,6 +355,8 @@ enum {
     V4L2_IDENT_GC2035= 64116,      /* ddl@rock-chips.com : GC0329 support */
     V4L2_IDENT_GC0328 = 64117,
     V4L2_IDENT_GC0311 = 64118,
+    V4L2_IDENT_GC2145 = 64119,
+    V4L2_IDENT_GC2155 = 64109,
 
     V4L2_IDENT_SP0838 = 64120,      /* ddl@rock-chips.com : SP0838 support */
     V4L2_IDENT_SP2518 = 64121,      /* ddl@rock-chips.com : SP2518 support */	      
