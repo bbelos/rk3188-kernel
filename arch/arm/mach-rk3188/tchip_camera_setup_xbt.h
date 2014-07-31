@@ -12,6 +12,7 @@
                              pwdn_active,\
                              flash_attach,\
                              flash_io,\
+                             af_io,\
                              res,\
                              mir,\
                              i2c_chl,\
@@ -40,9 +41,9 @@
                 .gpio_power = pwr_io,\
                 .gpio_reset = rst_io,\
                 .gpio_powerdown = pwdn_io,\
-                .gpio_af = INVALID_GPIO,\
+                .gpio_af = af_io,\
                 .gpio_flash = flash_io,\
-                .gpio_flag = ((pwr_active&0x01)<<RK29_CAM_POWERACTIVE_BITPOS)|((rst_active&0x01)<<RK29_CAM_RESETACTIVE_BITPOS)|((pwdn_active&0x01)<<RK29_CAM_POWERDNACTIVE_BITPOS)|RK29_CAM_FLASHACTIVE_H,\
+                .gpio_flag = ((pwr_active&0x01)<<RK29_CAM_POWERACTIVE_BITPOS)|((rst_active&0x01)<<RK29_CAM_RESETACTIVE_BITPOS)|((pwdn_active&0x01)<<RK29_CAM_POWERDNACTIVE_BITPOS)|RK29_CAM_FLASHACTIVE_H|RK29_CAM_AFACTIVE_L,\
             },\
             .orientation = ori,\
             .resolution = res,\
@@ -66,6 +67,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         (CONS(RK29_CAM_SENSOR_OV5640,_PWRDN_ACTIVE)&0x10)|0x01,
                         0,
                         RK30_PIN0_PC1,
+                        RK30_PIN0_PC7,
                         CONS(RK29_CAM_SENSOR_OV5640,_FULL_RESOLUTION),
                         0x00,
                         3,
@@ -84,6 +86,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         (CONS(RK29_CAM_SENSOR_OV5647,_PWRDN_ACTIVE)&0x10)|0x01,
                         0,
                         RK30_PIN0_PC1,
+                        RK30_PIN0_PC7,
                         CONS(RK29_CAM_SENSOR_OV5647,_FULL_RESOLUTION),
                         0x00,
                         3,
