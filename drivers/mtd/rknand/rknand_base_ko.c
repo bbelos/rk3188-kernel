@@ -280,6 +280,25 @@ static int rknand_panic_write(struct mtd_info *mtd, loff_t to, size_t len, size_
 	return 0;
 }
 
+static char sn_data[512];
+static char vendor0[512];
+char GetSNSectorInfo(char * pbuf)
+{
+    memcpy(pbuf,sn_data,0x200);
+    return 0;
+}
+
+char GetSNSectorInfoBeforeNandInit(char * pbuf)
+{
+    memcpy(pbuf,sn_data,0x200);
+    return 0;
+} 
+
+char GetVendor0InfoBeforeNandInit(char * pbuf)
+{
+    memcpy(pbuf,vendor0 + 8,504);
+    return 0;
+}
 
 int GetIdBlockSysData(char * buf, int Sector)
 {
@@ -287,34 +306,6 @@ int GetIdBlockSysData(char * buf, int Sector)
 	   return( gpNandInfo->GetIdBlockSysData( buf,  Sector));
     return 0;
 }
-
-char GetSNSectorInfoBeforeNandInit(char * pbuf)
-{
-    char * sn_addr = ioremap(0x10501600,0x200);
-    memcpy(pbuf,sn_addr,0x200);
-    iounmap(sn_addr);
-	//print_hex_dump(KERN_WARNING, "sn:", DUMP_PREFIX_NONE, 16,1, sn_addr, 16, 0);
-    return 0;
-} 
-
-char GetSNSectorInfo(char * pbuf)
-{
-    if(gpNandInfo->GetSNSectorInfo)
-	   return( gpNandInfo->GetSNSectorInfo( pbuf));
-	else
-	   return GetSNSectorInfoBeforeNandInit(pbuf);
-    return 0;
-}
-
-
-char GetVendor0InfoBeforeNandInit(char * pbuf)
-{
-    char * sn_addr = ioremap(0x10501400,0x200);
-    memcpy(pbuf,sn_addr + 8,504);
-    iounmap(sn_addr);
-	//print_hex_dump(KERN_WARNING, "sn:", DUMP_PREFIX_NONE, 16,1, sn_addr, 16, 0);
-    return 0;
-} 
 
 char GetChipSectorInfo(char * pbuf)
 {
@@ -632,9 +623,19 @@ static struct platform_driver rknand_driver = {
 
 MODULE_ALIAS(DRIVER_NAME);
 
+#ifndef RK30_NANDC_PHYS
+#define RK30_NANDC_PHYS 0x10500000
+#endif
+
 static int __init rknand_init(void)
 {
 	int ret;
+  
+    char * membase = ioremap(RK30_NANDC_PHYS,0x2000);	
+    memcpy(vendor0,membase+0x1400,0x200);
+    memcpy(sn_data,membase+0x1600,0x200);
+    iounmap(membase);
+
 	NAND_DEBUG(NAND_DEBUG_LEVEL0,"rknand_init: \n");
 	ret = platform_driver_register(&rknand_driver);
 	NAND_DEBUG(NAND_DEBUG_LEVEL0,"platform_driver_register:ret = %x \n",ret);
