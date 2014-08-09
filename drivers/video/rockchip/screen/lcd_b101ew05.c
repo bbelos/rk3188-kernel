@@ -5,6 +5,45 @@
 #include "../transmitter/rk610_lcd.h"
 #endif
 
+#if defined(CONFIG_TCHIP_MACH_TR101Q) 
+#define SCREEN_TYPE	    	SCREEN_LVDS   //depend on your LCD type SCREEN_RGB/SCREEN_LVDS/SCREEN_MIPI or others
+#define LVDS_FORMAT      	LVDS_8BIT_3   //depend on LVDS screen type,you can get it from the lcd SPEC
+#define OUT_FACE	    	OUT_D888_P666 //depend on hardware connection
+
+
+#define DCLK	          	86000000
+#define LCDC_ACLK         	300000000           //29 lcdc axi DMA ÆµÂÊ
+
+/* Timing */
+#define H_PW			10
+#define H_BP			100
+#define H_VD			1280
+#define H_FP			18
+
+#define V_PW			2
+#define V_BP			8
+#define V_VD			800
+#define V_FP			6
+
+#define LCD_WIDTH          	216
+#define LCD_HEIGHT         	135
+/* Other */
+#if  defined(CONFIG_RK610_LVDS) || defined(CONFIG_RK616_LVDS) || defined(CONFIG_RK3026_LVDS)
+#define DCLK_POL	1
+#else
+#define DCLK_POL	0
+#endif
+#define DEN_POL		0
+#define VSYNC_POL	0
+#define HSYNC_POL	0
+
+#define SWAP_RB		0
+#define SWAP_RG		0
+#define SWAP_GB		0
+
+
+#else /// define 
+
 #define SCREEN_TYPE	    	SCREEN_LVDS   //depend on your LCD type SCREEN_RGB/SCREEN_LVDS/SCREEN_MIPI or others
 #define LVDS_FORMAT      	LVDS_8BIT_2   //depend on LVDS screen type,you can get it from the lcd SPEC
 #define OUT_FACE	    	OUT_D888_P666 //depend on hardware connection
@@ -39,6 +78,8 @@
 #define SWAP_RB		0
 #define SWAP_RG		0
 #define SWAP_GB		0
+
+#endif //CONFIG_TCHIP_MACH_TR101Q
 
 #define USE_RK_DSP_LUT
 int dsp_lut[256] ={
