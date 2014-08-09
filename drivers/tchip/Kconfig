@@ -90,6 +90,9 @@ choice
     config TCHIP_MACH_XBT_3188
 		bool "XBT(3188), 9'76 Machine for XBT"
 
+    config TCHIP_MACH_TR101Q
+		bool "TR101Q, 3G Machine for JianWei"
+
 endchoice
 
 choice 
