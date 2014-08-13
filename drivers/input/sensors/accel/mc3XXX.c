@@ -819,18 +819,18 @@ static inline int mc3XXX_convert_to_int(s16 value)
 {
 	int result;
 
-	printk("mc3XXX_convert_to_int value=%d ",value );
+	//printk("mc3XXX_convert_to_int value=%d ",value );
 	if(value>-3 && value<3)value=0;
 
 	if (value < MC3XXX_BOUNDARY) 
 	{	
 		result = value * MC3XXX_GRAVITY_STEP;
-		printk("value < MC3XXX_BOUNDARY result=%d ",result );
+		//printk("value < MC3XXX_BOUNDARY result=%d ",result );
 		
 	} else 
 	{
 		result = ~(((~value & 0x7f) + 1)* MC3XXX_GRAVITY_STEP) + 1;
-		printk("value > MC3XXX_BOUNDARY result=%d ",result );
+		//printk("value > MC3XXX_BOUNDARY result=%d ",result );
 	}
 		
 
