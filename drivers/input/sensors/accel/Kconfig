@@ -15,6 +15,13 @@ config GS_MMA8452
 	  To have support for your specific gsesnor you will have to
 	  select the proper drivers which depend on this option.
 
+config GS_MC3XXX
+  bool "gsensor mc3xxx"
+        help
+          To have support for your specific gsesnor you will have to
+          select the proper drivers which depend on this option.
+
+
 config GS_KXTIK
     bool "gsensor kxtik"
 	help
@@ -37,6 +44,12 @@ config GS_LIS3DH
 config GS_MMA7660
   bool "gsensor mma7660"
 	help	 
+	  To have support for your specific gsesnor you will have to
+	  select the proper drivers which depend on this option.
+
+config GS_STK831X
+  bool "gsensor stk831x"
+	help
 	  To have support for your specific gsesnor you will have to
 	  select the proper drivers which depend on this option.
 

@@ -48,6 +48,8 @@ Comprehensive camera device registration:
 #include "../mach-rk3188/tchip_camera_setup_tr838.h"
 #elif defined(CONFIG_TCHIP_MACH_XBT_3188)
 #include "../mach-rk3188/tchip_camera_setup_xbt.h"
+#elif defined (CONFIG_TCHIP_MACH_TR101Q)	
+#include "../mach-rk3188/tchip_camera_setup_tr101q.h"
 #else
 static struct rkcamera_platform_data new_camera[] = {
     new_camera_device_ex(RK29_CAM_SENSOR_OV5640,
@@ -299,8 +301,13 @@ static struct rkcamera_platform_data new_camera[] = {
 static void rk_cif_power(int on)
 {
     struct regulator *ldo_18,*ldo_28;
+#ifdef  CONFIG_REGULATOR_ACT8846
+	ldo_28 = regulator_get(NULL, "act_ldo8");	// vcc28_cif
+	ldo_18 = regulator_get(NULL, "act_ldo3");	// vcc18_cif
+#else
 	ldo_28 = regulator_get(NULL, "ldo7");	// vcc28_cif
 	ldo_18 = regulator_get(NULL, "ldo1");	// vcc18_cif
+#endif
 	if (ldo_28 == NULL || IS_ERR(ldo_28) || ldo_18 == NULL || IS_ERR(ldo_18)){
         printk("get cif ldo failed!\n");
         if(on ==0 )
@@ -312,11 +319,21 @@ static void rk_cif_power(int on)
 		return;
 	    }
     if(on == 0){	
+#ifdef  CONFIG_REGULATOR_ACT8846
+        while(regulator_is_enabled(ldo_28))   
+            regulator_disable(ldo_28);
+        regulator_put(ldo_28);
+        while(regulator_is_enabled(ldo_18))
+            regulator_disable(ldo_18);
+        regulator_put(ldo_18);
+    	mdelay(500);
+#else
     	regulator_disable(ldo_28);
     	regulator_put(ldo_28);
     	regulator_disable(ldo_18);
-    	regulator_put(ldo_18);
+    	regulator_put(ldo_18);		
     	mdelay(500);
+#endif
         }
     else{
     	regulator_set_voltage(ldo_28, 2800000, 2800000);

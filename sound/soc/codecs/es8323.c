@@ -77,6 +77,14 @@ static int hp_irq_flag = 0;
 #define es8323_DEF_VOL			0x1e
 #endif
 
+#if defined(CONFIG_TCHIP_MACH_TR101Q)
+#undef EAR_CON_PIN
+#undef SPK_CTL
+#undef HP_DET          //RK30_PIN0_PB5
+#define SPK_CON 		RK30_PIN2_PD7 //RK30_PIN4_PC5
+#define es8323_DEF_VOL			0x1d
+#endif
+
 static int es8323_set_bias_level(struct snd_soc_codec *codec,enum snd_soc_bias_level level);
 extern int es8323_dapm_pre_event(struct snd_soc_dapm_widget* widget, struct snd_kcontrol * null, int event);
 extern int es8323_dapm_post_event(struct snd_soc_dapm_widget* widget, struct snd_kcontrol * null, int event);                                
@@ -111,6 +119,7 @@ struct es8323_priv {
 	int is_biason;
 };
 
+#ifdef HP_DET
 static void hp_detect_do_switch(struct work_struct *work)
 {
 	int ret;
@@ -164,7 +173,7 @@ static irqreturn_t hp_det_irq_handler(int irq, void *dev_id)
 
 }
 
-
+#endif
 
 static unsigned int es8323_read_reg_cache(struct snd_soc_codec *codec,
 				     unsigned int reg)
@@ -1015,7 +1024,7 @@ static int es8323_probe(struct snd_soc_codec *codec)
     //gpio_set_value(SPK_CON, 1);
     gpio_direction_output(SPK_CON,0);
 
-
+#ifdef HP_DET
 		ret = gpio_request(HP_DET, NULL);
 		if (ret != 0) {
 				printk("%s request HP_DET error", __func__);
@@ -1034,6 +1043,7 @@ static int es8323_probe(struct snd_soc_codec *codec)
         else 
 			printk("request_irq HP_IRQ failed\n");
     }
+#endif
     
 	if (codec == NULL) {
 		dev_err(codec->dev, "Codec device not registered\n");

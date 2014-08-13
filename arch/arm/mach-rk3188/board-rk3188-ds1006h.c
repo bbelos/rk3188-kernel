@@ -98,10 +98,16 @@
      #define GS2_ORIGENTATION_MC3230         {-1, 0, 0, 0, 1, 0, 0, 0, -1}
      #define GS2_ORIGENTATION_STK8312        {0, 1, 0, -1, 0, 0, 0, 0, 1}
      #define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1} 
+#elif defined (CONFIG_TCHIP_MACH_TR101Q)	
+       #define GS2_ORIGENTATION_MC3230         {0, -1, 0, 1, 0, 0, 0, 0, 1}
+       #define GS2_ORIGENTATION_STK8312        {0, 1, 0, 1, 0, 0, 0, 0, -1}
+       #define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1}
+		#define GS2_ORIGENTATION_STK831x 		{0, 1, 0, 0, 1, 0, 0, 0, 1}    
 #else
 	#define GS2_ORIGENTATION_MC3230         {0, 1, 0, 1, 0, 0, 0, 0, -1}
 	#define GS2_ORIGENTATION_STK8312        {0, 1, 0, 1, 0, 0, 0, 0, -1}
 	#define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1}    
+	#define GS2_ORIGENTATION_STK831x 		{0, 1, 0, 0, 1, 0, 0, 0, 1}    
 #endif
 
 #if defined(CONFIG_SWITCH_GPIO) 
@@ -651,6 +657,17 @@ static struct rk29_bl_info rk29_bl_info = {
 	.io_deinit = rk29_backlight_io_deinit,
 	.pwm_suspend = rk29_backlight_pwm_suspend,
 	.pwm_resume = rk29_backlight_pwm_resume,
+#elif defined (CONFIG_TCHIP_MACH_TR101Q)
+        .min_brightness = 100,
+        .max_brightness = 240,
+        .brightness_mode =BRIGHTNESS_MODE_ELONGATION,
+	.pre_div = 30 * 1000,  // pwm output clk: 30k;
+	.pwm_id = PWM_ID,
+	.bl_ref = PWM_EFFECT_VALUE,
+	.io_init = rk29_backlight_io_init,
+	.io_deinit = rk29_backlight_io_deinit,
+	.pwm_suspend = rk29_backlight_pwm_suspend,
+	.pwm_resume = rk29_backlight_pwm_resume,
 #else
         .min_brightness = 65,
         .max_brightness = 150,
@@ -690,6 +707,49 @@ static struct gsensor_platform_data STK8312_info = {
     .orientation = GS2_ORIGENTATION_STK8312,
 };
 #endif
+
+
+#if defined (CONFIG_GS_STK831X)
+#define STK831X_INT_PIN RK30_PIN0_PB7
+static int stk831x_init_platform_hw(void)
+{
+	//rk30_mux_api_set(GPIO1B2_SPI_RXD_UART1_SIN_NAME, GPIO1B_GPIO1B2);
+
+	return 0;
+}
+static struct sensor_platform_data stk831x_info = {
+	.type = SENSOR_TYPE_ACCEL,
+	.irq_enable = 0,
+	.poll_delay_ms = 30,
+    .init_platform_hw = stk831x_init_platform_hw,
+	.orientation = GS2_ORIGENTATION_STK831x,
+};
+#endif
+
+#if defined (CONFIG_GS_MC3XXX)
+#define MC3XXX_INT_PIN	RK30_PIN0_PB7
+static int MC3XXX_init_platform_hw(void)
+{
+/*
+	if(gpio_request(MC3XXX_INT_PIN,NULL) != 0){
+		gpio_free(MC3XXX_INT_PIN);
+		printk("MC3XXX_init_platform_hw gpio_request error\n");
+		return -EIO;
+	}
+	gpio_pull_updown(MC3XXX_INT_PIN, 1);
+*/
+	return 0;
+}
+
+static struct sensor_platform_data MC3XXX_info = {
+	.type = SENSOR_TYPE_ACCEL,
+	.irq_enable = 0,
+	.poll_delay_ms = 30,
+        .init_platform_hw = MC3XXX_init_platform_hw,
+        .orientation = GS2_ORIGENTATION_MC3230,
+};
+#endif
+
 
 /*MMA8452 gsensor*/
 #if defined (CONFIG_GS_MMA8452)
@@ -1004,6 +1064,19 @@ static struct sensor_platform_data cm3232_info = {
 #define LCD_TCON_EN_VALUE	GPIO_LOW
 #define LCD_LVDS_STB		INVALID_GPIO
 #define LCD_LVDS_STB_VALUE	GPIO_HIGH
+#elif defined (CONFIG_TCHIP_MACH_TR101Q)
+#define LCD_CS_PIN         RK30_PIN3_PD4
+#define LCD_CS_IOMUX       GPIO3_D4
+#define LCD_CS_VALUE       GPIO_HIGH
+#define LCD_PWR_PIN        INVALID_GPIO
+#define LCD_PWR_IOMUX      GPIO1_B2
+#define LCD_PWR_VALUE      GPIO_HIGH
+#define LCD_EN_PIN         RK30_PIN0_PB0
+#define LCD_EN_VALUE       GPIO_LOW
+#define LCD_TCON_EN			INVALID_GPIO//RK30_PIN0_PB4
+#define LCD_TCON_EN_VALUE	GPIO_LOW
+#define LCD_LVDS_STB		INVALID_GPIO
+#define LCD_LVDS_STB_VALUE	GPIO_HIGH
 #else
 #define LCD_CS_PIN         RK30_PIN1_PB5
 #define LCD_CS_IOMUX       GPIO1_B5
@@ -1164,7 +1237,7 @@ static int rk_fb_io_enable(void)
 	return 0;
 }
 
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined (CONFIG_TCHIP_MACH_TRQ7) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_XBT_3188)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TR7088) || defined (CONFIG_TCHIP_MACH_TRQ7) || defined(CONFIG_TCHIP_MACH_TR7888) || defined(CONFIG_TCHIP_MACH_XBT_3188) || defined(CONFIG_TCHIP_MACH_TR101Q)
 
 
 #if defined(CONFIG_LCDC1_RK3188)
@@ -1811,6 +1884,35 @@ static struct rk30_adc_battery_platform_data rk30_adc_battery_platdata = {
         //.low_voltage_protection = 3600,
         .board_batt_table = batt_table,
 };   
+
+#elif  defined(CONFIG_TCHIP_MACH_TR101Q)
+static int batt_table[2*11+6] =
+{
+    0x4B434F52,0x7461625F,0x79726574,1,470,100,
+	68307630, 7242, 7332, 7404, 7470, 7520, 7610, 7744, 7848, 8016, 8284,//discharge
+	7630, 7754, 7852, 7908, 7956, 8024, 8112, 8220, 8306, 8318, 8458//charge
+};
+
+static struct rk30_adc_battery_platform_data rk30_adc_battery_platdata = {
+        .dc_det_pin      = RK30_PIN0_PB2,
+        .batt_low_pin    = INVALID_GPIO, 
+        .charge_set_pin  = INVALID_GPIO,
+        .charge_ok_pin   = RK30_PIN0_PA6,
+        .usb_det_pin = INVALID_GPIO,
+        .dc_det_level    = GPIO_LOW,
+        .charge_ok_level = GPIO_HIGH,
+
+        .reference_voltage = 1800, // the rK2928 is 3300;RK3066 and rk29 are 2500;rk3066B is 1800;
+        .pull_up_res = 470,     //divider resistance ,  pull-up resistor
+        .pull_down_res = 100, //divider resistance , pull-down resistor
+
+        .is_reboot_charging = 1,
+        .save_capacity   = 1 ,
+        .use_board_table = 1,
+        //.low_voltage_protection = 3600,
+        .board_batt_table = batt_table,
+};
+
 #else    
 static struct rk30_adc_battery_platform_data rk30_adc_battery_platdata = {
         .dc_det_pin      = RK30_PIN0_PB2,
@@ -2255,7 +2357,11 @@ static struct mt6622_platform_data mt6622_platdata = {
 
 		    .reset_gpio         = { // BT_RST
 		        #if DS1006H_V1_2_SUPPORT
+					#if defined(CONFIG_TCHIP_MACH_TR101Q)
+					.io             = INVALID_GPIO,
+					#else
                     .io             = RK30_PIN3_PD1,
+					#endif
 		        #else
 		        .io             = RK30_PIN0_PD7,
 		        #endif
@@ -2493,6 +2599,25 @@ static struct i2c_board_info __initdata i2c0_info[] = {
          .platform_data          = &STK8312_info,
        },
 #endif
+#if defined (CONFIG_GS_STK831X)
+	{
+	  .type 		  = "gs_stk831x",
+	  .addr 		  = 0x3d,
+	  .flags		  = 0,
+	  .irq			  = STK831X_INT_PIN,
+	  .platform_data  = &stk831x_info,
+	},
+#endif
+#if defined (CONFIG_GS_MC3XXX)
+	{
+		.type	        = "gs_mc3XXX",
+		.addr	        = 0x4c,
+		.flags	        = 0,
+		.irq	        = MC3XXX_INT_PIN,
+		.platform_data = &MC3XXX_info,
+	},
+#endif
+
 };
 #endif
 
@@ -3043,7 +3168,7 @@ static struct i2c_board_info __initdata i2c4_info[] = {
 #endif
 
 #if defined (CONFIG_SND_SOC_ES8323) 
-#if defined (CONFIG_TCHIP_MACH_TRQ7_LJ)
+#if defined (CONFIG_TCHIP_MACH_TRQ7_LJ) || defined (CONFIG_TCHIP_MACH_TR101Q)
         {
                 .type                   = "es8323",
                 .addr                   = 0x10,
@@ -3156,6 +3281,14 @@ static void rk30_pm_power_off(void)
 #if defined(CONFIG_REGULATOR_ACT8846)
 #ifdef CONFIG_TCHIP_MACH_TR785
     act8846_device_shutdown();
+
+#elif defined(CONFIG_TCHIP_MACH_TR101Q)
+    if (pmic_is_act8846()) {
+    	if(gpio_get_value (RK30_PIN0_PB2) == GPIO_LOW || 1 == dwc_vbus_status() || 2 == dwc_vbus_status())
+        	arm_pm_restart(0, "charge");
+		else
+    		act8846_device_shutdown();
+	}
 #else
        if (pmic_is_act8846()) {
 #if defined(CONFIG_TCHIP_MACH_TR838)
@@ -3240,6 +3373,14 @@ static void __init machine_rk30_board_init(void)
       gpio_direction_output(WIFI_PWN, GPIO_HIGH);
 	}
 	
+#if defined (CONFIG_TCHIP_MACH_TR101Q)
+	//wifi
+		iomux_set(GPIO1_B3);
+		gpio_request(RK30_PIN1_PB3, "wifi_pwr");
+		gpio_direction_output(RK30_PIN1_PB3, GPIO_HIGH);
+	//
+#endif
+
 	//avs_init();
 	gpio_request(POWER_ON_PIN, "poweronpin");
 	gpio_direction_output(POWER_ON_PIN, GPIO_HIGH);

@@ -1641,6 +1641,10 @@ int sensor_unregister_slave(int type,struct i2c_client *client,
 	return result;
 }
 
+static struct miscdevice stk_device = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "stk831x",
+};
 
 int sensor_probe(struct i2c_client *client, const struct i2c_device_id *devid)
 {
@@ -1649,6 +1653,7 @@ int sensor_probe(struct i2c_client *client, const struct i2c_device_id *devid)
 	struct sensor_platform_data *pdata;
 	int result = 0;
 	int type = 0;
+	int error = 0;
 	
 	dev_info(&client->adapter->dev, "%s: %s,0x%x\n", __func__, devid->name,(unsigned int)client);
 
@@ -1876,6 +1881,17 @@ int sensor_probe(struct i2c_client *client, const struct i2c_device_id *devid)
 
 	printk("%s:initialized ok,sensor name:%s,type:%d,id=%d\n\n",__func__,sensor->ops->name,type,(int)sensor->i2c_id->driver_data);
 
+#if defined (CONFIG_GS_STK831X)
+	if(strcmp(sensor->ops->name, "gs_stk831x") == 0)
+	{
+		error = misc_register(&stk_device);
+		if (error) 
+		{
+			printk(KERN_ERR "%s: misc_register gs_stk831x failed\n", __func__);
+		}
+	}
+#endif
+
 	return result;
 	
 out_misc_device_register_device_failed:
@@ -1930,7 +1946,9 @@ static const struct i2c_device_id sensor_id[] = {
 	{"gs_kxtj9", ACCEL_ID_KXTJ9},
 	{"gs_lis3dh", ACCEL_ID_LIS3DH},
 	{"gs_mma7660", ACCEL_ID_MMA7660},
+	{"gs_mc3XXX", ACCEL_ID_MC3XXX},    // MCUBE
 	{"gs_mxc6225", ACCEL_ID_MXC6225},
+	{"gs_stk831x", ACCEL_ID_STK831X},
 	/*compass*/
 	{"compass", COMPASS_ID_ALL},
 	{"ak8975", COMPASS_ID_AK8975},	
