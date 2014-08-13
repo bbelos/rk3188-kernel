@@ -88,6 +88,9 @@
 #include "../mach-rk30/board-rk3168-ds1006h-camera.c"
 #include <plat/key.h>
 
+#if defined(CONFIG_ANDROID_TIMED_GPIO)
+#include "../../../drivers/staging/android/timed_gpio.h"
+#endif
 
 #if defined(CONFIG_TCHIP_MACH_TR785) || defined(CONFIG_TCHIP_MACH_TR1088)
 	#define GS2_ORIGENTATION_MC3230        { 1, 0, 0,0, -1, 0,  0, 0, -1}
@@ -2422,6 +2425,48 @@ static struct platform_device device_tcc_bt = {
 };
 #endif
 
+
+#ifdef CONFIG_ANDROID_TIMED_GPIO
+#if defined (CONFIG_TCHIP_MACH_TR101Q)  
+static struct timed_gpio timed_gpios[] = {
+	{
+		.name = "vibrator",
+		.gpio = RK30_PIN0_PC7,
+		.max_timeout = 1000,
+		.active_low = 0,
+		.adjust_time =20,      //adjust for diff product
+	},
+	/*
+	{
+		.name = "vibrator1",
+		.gpio = RK30_PIN0_PC5,
+		.max_timeout = 1000,
+		.active_low = 0,
+		.adjust_time =20,      //adjust for diff product
+	},
+	*/
+
+};
+
+static struct timed_gpio_platform_data rk29_vibrator_info = {
+	.num_gpios = ARRAY_SIZE(timed_gpios),
+	.gpios = timed_gpios,
+};
+
+static struct platform_device rk29_device_vibrator = {
+	.name = "timed-gpio",
+	.id = -1,
+	.dev = {
+		.platform_data = &rk29_vibrator_info,
+	},
+
+};
+#endif
+#endif
+
+
+
+
 #define ATX8_RST_PIN    RK30_PIN3_PD7
 
 static struct platform_device *devices[] __initdata = {
@@ -2466,6 +2511,13 @@ static struct platform_device *devices[] __initdata = {
         &pwm_regulator_device[0],
         &pwm_regulator_device[1],
 #endif
+
+#ifdef CONFIG_ANDROID_TIMED_GPIO
+#if defined (CONFIG_TCHIP_MACH_TR101Q)  
+	&rk29_device_vibrator,
+#endif
+#endif
+
 };
 
 
