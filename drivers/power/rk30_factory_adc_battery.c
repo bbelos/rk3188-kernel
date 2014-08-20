@@ -1049,7 +1049,7 @@ static void rk_usb_charger(struct rk30_adc_battery_data *bat)
 			                timer_of_charge_sample = NUM_CHARGE_MIN_SAMPLE - 2; // 13
 			if (++(bat->gBatCapacityusbChargeCnt) >= timer_of_charge_sample){
 				bat->gBatCapacityusbChargeCnt  = 0;
-				if (bat->bat_capacity < 99){
+				if (bat->bat_capacity <= 99){
 					bat->bat_capacity++;
 					bat->bat_change  = 1;
 				}
@@ -1177,7 +1177,7 @@ static void rk_ac_charger(struct rk30_adc_battery_data *bat)
 			                timer_of_charge_sample = NUM_CHARGE_MIN_SAMPLE - 2; // 13
 			if (++(bat->gBatCapacityacChargeCnt) >= timer_of_charge_sample){
 				bat->gBatCapacityacChargeCnt  = 0;
-				if (bat->bat_capacity < 99){
+				if (bat->bat_capacity <= 99){
 					bat->bat_capacity++;
 					bat->bat_change  = 1;
 				}
