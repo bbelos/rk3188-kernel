@@ -49,7 +49,7 @@ static int rk30_battery_dbg_level = 0;
 module_param_named(dbg_level, rk30_battery_dbg_level, int, 0644);
 #define DBG( args...) \
 	do { \
-		if (rk30_battery_dbg_level) { \
+		if (rk30_battery_dbg_level>1) { \
 			pr_info(args); \
 		} \
 	} while (0)
@@ -1783,7 +1783,7 @@ struct rk30_adc_battery_data  *bat = container_of((work), \
 			{
 			AdcTestCnt = 0;
 
-			DBG("Status = %d, RealAdcVal = %d, RealVol = %d,gBatVol = %d, gBatCap = %d, RealCapacity = %d, batt_dischargecnt = %d\n,  chargecnt = %d,ac_count = %d, usb_count =%d ,usb_dischargecount =%d\n", 
+			printk("Status = %d, RealAdcVal = %d, RealVol = %d,gBatVol = %d, gBatCap = %d, RealCapacity = %d, batt_dischargecnt = %d\n,  chargecnt = %d,ac_count = %d, usb_count =%d ,usb_dischargecount =%d\n", 
 			bat ->bat_status, bat ->adc_val, rk_adc_voltage(bat, bat ->adc_val), 
 			bat ->bat_voltage, bat ->bat_capacity, bat ->capacitytmp, bat ->gBatCapacityDisChargeCnt, bat ->gBatCapacityChargeCnt,
 			bat ->gBatCapacityacChargeCnt, bat ->gBatCapacityusbChargeCnt, bat ->gBatCapacityusbdisChargeCnt);
