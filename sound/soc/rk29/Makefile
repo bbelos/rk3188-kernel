@@ -13,6 +13,7 @@ obj-$(CONFIG_SND_RK_SOC_SPDIF) += snd-soc-rockchip-spdif.o
 
 # ROCKCHIP Machine Support
 snd-soc-wm8900-objs := rk29_wm8900.o
+snd-soc-wm8904-objs := rk29_wm8904.o
 snd-soc-rt5621-objs := rk29_rt5621.o
 snd-soc-rt5631-objs := rk29_rt5631.o
 snd-soc-rt5616-objs := rk29_rt5616.o
@@ -37,6 +38,7 @@ snd-soc-hdmi-spdif-objs := rk_hdmi_spdif.o
 obj-$(CONFIG_SND_RK29_SOC_WM8994) += snd-soc-wm8994.o
 obj-$(CONFIG_SND_RK29_SOC_WM8988) += snd-soc-wm8988.o
 obj-$(CONFIG_SND_RK29_SOC_WM8900) += snd-soc-wm8900.o
+obj-$(CONFIG_SND_RK29_SOC_WM8904) += snd-soc-wm8904.o
 obj-$(CONFIG_SND_RK29_SOC_RT5621) += snd-soc-rt5621.o
 obj-$(CONFIG_SND_RK29_SOC_RT5631) += snd-soc-rt5631.o
 obj-$(CONFIG_SND_RK29_SOC_RT5631_PHONE) += snd-soc-rt5631-phone.o

@@ -3228,6 +3228,13 @@ static struct i2c_board_info __initdata i2c4_info[] = {
         },
 #endif
 #endif
+#if   defined (CONFIG_SND_SOC_WM8904) 
+        {
+                .type                   = "wm8904",
+                .addr                   = 0x1a,
+                .flags                  = 0,
+        }
+#endif
 
 };
 #endif

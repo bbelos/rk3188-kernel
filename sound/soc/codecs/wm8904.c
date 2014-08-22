@@ -10,7 +10,7 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
-
+//#define DEBUG
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
@@ -27,7 +27,7 @@
 #include <sound/initval.h>
 #include <sound/tlv.h>
 #include <sound/wm8904.h>
-
+#include <linux/gpio.h>
 #include "wm8904.h"
 
 enum wm8904_type {
@@ -45,7 +45,7 @@ static const char *wm8904_supply_names[WM8904_NUM_SUPPLIES] = {
 	"CPVDD",
 	"MICVDD",
 };
-
+#define SPK_CON 		RK30_PIN2_PD7
 /* codec private data */
 struct wm8904_priv {
 
@@ -972,6 +972,27 @@ static int sysclk_event(struct snd_soc_dapm_widget *w,
 
 	return 0;
 }
+ 
+static void on_off_ext_amp(int i)
+{
+    #ifdef SPK_CON
+    gpio_set_value(SPK_CON, i);
+   // printk("*** %s() SPEAKER set as %d\n", __FUNCTION__, i);
+    #endif
+    #ifdef EAR_CON_PIN
+    //gpio_direction_output(EAR_CON_PIN, GPIO_LOW);
+    gpio_set_value(EAR_CON_PIN, i);
+    //printk("*** %s() HEADPHONE set as %d\n", __FUNCTION__, i);
+    mdelay(50);
+    #endif
+}
+
+
+void codec_set_spk(bool on)
+{
+	on_off_ext_amp (on);
+}
+EXPORT_SYMBOL (codec_set_spk);
 
 static int out_pga_event(struct snd_soc_dapm_widget *w,
 			 struct snd_kcontrol *kcontrol, int event)
@@ -1086,6 +1107,7 @@ static int out_pga_event(struct snd_soc_dapm_widget *w,
 				    WM8904_HPR_RMV_SHORT,
 				    WM8904_HPL_RMV_SHORT |
 				    WM8904_HPR_RMV_SHORT);
+		on_off_ext_amp (1);
 
 		break;
 
@@ -1116,6 +1138,7 @@ static int out_pga_event(struct snd_soc_dapm_widget *w,
 		snd_soc_update_bits(codec, pwr_reg,
 				    WM8904_HPL_PGA_ENA | WM8904_HPR_PGA_ENA,
 				    0);
+		on_off_ext_amp (0);
 		break;
 	}
 
@@ -2139,6 +2162,7 @@ static int wm8904_set_bias_level(struct snd_soc_codec *codec,
 
 	case SND_SOC_BIAS_STANDBY:
 		if (codec->dapm.bias_level == SND_SOC_BIAS_OFF) {
+		/*
 			ret = regulator_bulk_enable(ARRAY_SIZE(wm8904->supplies),
 						    wm8904->supplies);
 			if (ret != 0) {
@@ -2147,7 +2171,7 @@ static int wm8904_set_bias_level(struct snd_soc_codec *codec,
 					ret);
 				return ret;
 			}
-
+*/
 			wm8904_sync_cache(codec);
 
 			/* Enable bias */
@@ -2193,8 +2217,8 @@ static int wm8904_set_bias_level(struct snd_soc_codec *codec,
 		codec->cache_sync = 1;
 #endif
 
-		regulator_bulk_disable(ARRAY_SIZE(wm8904->supplies),
-				       wm8904->supplies);
+		//regulator_bulk_disable(ARRAY_SIZE(wm8904->supplies),
+		//		       wm8904->supplies);
 		break;
 	}
 	codec->dapm.bias_level = level;
@@ -2371,7 +2395,7 @@ static int wm8904_probe(struct snd_soc_codec *codec)
 	struct wm8904_pdata *pdata = wm8904->pdata;
 	u16 *reg_cache = codec->reg_cache;
 	int ret, i;
-
+	printk ("enter %s\n",__func__);
 	codec->cache_sync = 1;
 	codec->dapm.idle_bias_off = 1;
 
@@ -2395,7 +2419,7 @@ static int wm8904_probe(struct snd_soc_codec *codec)
 
 	for (i = 0; i < ARRAY_SIZE(wm8904->supplies); i++)
 		wm8904->supplies[i].supply = wm8904_supply_names[i];
-
+/*
 	ret = regulator_bulk_get(codec->dev, ARRAY_SIZE(wm8904->supplies),
 				 wm8904->supplies);
 	if (ret != 0) {
@@ -2409,7 +2433,7 @@ static int wm8904_probe(struct snd_soc_codec *codec)
 		dev_err(codec->dev, "Failed to enable supplies: %d\n", ret);
 		goto err_get;
 	}
-
+*/
 	ret = snd_soc_read(codec, WM8904_SW_RESET_AND_ID);
 	if (ret < 0) {
 		dev_err(codec->dev, "Failed to read ID register\n");
@@ -2488,18 +2512,23 @@ static int wm8904_probe(struct snd_soc_codec *codec)
 	wm8904_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
 	/* Bias level configuration will have done an extra enable */
-	regulator_bulk_disable(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
+	//regulator_bulk_disable(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
 
 	wm8904_handle_pdata(codec);
 
 	wm8904_add_widgets(codec);
+	
+	#if defined(SPK_CON)
+	gpio_request(SPK_CON,NULL);
+	gpio_direction_output(SPK_CON, GPIO_HIGH);
+	#endif
 
 	return 0;
 
 err_enable:
-	regulator_bulk_disable(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
+	//regulator_bulk_disable(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
 err_get:
-	regulator_bulk_free(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
+	//regulator_bulk_free(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
 	return ret;
 }
 
@@ -2508,7 +2537,7 @@ static int wm8904_remove(struct snd_soc_codec *codec)
 	struct wm8904_priv *wm8904 = snd_soc_codec_get_drvdata(codec);
 
 	wm8904_set_bias_level(codec, SND_SOC_BIAS_OFF);
-	regulator_bulk_free(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
+	//regulator_bulk_free(ARRAY_SIZE(wm8904->supplies), wm8904->supplies);
 	kfree(wm8904->retune_mobile_texts);
 	kfree(wm8904->drc_texts);
 
@@ -2533,7 +2562,7 @@ static __devinit int wm8904_i2c_probe(struct i2c_client *i2c,
 {
 	struct wm8904_priv *wm8904;
 	int ret;
-
+	printk ("enter %s\n",__func__);
 	wm8904 = kzalloc(sizeof(struct wm8904_priv), GFP_KERNEL);
 	if (wm8904 == NULL)
 		return -ENOMEM;
@@ -2578,6 +2607,8 @@ static struct i2c_driver wm8904_i2c_driver = {
 static int __init wm8904_modinit(void)
 {
 	int ret = 0;
+	
+	//printk ("enter-----%s\n",__func__);
 #if defined(CONFIG_I2C) || defined(CONFIG_I2C_MODULE)
 	ret = i2c_add_driver(&wm8904_i2c_driver);
 	if (ret != 0) {
