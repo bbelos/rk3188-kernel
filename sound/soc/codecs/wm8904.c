@@ -1220,7 +1220,7 @@ SND_SOC_DAPM_INPUT("IN2R"),
 SND_SOC_DAPM_INPUT("IN3L"),
 SND_SOC_DAPM_INPUT("IN3R"),
 
-SND_SOC_DAPM_MICBIAS("MICBIAS", WM8904_MIC_BIAS_CONTROL_0, 0, 0),
+SND_SOC_DAPM_MICBIAS("MICBIAS", WM8904_MIC_BIAS_CONTROL_0, 0, 1),
 
 SND_SOC_DAPM_MUX("Left Capture Mux", SND_SOC_NOPM, 0, 0, &lin_mux),
 SND_SOC_DAPM_MUX("Left Capture Inverting Mux", SND_SOC_NOPM, 0, 0,
@@ -2509,6 +2509,8 @@ static int wm8904_probe(struct snd_soc_codec *codec)
 	snd_soc_update_bits(codec, WM8904_BIAS_CONTROL_0,
 			    WM8904_POBCTRL, 0);
 
+	snd_soc_write(codec, WM8904_MIC_BIAS_CONTROL_0 ,0x01);
+	snd_soc_write(codec, WM8904_MIC_BIAS_CONTROL_1 ,0x02);
 	wm8904_set_bias_level(codec, SND_SOC_BIAS_STANDBY);
 
 	/* Bias level configuration will have done an extra enable */

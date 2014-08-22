@@ -193,7 +193,11 @@ static void headsetobserve_work(struct work_struct *work)
 		
 	if(headset_info->headset_status == HEADSET_IN)
 	{
+		#if defined (CONFIG_TCHIP_MACH_XBT_3188)
+		headset_info->cur_headset_status = BIT_HEADSET;
+		#else
 		headset_info->cur_headset_status = BIT_HEADSET_NO_MIC;
+		#endif
 		if(pdata->headset_in_type == HEADSET_IN_HIGH)
 			irq_set_irq_type(headset_info->irq[HEADSET],IRQF_TRIGGER_FALLING);
 		else
