@@ -197,6 +197,39 @@ struct rk29_keys_platform_data rk29_keys_pdata = {
 	.chn	= 1,  //chn: 0-7, if do not use ADC,set 'chn' -1
 };
 
+#if defined (CONFIG_RK_HEADSET_DET) || defined (CONFIG_RK_HEADSET_IRQ_HOOK_ADC_DET)
+#include "../../../drivers/headset_observe/rk_headset.h"
+static int rk_headset_io_init(int gpio)
+{
+		int ret;
+		ret = gpio_request(gpio, "headset_input");
+		if(ret) 
+			return ret;
+
+		//rk30_mux_api_set(GPIO0B4_I2S8CHSDO0_NAME, GPIO0B_GPIO0B4);
+		gpio_pull_updown(gpio, PullDisable);
+		gpio_direction_input(gpio);
+		mdelay(50);
+		return 0;
+};
+
+struct rk_headset_pdata rk_headset_info = {
+		.Headset_gpio		= RK30_PIN0_PB4,
+		.headset_in_type = HEADSET_IN_LOW,
+		//.Hook_adc_chn = 2,
+		//.hook_key_code = KEY_MEDIA,
+		.headset_io_init = rk_headset_io_init, 
+};
+
+struct platform_device rk_device_headset = {
+		.name	= "rk_headsetdet",
+		.id 	= 0,
+		.dev    = {
+			    .platform_data = &rk_headset_info,
+		}
+};
+#endif
+
 /*
      v1.0 : 	ignore
      v1.1 :      rk610 lvds + rk610 codec + MT5931_MT6622 + light photoresistor + adc/cw2015
@@ -2518,6 +2551,9 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #endif
 
+#if defined (CONFIG_RK_HEADSET_DET) || defined (CONFIG_RK_HEADSET_IRQ_HOOK_ADC_DET)
+	&rk_device_headset,
+#endif
 };
 
 
@@ -3408,10 +3444,13 @@ void wifi_bt_power_ctl(bool on)
         }
     }
 }
+#if defined (CONFIG_TCHIP_MACH_XBT_3188)  
+#define HP_CON_PIN  RK30_PIN0_PC6
+#endif
 
 static void __init machine_rk30_board_init(void)
 {
-
+	int ret;
 #if defined(CONFIG_TCHIP_MACH_TR7088) && !defined(CONFIG_TCHIP_MACH_TR7088TN) && !defined(CONFIG_TCHIP_MACH_TR7088_CUBE)
 	gpio_request(RK30_PIN3_PD6,NULL);
     gpio_pull_updown(RK30_PIN3_PD6, GPIOPullDown);
@@ -3471,6 +3510,14 @@ static void __init machine_rk30_board_init(void)
 #endif	
 #if defined(CONFIG_BK3515A_COMBO)
 		clk_set_rate(clk_get_sys("rk_serial.0", "uart"), 16*1000000);
+#endif
+
+#if defined (CONFIG_TCHIP_MACH_XBT_3188)
+	ret = gpio_request(HP_CON_PIN, "headset_control");
+	if(ret) 
+		printk ("request headset_control pin fail !\n");
+	else
+	   	gpio_direction_output(HP_CON_PIN, GPIO_HIGH);
 #endif
 }
 
