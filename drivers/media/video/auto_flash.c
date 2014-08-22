@@ -43,9 +43,16 @@ int sensor_get_data(struct i2c_client *client)
 
 int sensor_light_status()
 {
-	struct sensor_private_data *sensor = g_sensor[SENSOR_TYPE_LIGHT];
-	struct i2c_client *client = sensor->client;
-    int value = sensor_get_data(client);
+	int value = 0;
+	struct sensor_private_data *sensor = NULL;
+	struct i2c_client *client = NULL;
+	sensor = g_sensor[SENSOR_TYPE_LIGHT];
+	if (sensor == NULL)
+		return 0;
+	client = sensor->client;
+
+     value= sensor_get_data(client);
+
     if(value < FLASH_LIGHT_SENSOR_THRESHOLD)
         return 1;
     else
