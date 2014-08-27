@@ -92,6 +92,10 @@
 #include "../../../drivers/staging/android/timed_gpio.h"
 #endif
 
+#if defined (CONFIG_SND_SOC_WM8904)
+#include <sound/wm8904.h>
+#endif
+
 #if defined(CONFIG_TCHIP_MACH_TR785) || defined(CONFIG_TCHIP_MACH_TR1088)
 	#define GS2_ORIGENTATION_MC3230        { 1, 0, 0,0, -1, 0,  0, 0, -1}
        //#define GS2_ORIGENTATION_STK8312       { 0, 0, 1,1, 0, 0,  0, -1, 0} //z,x,y
@@ -123,6 +127,23 @@ static struct platform_device device_headset_switch = {
     .dev  = {
         .platform_data    = &headset_switch_data,          
     }
+};
+#endif
+
+#if defined (CONFIG_SND_SOC_WM8904)
+struct wm8904_drc_cfg wm8904_drc_cfg[] = {
+	{
+		.name	=  "DRC_SPK",
+		.regs	= {0xc1af, 0x3249, 0x0, 0x0281}
+	},
+	{
+		.name	=  "DRC_HP",
+		.regs	= {0x01af, 0x3248, 0x0, 0x0}
+	}
+};
+struct wm8904_pdata  wm8904_pdata = {
+	.num_drc_cfgs 	= ARRAY_SIZE(wm8904_drc_cfg),
+	.drc_cfgs	= &wm8904_drc_cfg,
 };
 #endif
 
@@ -3269,6 +3290,7 @@ static struct i2c_board_info __initdata i2c4_info[] = {
                 .type                   = "wm8904",
                 .addr                   = 0x1a,
                 .flags                  = 0,
+                .platform_data		= &wm8904_pdata,
         }
 #endif
 

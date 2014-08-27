@@ -676,8 +676,8 @@ static void wm8904_set_drc(struct snd_soc_codec *codec)
 				    pdata->drc_cfgs[wm8904->drc_cfg].regs[i]);
 
 	/* Reenable the DRC */
-	snd_soc_update_bits(codec, WM8904_DRC_0,
-			    WM8904_DRC_ENA | WM8904_DRC_DAC_PATH, save);
+	//snd_soc_update_bits(codec, WM8904_DRC_0,
+	//		    WM8904_DRC_ENA | WM8904_DRC_DAC_PATH, save);
 }
 
 static int wm8904_put_drc_enum(struct snd_kcontrol *kcontrol,
@@ -1691,7 +1691,6 @@ static int wm8904_set_sysclk(struct snd_soc_dai *dai, int clk_id,
 {
 	struct snd_soc_codec *codec = dai->codec;
 	struct wm8904_priv *priv = snd_soc_codec_get_drvdata(codec);
-
 	switch (clk_id) {
 	case WM8904_CLK_MCLK:
 		priv->sysclk_src = clk_id;
