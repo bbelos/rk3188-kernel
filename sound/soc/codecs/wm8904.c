@@ -874,6 +874,8 @@ SOC_SINGLE("High Pass Filter Switch", WM8904_ADC_DIGITAL_0, 4, 1, 0),
 SOC_ENUM("High Pass Filter Mode", hpf_mode),
 
 SOC_SINGLE("ADC 128x OSR Switch", WM8904_ANALOGUE_ADC_0, 0, 1, 0),
+
+SOC_SINGLE("Left ADC Output Invert", WM8904_ADC_DIGITAL_0, 1, 1, 0),
 };
 
 static const char *drc_path_text[] = {
