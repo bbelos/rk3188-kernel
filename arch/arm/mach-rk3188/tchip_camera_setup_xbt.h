@@ -43,7 +43,7 @@
                 .gpio_powerdown = pwdn_io,\
                 .gpio_af = af_io,\
                 .gpio_flash = flash_io,\
-                .gpio_flag = ((pwr_active&0x01)<<RK29_CAM_POWERACTIVE_BITPOS)|((rst_active&0x01)<<RK29_CAM_RESETACTIVE_BITPOS)|((pwdn_active&0x01)<<RK29_CAM_POWERDNACTIVE_BITPOS)|RK29_CAM_FLASHACTIVE_H|RK29_CAM_AFACTIVE_L,\
+                .gpio_flag = ((pwr_active&0x01)<<RK29_CAM_POWERACTIVE_BITPOS)|((rst_active&0x01)<<RK29_CAM_RESETACTIVE_BITPOS)|((pwdn_active&0x01)<<RK29_CAM_POWERDNACTIVE_BITPOS)|RK29_CAM_FLASHACTIVE_H|RK29_CAM_AFACTIVE_H,\
             },\
             .orientation = ori,\
             .resolution = res,\

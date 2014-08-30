@@ -184,7 +184,7 @@ module_param(debug, int, S_IRUGO|S_IWUSR);
 #ifdef CONFIG_CAMERA_AUTO_FLASH
 extern int sensor_light_status(); 
 #endif
-
+static int sensor_ioctrl(struct soc_camera_device *icd,enum rk29sensor_power_cmd cmd, int on);
 //flash off in fixed time to prevent from too hot , zyc
 struct  flash_timer{
     struct soc_camera_device *icd;
@@ -2079,6 +2079,7 @@ sensor_af_pause_end:
 	return ret;
 }
 
+
 static int sensor_af_init(struct i2c_client *client)
 {
 	int ret = 0, cnt;
@@ -2124,7 +2125,7 @@ static int sensor_af_downfirmware(struct i2c_client *client)
     struct v4l2_mbus_framefmt mf;
 		
 	SENSOR_DG("%s %s Enter\n",SENSOR_NAME_STRING(), __FUNCTION__);
-    
+    	sensor_ioctrl(icd, Sensor_Af, 1);
 	if (sensor_af_init(client)) {
 		sensor->info_priv.funmodule_state &= (~SENSOR_AF_IS_OK);
 		ret = -1;
@@ -2464,6 +2465,16 @@ static int sensor_ioctrl(struct soc_camera_device *icd,enum rk29sensor_power_cmd
 			}
 			break;
 		}
+		case Sensor_Af:
+		{
+			struct i2c_client *client = to_i2c_client(to_soc_camera_control(icd));
+    		struct sensor *sensor = to_sensor(client);
+
+			if (sensor->sensor_io_request && sensor->sensor_io_request->sensor_ioctrl) {
+				sensor->sensor_io_request->sensor_ioctrl(icd->pdev,Cam_Af, on);
+			}
+			break;
+		}
 		default:
 		{
 			SENSOR_TR("%s cmd(0x%x) is unknown!",SENSOR_NAME_STRING(),cmd);
@@ -2627,12 +2638,16 @@ static int sensor_deactivate(struct i2c_client *client)
     	sensor_write(client,0x3019,0x00);    // STROBE,SDA
     	sensor_task_lock(client, 0);
     } 
+
     sensor_ioctrl(icd, Sensor_PowerDown, 1);
     msleep(100); 
 	/* ddl@rock-chips.com : sensor config init width , because next open sensor quickly(soc_camera_open -> Try to configure with default parameters) */
 	icd->user_width = SENSOR_INIT_WIDTH;
     icd->user_height = SENSOR_INIT_HEIGHT;
     sensor->info_priv.funmodule_state &= ~SENSOR_INIT_IS_OK;
+    #if CONFIG_SENSOR_Focus
+        sensor_ioctrl(icd, Sensor_Af, 0);
+    #endif
 	return 0;
 }
 
