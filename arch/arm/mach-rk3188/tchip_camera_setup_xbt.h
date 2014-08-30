@@ -75,6 +75,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         CONS(RK29_CAM_SENSOR_OV5640,_I2C_ADDR),
                         0,
                         24),
+                        /*
     new_camera_device_xbt(RK29_CAM_SENSOR_OV5647,
                         back,
                         0,
@@ -94,6 +95,7 @@ static struct rkcamera_platform_data new_camera[] = {
                         0x6c,//CONS(RK29_CAM_SENSOR_OV5647,_I2C_ADDR),
                         0,
                         24),
+                        */
     new_camera_device_ex(RK29_CAM_SENSOR_SP2518,
                         front,
                         0,
@@ -110,7 +112,8 @@ static struct rkcamera_platform_data new_camera[] = {
                         100000,
                         CONS(RK29_CAM_SENSOR_SP2518,_I2C_ADDR),
                         0,
-                        24),              
+                        24), 
+                        /*
     new_camera_device_ex(RK29_CAM_SENSOR_GC2145,
                         front,
                         0,
@@ -144,7 +147,8 @@ static struct rkcamera_platform_data new_camera[] = {
                         100000,
                         CONS(RK29_CAM_SENSOR_GC2155,_I2C_ADDR),
                         0,
-                        24),              
+                        24),
+                        */
     new_camera_device_end
 };
 #endif
