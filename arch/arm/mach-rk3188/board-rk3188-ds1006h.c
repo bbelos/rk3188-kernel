@@ -134,7 +134,7 @@ static struct platform_device device_headset_switch = {
 struct wm8904_drc_cfg wm8904_drc_cfg[] = {
 	{
 		.name	=  "DRC_SPK",
-		.regs	= {0xc1af, 0x3249, 0x0, 0x0281}
+		.regs	= {0xc1af, 0x324b, 0x0, 0x0607}
 	},
 	{
 		.name	=  "DRC_HP",
