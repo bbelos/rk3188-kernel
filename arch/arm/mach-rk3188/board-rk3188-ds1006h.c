@@ -3468,6 +3468,7 @@ void wifi_bt_power_ctl(bool on)
 }
 #if defined (CONFIG_TCHIP_MACH_XBT_3188)  
 #define HP_CON_PIN  RK30_PIN0_PC6
+#define FS88X6_RST_PIN  RK30_PIN0_PC3
 #endif
 
 static void __init machine_rk30_board_init(void)
@@ -3540,6 +3541,13 @@ static void __init machine_rk30_board_init(void)
 		printk ("request headset_control pin fail !\n");
 	else
 	   	gpio_direction_output(HP_CON_PIN, GPIO_HIGH);
+#endif
+#if defined (CONFIG_TCHIP_MACH_XBT_3188)
+	ret = gpio_request(FS88X6_RST_PIN, "fs88x6_rst");
+	if(ret) 
+		printk ("request fs88x6 rst pin fail !\n");
+	else
+	   	gpio_direction_output(FS88X6_RST_PIN, GPIO_HIGH);
 #endif
 }
 
