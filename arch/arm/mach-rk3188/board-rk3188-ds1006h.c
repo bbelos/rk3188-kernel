@@ -704,7 +704,7 @@ static struct rk29_bl_info rk29_bl_info = {
 	.pwm_suspend = rk29_backlight_pwm_suspend,
 	.pwm_resume = rk29_backlight_pwm_resume,
 #elif defined(CONFIG_TCHIP_MACH_XBT_3188)
-    .min_brightness = 50,
+    .min_brightness = 10,
     .max_brightness = 220,
     .brightness_mode = BRIGHTNESS_MODE_ELONGATION,
 	.pre_div = 20 * 1000,  // pwm output clk: 30k;
