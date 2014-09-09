@@ -2434,7 +2434,11 @@ static struct mt6622_platform_data mt6622_platdata = {
 		          #else
 			    .io             = RK30_PIN3_PD2,
 			    #endif
+				#if defined(CONFIG_TCHIP_MACH_TR101Q)
+			    .enable         = GPIO_LOW,
+				#else
 			    .enable         = GPIO_HIGH,
+				#endif
 			    .iomux          = {
 				    .name       = NULL,
 				},
