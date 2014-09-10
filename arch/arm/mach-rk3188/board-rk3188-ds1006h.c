@@ -2273,14 +2273,14 @@ static struct rfkill_rk_platform_data rfkill_rk_platdata = {
 #else
     .wake_host_irq      = { // BT_HOST_WAKE, for bt wakeup host when it is in deep sleep
         .gpio           = {
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TRQ7_LJ) || defined(CONFIG_TCHIP_MACH_XBT_3188)
             .io         = RK30_PIN3_PC7, // set io to INVALID_GPIO for disable it
 #else
             .io         = RK30_PIN0_PA5, // set io to INVALID_GPIO for disable it
 #endif
             .enable     = GPIO_LOW,      // set GPIO_LOW for falling, set 0 for rising
             .iomux      = {
-#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
+#if defined(CONFIG_TCHIP_MACH_TR1088) || defined(CONFIG_TCHIP_MACH_TRQ7_LJ) || defined(CONFIG_TCHIP_MACH_XBT_3188)
             	.name       = "bt_wake_host",
            		.fgpio      = GPIO3_C7,
 #else
