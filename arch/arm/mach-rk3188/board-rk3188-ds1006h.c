@@ -3403,7 +3403,7 @@ static void rk30_pm_power_off(void)
 #ifdef CONFIG_TCHIP_MACH_TR785
     act8846_device_shutdown();
 
-#elif defined(CONFIG_TCHIP_MACH_TR101Q)
+#elif defined(CONFIG_TCHIP_MACH_TR101Q) || defined(CONFIG_TCHIP_MACH_XBT_3188)
     if (pmic_is_act8846()) {
     	if(gpio_get_value (RK30_PIN0_PB2) == GPIO_LOW || 1 == dwc_vbus_status() || 2 == dwc_vbus_status())
         	arm_pm_restart(0, "charge");
