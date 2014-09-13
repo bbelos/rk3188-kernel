@@ -1038,6 +1038,8 @@ static int out_pga_event(struct snd_soc_dapm_widget *w,
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
+		on_off_ext_amp (1);
+		mdelay (100);
 		/* Power on the PGAs */
 		snd_soc_update_bits(codec, pwr_reg,
 				    WM8904_HPL_PGA_ENA | WM8904_HPR_PGA_ENA,
@@ -1109,7 +1111,7 @@ static int out_pga_event(struct snd_soc_dapm_widget *w,
 				    WM8904_HPR_RMV_SHORT,
 				    WM8904_HPL_RMV_SHORT |
 				    WM8904_HPR_RMV_SHORT);
-		on_off_ext_amp (1);
+		
 
 		break;
 
