@@ -136,7 +136,7 @@ static ssize_t icn85xx_store_update(struct device* cd, struct device_attribute *
     printk("len: %d, update: %s\n", len, buf);  
     memset(firmware, 0, 128);
     memcpy(firmware, buf, len-1);
-    if(R_OK == icn85xx_fw_update(firmware))
+    if(R_OK == icn85xx_fw_update("/mnt/sdcard/ICN8505.bin"))
     {
         printk("update ok\n");
     }
@@ -1444,7 +1444,7 @@ static int icn85xx_iic_test(void)
                 printk("flash id:%x\n", flashid);
                 if((MD25D40_ID1 == flashid) || (MD25D40_ID2 == flashid)
                     ||(MD25D20_ID1 == flashid) || (MD25D20_ID1 == flashid)
-                    ||(GD25Q10_ID == flashid) || (MX25L512E_ID == flashid) || (MD25D10_ID1 == flashid))
+                    ||(GD25Q10_ID == flashid) || (MX25L512E_ID == flashid) || (MD25D10_ID1 == flashid) || (MD25D05_ID1 == flashid))
                 {
                     icn85xx_ts->ictype = ICN85XX_WITH_FLASH;
                 }
