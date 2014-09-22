@@ -2414,11 +2414,7 @@ static struct mt6622_platform_data mt6622_platdata = {
 
 		    .reset_gpio         = { // BT_RST
 		        #if DS1006H_V1_2_SUPPORT
-					#if defined(CONFIG_TCHIP_MACH_TR101Q)
-					.io             = INVALID_GPIO,
-					#else
                     .io             = RK30_PIN3_PD1,
-					#endif
 		        #else
 		        .io             = RK30_PIN0_PD7,
 		        #endif
