@@ -136,7 +136,7 @@ static ssize_t icn85xx_store_update(struct device* cd, struct device_attribute *
     printk("len: %d, update: %s\n", len, buf);  
     memset(firmware, 0, 128);
     memcpy(firmware, buf, len-1);
-    if(R_OK == icn85xx_fw_update("/mnt/sdcard/ICN8505.bin"))
+    if(R_OK == icn85xx_fw_update(firmware))
     {
         printk("update ok\n");
     }
