@@ -831,6 +831,24 @@ static struct sensor_platform_data mma8452_info = {
 };
 #endif
 
+/* mma7660 gsensor */
+#if defined (CONFIG_GS_MMA7660)
+
+#define MMA7660_INT_PIN   RK30_PIN0_PB7
+static int mma7660_init_platform_hw(void)
+{
+	return 0;
+}
+static struct sensor_platform_data mma7660_info = {
+	.type = SENSOR_TYPE_ACCEL,
+	.irq_enable = 1,
+	.poll_delay_ms = 30,
+    .init_platform_hw = mma7660_init_platform_hw,
+    .orientation = GS2_ORIGENTATION_MMA7660,
+};
+#endif
+/* end of mma7660 */
+
 #if defined (CONFIG_GS_LIS3DH)
 #define LIS3DH_INT_PIN   RK30_PIN0_PB7
 
@@ -2716,6 +2734,15 @@ static struct i2c_board_info __initdata i2c0_info[] = {
 	  .irq			  = STK831X_INT_PIN,
 	  .platform_data  = &stk831x_info,
 	},
+#endif
+#if defined (CONFIG_GS_MMA7660)
+        {
+                .type           = "gs_mma7660",
+                .addr           = 0x4c,
+                .flags          = 0,
+                .irq            = MMA7660_INT_PIN,
+                .platform_data = &mma7660_info,
+        },
 #endif
 #if defined (CONFIG_GS_MC3XXX)
 	{

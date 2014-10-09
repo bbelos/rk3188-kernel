@@ -1531,6 +1531,33 @@ if(!enable)
 
 }
 
+// add by tchip , this function also use in mma7660.c {
+int tchip_check_mc3xxx_id(struct i2c_client *client)
+{// mc3230 id is 1; return 1 -> is mc3230; return 0 is mma7660; return -1 read error
+
+	int err=0,count=3;
+	char val;
+
+	val = 0;
+	for ( count = 3; count >0 ; count-- ){
+    	err = i2c_master_reg8_recv(client, 0x18, &val, 1, 200000);//add by ruan ,0x18 is mc3230 chip id reg
+		if ( err >= 0 )
+			break;
+		printk("%s read reg err=%d , try again\n",__FUNCTION__,err);
+	}
+
+    if(	err < 0 )
+    {
+		printk("%s read reg err=%d !!! \n",__FUNCTION__,err);
+		return err;
+    }
+
+	printk("%s read reg=%d !!! \n",__FUNCTION__,val);
+	return val==1? 1:0;
+
+}
+// @ Tchip }
+
 static int MC3XXX_is_init = 0;
 static int sensor_init(struct i2c_client *client)
 {	
@@ -1539,6 +1566,12 @@ static int sensor_init(struct i2c_client *client)
 	int result = 0;
 
 	mcprintkfunc(" %s entry.\n", __FUNCTION__);
+#if 1 // add by tchip 
+	if ( 1 != tchip_check_mc3xxx_id(client)){
+		printk("%s: check id fail , exit\n",__func__);
+		return -1;
+	};
+#endif
 	if(MC3XXX_is_init == 0)
 	{
 		MC3XXX_Reset(client);

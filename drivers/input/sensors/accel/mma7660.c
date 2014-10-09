@@ -98,12 +98,24 @@ static int sensor_active(struct i2c_client *client, int enable, int rate)
 
 }
 
+int tchip_check_mc3xxx_id(struct i2c_client *client);
 static int sensor_init(struct i2c_client *client)
 {	
 	struct sensor_private_data *sensor =
 	    (struct sensor_private_data *) i2c_get_clientdata(client);	
 	int result = 0;
-	
+
+#if 1 // add by tchip 
+	result = tchip_check_mc3xxx_id(client);
+	if ( result != 0 ){
+		if( result == 1 )
+			printk("%s: check id is mc3XXX, exit\n",__func__);
+		else
+			printk("%s: check id failed, exit\n",__func__);
+		return -1;
+	}
+#endif
+
 	result = sensor->ops->active(client,0,0);
 	if(result)
 	{
@@ -257,7 +269,7 @@ static int sensor_report_value(struct i2c_client *client)
 
 
 struct sensor_operate gsensor_mma7660_ops = {
-	.name				= "mma7660",
+	.name				= "gs_mma7660",
 	.type				= SENSOR_TYPE_ACCEL,			//sensor type and it should be correct
 	.id_i2c				= ACCEL_ID_MMA7660,			//i2c id number
 	.read_reg			= MMA7660_REG_X_OUT,			//read data
