@@ -10,31 +10,31 @@ menuconfig G_SENSOR_DEVICE
 
 if G_SENSOR_DEVICE
 
-config GS_MMA7660
+config SENSORS_MMA7660
   bool "gs_mma7660"
 	help	 
 	  To have support for your specific gsesnor you will have to
 	  select the proper drivers which depend on this option.
 
-config GS_MMA8452
+config SENSORS_MMA8452
   bool "gs_mma8452"
 	help	 
 	  To have support for your specific gsesnor you will have to
 	  select the proper drivers which depend on this option.
 
-config GS_LIS3DH
+config SENSORS_LIS3DH
   bool "gs_lis3dh"
 	help	 
 	  To have support for your specific gsesnor you will have to
 	  select the proper drivers which depend on this option.
 	  
-config GS_L3G4200D
+config SENSORS_L3G4200D
   bool "gs_l3g4200d"
 	help	 
 	  To have support for your specific gsesnor you will have to
 	  select the proper drivers which depend on this option.
 
-config GS_BMA023
+config SENSORS_BMA023
   bool "gs_bma023"
   help
     To have support for your specific gsesnor you will have to
