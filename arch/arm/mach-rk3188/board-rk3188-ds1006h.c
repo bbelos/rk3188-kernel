@@ -101,20 +101,24 @@
        //#define GS2_ORIGENTATION_STK8312       { 0, 0, 1,1, 0, 0,  0, -1, 0} //z,x,y
 	#define GS2_ORIGENTATION_STK8312      { 0, 0, -1,-1, 0, 0,  0, -1, 0} //z,x,y
 	#define GS2_ORIGENTATION_MMA7660       { 1, 0, 0,0, -1, 0,  0, 0, -1}
+	#define GS2_ORIGENTATION_MMA8452        {0, 1, 0, 1, 0, 0, 0, 0, -1}    
 #elif defined(CONFIG_TCHIP_MACH_TRQ7_LJ)
      #define GS2_ORIGENTATION_MC3230         {-1, 0, 0, 0, 1, 0, 0, 0, -1}
      #define GS2_ORIGENTATION_STK8312        {0, 1, 0, -1, 0, 0, 0, 0, 1}
      #define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1} 
+	#define GS2_ORIGENTATION_MMA8452        {0, 1, 0, 1, 0, 0, 0, 0, -1}    
 #elif defined (CONFIG_TCHIP_MACH_TR101Q)	
        #define GS2_ORIGENTATION_MC3230         {0, -1, 0, 1, 0, 0, 0, 0, 1}
        #define GS2_ORIGENTATION_STK8312        {0, 1, 0, 1, 0, 0, 0, 0, -1}
        #define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1}
 		#define GS2_ORIGENTATION_STK831x 		{0, 1, 0, 0, 1, 0, 0, 0, 1}    
+	#define GS2_ORIGENTATION_MMA8452        {-1, 0, 0, 0, 1, 0, 0, 0, -1}    
 #else
 	#define GS2_ORIGENTATION_MC3230         {0, 1, 0, 1, 0, 0, 0, 0, -1}
 	#define GS2_ORIGENTATION_STK8312        {0, 1, 0, 1, 0, 0, 0, 0, -1}
 	#define GS2_ORIGENTATION_MMA7660        {0, 1, 0, 1, 0, 0, 0, 0, -1}    
 	#define GS2_ORIGENTATION_STK831x 		{0, 1, 0, 0, 1, 0, 0, 0, 1}    
+	#define GS2_ORIGENTATION_MMA8452        {0, 1, 0, 1, 0, 0, 0, 0, -1}    
 #endif
 
 #if defined(CONFIG_SWITCH_GPIO) 
@@ -825,7 +829,7 @@ static struct sensor_platform_data mma8452_info = {
 #if defined(CONFIG_TCHIP_MACH_XBT_3188)
         .orientation = {0, 1, 0, 1, 0, 0, 0, 0, -1},
 #else
-        .orientation = {-1, 0, 0, 0, 0, -1, 0, 1, 0},
+        .orientation = GS2_ORIGENTATION_MMA8452,
 #endif
 
 };
