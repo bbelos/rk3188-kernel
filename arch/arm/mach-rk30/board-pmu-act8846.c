@@ -462,7 +462,7 @@ void act8846_device_suspend(void)
 	udelay(100);
 
 	dcdc =regulator_get(NULL, "act_dcdc4");
-	regulator_set_voltage(dcdc, 2800000, 2800000);
+	regulator_set_voltage(dcdc, 3300000, 3300000);
 	regulator_put(dcdc);
 	udelay(100);
 
@@ -483,7 +483,7 @@ void act8846_device_resume(void)
 	udelay(100);
 
 	dcdc =regulator_get(NULL, "act_dcdc4");
-	regulator_set_voltage(dcdc, 3000000, 3000000);
+	regulator_set_voltage(dcdc, 3300000, 3300000);
 	regulator_put(dcdc);
 	udelay(100);
 	
