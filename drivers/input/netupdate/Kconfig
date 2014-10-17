@@ -1,0 +1,15 @@
+menuconfig ENCRYPTION_DEVICE
+	tristate "encryption support"
+	default n
+	depends on INPUT
+	help
+	  Enable this to be able to choose the drivers for controlling the
+	  infrared on some platforms, for example on PDAs.
+
+config ATXX_DEVICE_TYPE
+	int "Select ATXX type"
+	default 18
+    depends on ENCRYPTION_DEVICE
+	help
+	  Select a type for ATXX, like 18/28/38.
+

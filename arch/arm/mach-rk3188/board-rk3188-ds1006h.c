@@ -2543,7 +2543,6 @@ static struct platform_device rk29_device_vibrator = {
 
 
 
-#define ATX8_RST_PIN    RK30_PIN3_PD7
 
 static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SWITCH_GPIO) 
@@ -2626,6 +2625,60 @@ static int rk_platform_add_display_devices(void)
 	return 0;
 	
 }
+
+//@ tchip  atx8 device 
+#define ATX8_RST_PIN    RK30_PIN3_PD7
+#define ATX8_RST_PIN_NAME       0
+#define ATX8_RST_PIN_FGPIO      0
+
+#if defined (CONFIG_ENCRYPTION_DEVICE)
+#include "../../../drivers/input/netupdate/at18.h"
+static void tchip_iomux_set(struct atx8_gpio *gpio, int iomux)
+{
+	if ( gpio->iomux.name != 0 )
+	{
+		if ( iomux ) // 1 -- iomux i2c  mode 
+			iomux_set(gpio->iomux.name);
+		else
+			iomux_set_gpio_mode(iomux_mode_to_gpio(gpio->iomux.name));
+	}
+}
+static struct atx8_platform_data tchip_atx8_platdata = {
+    .name               = "atx8",
+	.iomux_set			= tchip_iomux_set,
+    .cs_gpio       = {
+        .name       = "atx8_cs",
+        .io             = ATX8_RST_PIN,
+        .enable         = GPIO_HIGH,    // atx8 enable level
+        .iomux          = {
+			.name		= ATX8_RST_PIN_NAME,
+            .fgpio      = ATX8_RST_PIN_FGPIO,
+        },
+    },
+
+    .sda_gpio           = {
+        .name       = "atx8_sda",
+        .io             = RK30_PIN1_PD0,
+        .enable         = GPIO_HIGH,    // sda high level
+        .iomux          = {
+			.name		= I2C0_SDA,
+            .fgpio      = 0,
+            .fi2c       = 1,
+        },
+    },
+    .scl_gpio           = {
+        .name       = "atx8_scl",
+        .io             = RK30_PIN1_PD1,
+        .enable         = GPIO_HIGH,    // scl high level
+        .iomux          = {
+			.name		= I2C0_SCL,
+            .fgpio      = 0,
+            .fi2c       = 1,
+        },
+    },
+};
+    
+#endif //@ tchip atx8 end
 
 // i2c
 #ifdef CONFIG_I2C0_RK30
@@ -2756,6 +2809,15 @@ static struct i2c_board_info __initdata i2c0_info[] = {
 		.irq	        = MC3XXX_INT_PIN,
 		.platform_data = &MC3XXX_info,
 	},
+#endif
+
+#if defined (CONFIG_ENCRYPTION_DEVICE)
+       {
+               .type                   = "netupdate",
+               .addr                   = 0x2f,
+               .flags                  = 0,
+               .platform_data = &tchip_atx8_platdata,
+       },
 #endif
 
 };
