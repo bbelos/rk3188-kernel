@@ -609,7 +609,7 @@ static int rk29_backlight_pwm_resume(void)
 static struct rk29_bl_info rk29_bl_info = {
 #if defined(CONFIG_TCHIP_MACH_TR785)
         .min_brightness = 65,
-        .max_brightness = 220,
+        .max_brightness = 165,//220,
         .brightness_mode =BRIGHTNESS_MODE_ELONGATION,//BRIGHTNESS_MODE_CONIC,
 	.pre_div = 30 * 1000,  // pwm output clk: 30k;
 	.pwm_id = PWM_ID,
