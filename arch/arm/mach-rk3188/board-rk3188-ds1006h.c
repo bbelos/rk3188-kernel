@@ -882,6 +882,16 @@ static struct cw2015_platform_data cw2015_info =
     .batt_low_level = GPIO_LOW,
     //.charge_ok_level = GPIO_HIGH,
 };
+#elif defined(CONFIG_TCHIP_MACH_TR785)
+static struct cw2015_platform_data cw2015_info =
+{
+    .dc_det_pin = INVALID_GPIO,
+    //.batt_low_pin = RK30_PIN0_PB1,
+    //.charge_ok_pin   = RK30_PIN0_PA6,
+    .dc_det_level = GPIO_LOW,
+    .batt_low_level = GPIO_LOW,
+    //.charge_ok_level = GPIO_HIGH,
+};
 #else
 static struct cw2015_platform_data cw2015_info =
 {
