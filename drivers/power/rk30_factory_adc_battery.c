@@ -2159,6 +2159,15 @@ static int rk30_adc_battery_probe(struct platform_device *pdev)
 	struct adc_client                   *client;
 	struct rk30_adc_battery_data          *data;
 	struct rk30_adc_battery_platform_data *pdata = pdev->dev.platform_data;
+	
+	// if have registerd other system_supplied(like cw2015), don't register rk30_adc_battery
+    // add by zhansb@130410
+    if(power_supply_get_by_name("battery") != NULL)
+    {
+        printk("%s-%d :power supply has registerd\n",__FUNCTION__,__LINE__);
+        return -EINVAL;
+    }
+    
 #ifdef CONFIG_MACH_RK_FAC
 	int i;
 	for(i=0;i<BATT_NUM;i++)
@@ -2408,7 +2417,11 @@ static void __exit rk30_adc_battery_exit(void)
 	platform_driver_unregister(&rk30_adc_battery_driver);
 }
 //module_init(rk30_adc_battery_init);//module_init(rk30_adc_battery_init);//
+#if defined(CONFIG_TCHIP_MACH_TR785)
+fs_initcall_sync(rk30_adc_battery_init);
+#else
 subsys_initcall(rk30_adc_battery_init);
+#endif
 //fs_initcall(rk30_adc_battery_init);
 module_exit(rk30_adc_battery_exit);
 
