@@ -2867,16 +2867,29 @@ static struct pmu_info  act8846_dcdc_info[] = {
 		.suspend_vol  =  900000,
 		#endif
 	},
+#if defined( CONFIG_TCHIP_MACH_TR101Q )
 	{
 		.name          = "act_dcdc4",   //vccio
 		.min_uv          = 3300000,
 		.max_uv         = 3300000,
+		#ifdef CONFIG_ACT8846_SUPPORT_RESET
+		.suspend_vol  =  3300000,
+		#else
+		.suspend_vol  =  3300000,
+		#endif
+	},
+#else
+	{
+		.name          = "act_dcdc4",   //vccio
+		.min_uv          = 3000000,
+		.max_uv         = 3000000,
 		#ifdef CONFIG_ACT8846_SUPPORT_RESET
 		.suspend_vol  =  3000000,
 		#else
 		.suspend_vol  =  2800000,
 		#endif
 	},
+#endif
 	
 };
 static  struct pmu_info  act8846_ldo_info[] = {
