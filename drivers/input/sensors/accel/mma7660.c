@@ -55,7 +55,11 @@
 #define MMA7660_BOUNDARY		(0x1 << (MMA7660_PRECISION - 1))
 #define MMA7660_GRAVITY_STEP		(MMA7660_RANGE / MMA7660_BOUNDARY)
 
+#if defined ( CONFIG_TCHIP_MACH_TR101Q )
+#define MMA7660_COUNT_AVERAGE	4
+#else
 #define MMA7660_COUNT_AVERAGE	2
+#endif
 
 struct sensor_axis_average {
 		int x_average;
@@ -229,11 +233,22 @@ static int sensor_report_value(struct i2c_client *client)
 	axis.y = (pdata->orientation[3])*x + (pdata->orientation[4])*y + (pdata->orientation[5])*z; 
 	axis.z = (pdata->orientation[6])*x + (pdata->orientation[7])*y + (pdata->orientation[8])*z;
 
-	
+// @ tchip add by ruan for ignore some wrong data	
+#if defined ( CONFIG_TCHIP_MACH_TR101Q )
+	if ( axis.x != 0 && axis.y != 0 && axis.z != 0 ){
+#else
+	if (1){
+#endif
 	axis_average.x_average += axis.x;
 	axis_average.y_average += axis.y;
 	axis_average.z_average += axis.z;
 	axis_average.count++;
+	//printk(KERN_ERR " -------------- %d, %d, %d\n",axis.x,axis.y,axis.z);
+	}else{
+	;
+	//printk(KERN_ERR " xxxxxxxxxxxxxx %d, %d, %d\n",axis.x,axis.y,axis.z);
+	}
+
 	
 	if(axis_average.count >= MMA7660_COUNT_AVERAGE)
 	{
@@ -242,6 +257,7 @@ static int sensor_report_value(struct i2c_client *client)
 		axis.z = axis_average.z_average / axis_average.count;
 		
 		DBG( "%s: axis = %d  %d  %d \n", __func__, axis.x, axis.y, axis.z);
+		//printk(KERN_ERR " ++++++++++++++++++++++++++++++++++ %d, %d, %d\n",axis.x,axis.y,axis.z);
 		
 		memset(&axis_average, 0, sizeof(struct sensor_axis_average));
 		
