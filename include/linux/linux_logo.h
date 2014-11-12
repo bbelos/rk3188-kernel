@@ -43,6 +43,9 @@ extern struct linux_logo tr7088_logo_linux_clut224;//extern const struct linux_l
 extern struct linux_logo tr7078_logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
 extern struct linux_logo tr7088tn_logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
 extern struct linux_logo tr101q_logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
+#if defined(CONFIG_TCHIP_TR101Q_HAVE_CHARGE_LOGO)
+extern struct linux_logo tr101q_charging_logo_linux_clut224;//extern const struct linux_logo logo_linux_clut224;
+#endif
 
 #ifdef CONFIG_LOGO_PIPO_CLUT224
 extern const struct linux_logo logo_pipo_clut224;

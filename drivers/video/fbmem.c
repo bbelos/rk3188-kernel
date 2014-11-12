@@ -511,6 +511,11 @@ static int fb_show_logo_line(struct fb_info *info, int rotate,
 		image.dx = 0;
 		image.dy = y;
 	}
+#elif defined(CONFIG_LOGO_LINUX_CLUT224_TR101Q)
+
+		image.dx = (info->var.xres/2)-(logo->width)/2;
+		image.dy = (info->var.yres/2)-(logo->height)/2;
+
 #else
 	//image.dx = 0;
 	//image.dy = y;

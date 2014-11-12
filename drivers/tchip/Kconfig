@@ -294,5 +294,9 @@ config TCHIP_LOGO_ROTATE_270
 
 endchoice
 
+config TCHIP_TR101Q_HAVE_CHARGE_LOGO
+    bool "TR101Q Display Charging LOGO in Power on, before into charging display mode"	
+    depends on TCHIP_MACH_TR101Q
+	default n
 
 endmenu

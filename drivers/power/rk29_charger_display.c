@@ -113,6 +113,16 @@ static void add_bootmode_charger_to_cmdline(void)
 	printk("Kernel command line: %s\n", saved_command_line);
 }
 
+
+#if defined(CONFIG_TCHIP_MACH_TR101Q)
+// @ tchip add 
+int tchip_board_dc_det();
+int tchip_is_boot_charge_mode()
+{
+	return ( 1==tchip_board_dc_det() && board_boot_mode() != BOOT_MODE_RECOVERY && board_boot_mode() != BOOT_MODE_REBOOT ) ? 1:0;
+}
+#endif
+
 //display charger logo in kernel CAPACITY
 
 
@@ -175,6 +185,14 @@ static int  __init start_charge_logo_display(void)
 		}
 	}
 #endif
+
+#if defined(CONFIG_TCHIP_MACH_TR101Q)
+    if( 1 == tchip_is_boot_charge_mode() )
+    {
+            add_bootmode_charger_to_cmdline();
+    }
+	return 0;
+#else
     //@2014.03.19
     if((val_capacity.intval < pwr_on_thrsd && val_status.intval != POWER_SUPPLY_STATUS_CHARGING) ||
                 (val_status.intval == POWER_SUPPLY_STATUS_CHARGING &&(board_boot_mode() != BOOT_MODE_REBOOT)) )
@@ -182,6 +200,8 @@ static int  __init start_charge_logo_display(void)
             add_bootmode_charger_to_cmdline();
     }
 	return 0;
+#endif
+
 } 
 
 //subsys_initcall_sync(start_charge_logo_display);

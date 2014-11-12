@@ -3504,6 +3504,13 @@ static void rk30_tr838_shutdown(void)
     }
 }
 
+#if defined(CONFIG_TCHIP_MACH_TR101Q) || defined(CONFIG_TCHIP_MACH_XBT_3188)
+int tchip_board_dc_det()
+{
+	return (gpio_get_value(RK30_PIN0_PB2)==GPIO_LOW) ? 1:0;
+}
+#endif
+
 static void rk30_pm_power_off(void)
 {
 	printk(KERN_ERR "rk30_pm_power_off start...\n");
@@ -3517,7 +3524,7 @@ static void rk30_pm_power_off(void)
 
 #if defined(CONFIG_TCHIP_MACH_TR101Q) || defined(CONFIG_TCHIP_MACH_XBT_3188)
     if (pmic_is_act8846()) {
-    	if(gpio_get_value (RK30_PIN0_PB2) == GPIO_LOW || 1 == dwc_vbus_status() || 2 == dwc_vbus_status())
+    	if( 1 == tchip_board_dc_det() || 1 == dwc_vbus_status() || 2 == dwc_vbus_status())
         	arm_pm_restart(0, "charge");
 		else
     		act8846_device_shutdown();

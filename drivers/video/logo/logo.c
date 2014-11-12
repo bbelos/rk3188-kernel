@@ -21,6 +21,12 @@
 #include <asm/bootinfo.h>
 #endif
 
+#if defined(CONFIG_TCHIP_MACH_TR101Q) && defined(CONFIG_POWER_ON_CHARGER_DISPLAY)
+// @ tchip add 
+int tchip_board_dc_det();
+int tchip_is_boot_charge_mode();
+#endif
+
 static int nologo;
 module_param(nologo, bool, 0);
 MODULE_PARM_DESC(nologo, "Disables startup logo");
@@ -165,6 +171,11 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 			logo = &logo_linux_lowerpower_clut224;
 		}
 #endif 
+
+#if defined(CONFIG_TCHIP_MACH_TR101Q) && defined(CONFIG_POWER_ON_CHARGER_DISPLAY) && defined(CONFIG_TCHIP_TR101Q_HAVE_CHARGE_LOGO)
+		if ( 1 == tchip_is_boot_charge_mode() ) // charging
+			logo = &tr101q_charging_logo_linux_clut224;
+#endif
 
 		if (depth >= 24)
 		{
