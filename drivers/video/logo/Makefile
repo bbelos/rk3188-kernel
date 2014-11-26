@@ -90,5 +90,17 @@ $(obj)/%_gray256.c: $(src)/%_gray256.pgm $(pnmtologo) FORCE
 $(obj)/%_bmp.c: $(src)/%_bmp.bmp $(bmptologo) FORCE
 	$(call if_changed,bmplogo)
 
+ifeq (y,$(CONFIG_LOGO_LINUX_CLUT224_TR101Q))
+customelogo := $(src)/../../../../device/rockchip/tr101q/customer/tr101q_logo_linux_clut224.ppm
+publiclogo := $(src)/tr101q_public_clut224.ppm
+ifneq ( , $(wildcard $(customelogo)))
+$(obj)/tr101q_logo_linux_clut224.c: $(customelogo) $(pnmtologo) FORCE
+	$(pnmtologo) -t clut224 -n tr101q_logo_linux_clut224 -o $(src)/tr101q_logo_linux_clut224.c $(customelogo)
+else
+$(obj)/tr101q_logo_linux_clut224.c: $(publiclogo) $(pnmtologo) FORCE
+	$(pnmtologo) -t clut224 -n tr101q_logo_linux_clut224 -o $(src)/tr101q_logo_linux_clut224.c $(publiclogo)
+endif # have customelogo
+endif # tr101q
+
 # Files generated that shall be removed upon make clean
 clean-files := *.o *_mono.c *_vga16.c *_clut224.c *_gray256.c *_bmp.c
