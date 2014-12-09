@@ -342,8 +342,15 @@ static const struct snd_soc_dapm_widget es8323_dapm_widgets[] = {
 	SND_SOC_DAPM_ADC("Left ADC", "Left Capture", ES8323_ADCPOWER, 5, 1),
 
 	/* gModify.Cmmt Implement when suspend/startup */
+#if 1 
+	// the normal params 
 	SND_SOC_DAPM_DAC("Right DAC", "Right Playback", ES8323_DACPOWER, 7, 0),
 	SND_SOC_DAPM_DAC("Left DAC", "Left Playback", ES8323_DACPOWER, 8, 0),
+#else
+	// add by tchip , for reduce the noise when enable(disable) output, be careful the power in suspend
+	SND_SOC_DAPM_DAC("Right DAC", "Right Playback", ES8323_DACPOWER, 6, 1),
+	SND_SOC_DAPM_DAC("Left DAC", "Left Playback", ES8323_DACPOWER, 7, 1),
+#endif
 
 	SND_SOC_DAPM_MIXER("Left Mixer", SND_SOC_NOPM, 0, 0,
 		&es8323_left_mixer_controls[0],
